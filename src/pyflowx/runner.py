@@ -16,9 +16,9 @@ import enum
 import sys
 from typing import Dict, List, Optional, Sequence
 
-from ..errors import PyFlowXError
-from ..executors import Strategy, run
-from ..graph import Graph
+from .errors import PyFlowXError
+from .executors import Strategy, run
+from .graph import Graph
 
 __all__ = ["CliRunner", "CliExitCode"]
 
@@ -72,19 +72,10 @@ class CliRunner:
         runner.run(["test", "--strategy", "sequential"])
     """
 
-    def __init__(
-        self,
-        *,
-        strategy: Strategy = "sequential",
-        description: str = "",
-        **graphs: Graph,
-    ) -> None:
+    def __init__(self, *, strategy: Strategy = "sequential", description: str = "", graphs: Dict[str, Graph]) -> None:
         if not graphs:
             raise ValueError("CliRunner 至少需要一个命令 (通过关键字参数提供)")
-        # 校验所有值都是 Graph
-        for name, graph in graphs.items():
-            if not isinstance(graph, Graph):
-                raise TypeError(f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}")
+
         self._graphs: Dict[str, Graph] = dict(graphs)
         self._strategy: Strategy = strategy
         self._description: str = description
@@ -139,23 +130,23 @@ class CliRunner:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=self._format_commands_help(),
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "command",
             nargs="?",
             help="要执行的命令",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--strategy",
             choices=["sequential", "thread", "async"],
             default=self._strategy,
             help="执行策略 (默认: %(default)s)",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--dry-run",
             action="store_true",
             help="只打印执行计划, 不实际运行",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--list",
             action="store_true",
             help="列出所有可用命令",

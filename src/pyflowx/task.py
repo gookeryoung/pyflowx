@@ -227,9 +227,7 @@ class TaskSpec(Generic[T]):
         if callable(cmd):
             return cmd  # type: ignore[return-value]
 
-        raise TypeError(
-            f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}"
-        )
+        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")
 
     def should_execute(self) -> bool:
         """检查任务是否应该执行.

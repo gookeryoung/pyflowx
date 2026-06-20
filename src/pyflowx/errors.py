@@ -58,9 +58,7 @@ class TaskFailedError(PyFlowXError):
         layer: Optional[int] = None,
     ) -> None:
         location = f" (layer {layer})" if layer is not None else ""
-        super().__init__(
-            f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}"
-        )
+        super().__init__(f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}")
         self.task = task
         self.cause = cause
         self.attempts = attempts

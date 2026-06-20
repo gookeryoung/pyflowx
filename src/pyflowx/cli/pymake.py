@@ -403,7 +403,8 @@ def main():
       pymake ca          # 清理所有构建产物
     """
     runner = px.CliRunner(
+        strategy=px.Strategy.SEQUENTIAL,
         description="PyMake - Python 构建工具 (替代 Makefile)",
-        **_build_graphs(),
+        graphs=**_build_graphs(),
     )
     runner.run_cli()

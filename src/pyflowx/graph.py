@@ -10,12 +10,14 @@ from __future__ import annotations
 import sys
 from typing import Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
+from typing_extensions import override
+
 from .errors import CycleError, DuplicateTaskError, MissingDependencyError
 from .task import TaskSpec
 
 # graphlib 自 3.9 起进入标准库；3.8 回退到 backport。
 if sys.version_info >= (3, 9):  # pragma: no cover
-    import graphlib
+    import graphlib  # pyright: ignore[reportUnreachable]
 
     _TopologicalSorter = graphlib.TopologicalSorter
 else:  # pragma: no cover
@@ -157,9 +159,7 @@ class Graph:
         for spec in self._specs.values():
             if wanted & set(spec.tags):
                 pruned_deps = tuple(
-                    d
-                    for d in spec.depends_on
-                    if d in self._specs and (wanted & set(self._specs[d].tags))
+                    d for d in spec.depends_on if d in self._specs and (wanted & set(self._specs[d].tags))
                 )
                 kept.append(
                     TaskSpec(
@@ -217,9 +217,7 @@ class Graph:
         valid = {"TD", "TB", "BT", "LR", "RL"}
         orientation = orientation.upper()
         if orientation not in valid:
-            raise ValueError(
-                f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}."
-            )
+            raise ValueError(f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}.")
         lines: List[str] = [f"graph {orientation}"]
         for name in self._specs:
             lines.append(f'    {name}["{name}"]')
@@ -238,6 +236,7 @@ class Graph:
             out.append(f"  Layer {layer_idx}: {layer}")
         return "\n".join(out)
 
+    @override
     def __repr__(self) -> str:
         return f"Graph(tasks={len(self._specs)})"
 

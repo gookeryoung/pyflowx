@@ -84,9 +84,7 @@ def build_call_args(
     )
 
     # 与本任务相关的上下文子集。
-    dep_context: Dict[str, Any] = {
-        name: context[name] for name in spec.depends_on if name in context
-    }
+    dep_context: Dict[str, Any] = {name: context[name] for name in spec.depends_on if name in context}
 
     # 检测静态 kwargs 与依赖名的冲突。
     collisions = set(spec.kwargs) & set(dep_context)
