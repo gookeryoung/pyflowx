@@ -10,21 +10,19 @@ Demonstrates the core PyFlowX workflow:
 
 from __future__ import annotations
 
-from typing import List
-
 import pyflowx as px
 
 # --- task functions: pure, testable, no framework coupling ------------- #
 
 
-def extract_customers() -> List[dict]:
+def extract_customers() -> list[dict]:
     return [
         {"id": "C001", "name": "Alice"},
         {"id": "C002", "name": "Bob"},
     ]
 
 
-def extract_orders() -> List[dict]:
+def extract_orders() -> list[dict]:
     return [
         {"id": "O001", "customer_id": "C001", "amount": 150.0},
         {"id": "O002", "customer_id": "C002", "amount": 200.5},
@@ -33,9 +31,9 @@ def extract_orders() -> List[dict]:
 
 # Parameter names match dependency names → automatic injection.
 def transform(
-    extract_customers: List[dict],
-    extract_orders: List[dict],
-) -> List[dict]:
+    extract_customers: list[dict],
+    extract_orders: list[dict],
+) -> list[dict]:
     cmap = {c["id"]: c for c in extract_customers}
     return [
         {**o, "customer_name": cmap[o["customer_id"]]["name"]}
@@ -44,7 +42,7 @@ def transform(
     ]
 
 
-def load(transform: List[dict]) -> int:
+def load(transform: list[dict]) -> int:
     print(f"  loaded {len(transform)} records")
     return len(transform)
 

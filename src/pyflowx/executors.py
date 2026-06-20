@@ -20,7 +20,7 @@ import enum
 import inspect
 import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Awaitable, Callable, Mapping, cast
 
 from .context import build_call_args, describe_injection
 from .errors import TaskFailedError, TaskTimeoutError
@@ -53,7 +53,7 @@ class Strategy(enum.Enum):
     ASYNC = "async"
 
 
-def _normalize_strategy(strategy: Union[str, Strategy]) -> Strategy:
+def _normalize_strategy(strategy: str | Strategy) -> Strategy:
     """将字符串或 Strategy 归一化为 Strategy 枚举.
 
     Parameters
@@ -79,7 +79,9 @@ def _normalize_strategy(strategy: Union[str, Strategy]) -> Strategy:
             return Strategy(strategy)
         except ValueError:
             valid = ", ".join(repr(s.value) for s in Strategy)
-            raise ValueError(f"unknown strategy {strategy!r}; expected one of {valid}.") from None
+            raise ValueError(
+                f"unknown strategy {strategy!r}; expected one of {valid}."
+            ) from None
     raise TypeError(f"strategy must be str or Strategy, got {type(strategy).__name__}")
 
 
@@ -89,7 +91,7 @@ def _is_async_fn(spec: TaskSpec[object]) -> bool:
 
 
 def _emit(
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
     result: TaskResult[object],
 ) -> None:
     """若注册了回调则触发一个观察者事件。"""
@@ -106,7 +108,9 @@ def _emit(
     )
 
 
-def _log_retry(spec: TaskSpec[object], attempts: int, max_attempts: int, exc: BaseException) -> None:
+def _log_retry(
+    spec: TaskSpec[object], attempts: int, max_attempts: int, exc: BaseException
+) -> None:
     """记录重试日志（sync 与 async 共享，便于测试覆盖）。"""
     logger.warning(
         "task %r failed (attempt %d/%d): %r; retrying",
@@ -117,7 +121,7 @@ def _log_retry(spec: TaskSpec[object], attempts: int, max_attempts: int, exc: Ba
     )
 
 
-def _finalize_failure(result: TaskResult[object], layer_idx: Optional[int]) -> None:
+def _finalize_failure(result: TaskResult[object], layer_idx: int | None) -> None:
     """标记任务为 FAILED 并抛出 TaskFailedError。"""
     result.status = TaskStatus.FAILED
     result.finished_at = datetime.now()
@@ -132,7 +136,7 @@ def _finalize_failure(result: TaskResult[object], layer_idx: Optional[int]) -> N
 def _run_sync_with_retry(
     spec: TaskSpec[object],
     context: Mapping[str, Any],
-    layer_idx: Optional[int],
+    layer_idx: int | None,
 ) -> TaskResult[object]:
     """执行同步任务并带重试；返回填充好的 TaskResult。"""
     result: TaskResult[object] = TaskResult(spec=spec)
@@ -155,7 +159,7 @@ def _run_sync_with_retry(
             result.status = TaskStatus.SUCCESS
             result.finished_at = datetime.now()
             return result
-        except Exception as exc:  # noqa: BLE001 - 用户代码可能抛任何异常
+        except Exception as exc:
             result.error = exc
             if result.attempts >= max_attempts:
                 _finalize_failure(result, layer_idx)  # pragma: no cover
@@ -166,7 +170,7 @@ def _run_sync_with_retry(
 async def _run_async_with_retry(
     spec: TaskSpec[object],
     context: Mapping[str, Any],
-    layer_idx: Optional[int],
+    layer_idx: int | None,
 ) -> TaskResult[object]:
     """在事件循环上执行任务（同步或异步）并带重试。"""
     result: TaskResult[object] = TaskResult(spec=spec)
@@ -198,7 +202,9 @@ async def _run_async_with_retry(
                     return spec.effective_fn(*args, **kwargs)
 
                 if spec.timeout is not None:
-                    result.value = await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
+                    result.value = await asyncio.wait_for(
+                        loop.run_in_executor(None, fn_call), timeout=spec.timeout
+                    )
                 else:
                     result.value = await loop.run_in_executor(None, fn_call)
             result.status = TaskStatus.SUCCESS
@@ -214,7 +220,7 @@ async def _run_async_with_retry(
                 result.attempts,
                 max_attempts,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result.error = exc
             if result.attempts >= max_attempts:
                 _finalize_failure(result, layer_idx)  # pragma: no cover
@@ -230,17 +236,19 @@ def _build_context(
     global_context: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     """将全局上下文限制为本任务的依赖。"""
-    return {dep: global_context[dep] for dep in spec.depends_on if dep in global_context}
+    return {
+        dep: global_context[dep] for dep in spec.depends_on if dep in global_context
+    }
 
 
 def _execute_layer_sequential(
-    layer: List[str],
+    layer: list[str],
     graph: Graph,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
     layer_idx: int,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
 ) -> None:
     """逐个运行某层的任务。"""
     for name in layer:
@@ -261,23 +269,25 @@ def _execute_layer_sequential(
 
 
 def _execute_layer_threaded(
-    layer: List[str],
+    layer: list[str],
     graph: Graph,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
     layer_idx: int,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
     max_workers: int,
 ) -> None:
     """在线程池中并发运行某层的任务。"""
     # 先同步满足已缓存任务。
-    to_run: List[str] = []
+    to_run: list[str] = []
     for name in layer:
         if backend.has(name):
             cached = backend.get(name)
             context[name] = cached
-            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached)
+            result = TaskResult(
+                spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached
+            )
             report.results[name] = result
             _emit(on_event, result)
         else:
@@ -287,7 +297,7 @@ def _execute_layer_threaded(
         return
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_name: Dict[concurrent.futures.Future[TaskResult[object]], str] = {}
+        future_to_name: dict[concurrent.futures.Future[TaskResult[object]], str] = {}
         for name in to_run:
             spec = graph.spec(name)
             # 为本任务快照上下文以避免竞态。
@@ -305,21 +315,23 @@ def _execute_layer_threaded(
 
 
 async def _execute_layer_async(
-    layer: List[str],
+    layer: list[str],
     graph: Graph,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
     layer_idx: int,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
 ) -> None:
     """在事件循环上并发运行某层的任务。"""
-    to_run: List[str] = []
+    to_run: list[str] = []
     for name in layer:
         if backend.has(name):
             cached = backend.get(name)
             context[name] = cached
-            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached)
+            result = TaskResult(
+                spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached
+            )
             report.results[name] = result
             _emit(on_event, result)
         else:
@@ -346,8 +358,8 @@ async def _execute_layer_async(
 # 公共 API
 # ---------------------------------------------------------------------- #
 def _make_verbose_callback(
-    on_event: Optional[EventCallback],
-) -> Optional[EventCallback]:
+    on_event: EventCallback | None,
+) -> EventCallback | None:
     """包装 on_event 回调, 在 verbose 模式下打印任务生命周期.
 
     Parameters
@@ -385,13 +397,13 @@ def _make_verbose_callback(
 
 def run(
     graph: Graph,
-    strategy: Union[str, Strategy] = Strategy.SEQUENTIAL,
+    strategy: str | Strategy = Strategy.SEQUENTIAL,
     *,
-    max_workers: Optional[int] = None,
+    max_workers: int | None = None,
     dry_run: bool = False,
     verbose: bool = False,
-    on_event: Optional[EventCallback] = None,
-    state: Optional[StateBackend] = None,
+    on_event: EventCallback | None = None,
+    state: StateBackend | None = None,
 ) -> RunReport:
     """执行图并返回 :class:`RunReport`。
 
@@ -434,17 +446,23 @@ def run(
         return RunReport(success=True)
 
     # verbose 模式下包装事件回调
-    effective_callback: Optional[EventCallback] = _make_verbose_callback(on_event) if verbose else on_event
+    effective_callback: EventCallback | None = (
+        _make_verbose_callback(on_event) if verbose else on_event
+    )
 
     backend = resolve_backend(state)
     report = RunReport()
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
     try:
         if normalized == Strategy.SEQUENTIAL:
-            _drive_sequential(graph, layers, context, report, backend, effective_callback)
+            _drive_sequential(
+                graph, layers, context, report, backend, effective_callback
+            )
         elif normalized == Strategy.THREAD:
-            _drive_threaded(graph, layers, context, report, backend, effective_callback, max_workers)
+            _drive_threaded(
+                graph, layers, context, report, backend, effective_callback, max_workers
+            )
         else:
             _drive_async(graph, layers, context, report, backend, effective_callback)
     except TaskFailedError:
@@ -454,7 +472,7 @@ def run(
     return report
 
 
-def _print_dry_run(graph: Graph, layers: List[List[str]]) -> None:
+def _print_dry_run(graph: Graph, layers: list[list[str]]) -> None:
     """打印执行计划但不运行任何任务。"""
     print(f"Dry run: {len(graph)} tasks, {len(layers)} layers")
     for idx, layer in enumerate(layers, 1):
@@ -465,11 +483,11 @@ def _print_dry_run(graph: Graph, layers: List[List[str]]) -> None:
 
 def _drive_sequential(
     graph: Graph,
-    layers: List[List[str]],
-    context: Dict[str, Any],
+    layers: list[list[str]],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
 ) -> None:
     for idx, layer in enumerate(layers, 1):
         _execute_layer_sequential(layer, graph, context, report, backend, idx, on_event)
@@ -477,36 +495,40 @@ def _drive_sequential(
 
 def _drive_threaded(
     graph: Graph,
-    layers: List[List[str]],
-    context: Dict[str, Any],
+    layers: list[list[str]],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
-    on_event: Optional[EventCallback],
-    max_workers: Optional[int],
+    on_event: EventCallback | None,
+    max_workers: int | None,
 ) -> None:
     for idx, layer in enumerate(layers, 1):
         workers = max_workers or max(1, min(32, len(layer)))
-        _execute_layer_threaded(layer, graph, context, report, backend, idx, on_event, workers)
+        _execute_layer_threaded(
+            layer, graph, context, report, backend, idx, on_event, workers
+        )
 
 
 def _drive_async(
     graph: Graph,
-    layers: List[List[str]],
-    context: Dict[str, Any],
+    layers: list[list[str]],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
 ) -> None:
     asyncio.run(_async_drive(graph, layers, context, report, backend, on_event))
 
 
 async def _async_drive(
     graph: Graph,
-    layers: List[List[str]],
-    context: Dict[str, Any],
+    layers: list[list[str]],
+    context: dict[str, Any],
     report: RunReport,
     backend: StateBackend,
-    on_event: Optional[EventCallback],
+    on_event: EventCallback | None,
 ) -> None:
     for idx, layer in enumerate(layers, 1):
-        await _execute_layer_async(layer, graph, context, report, backend, idx, on_event)
+        await _execute_layer_async(
+            layer, graph, context, report, backend, idx, on_event
+        )

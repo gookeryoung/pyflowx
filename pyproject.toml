@@ -10,7 +10,10 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
+dependencies = [
+    "graphlib_backport >= 1.0.0; python_version < '3.9'",
+    "typing-extensions>=4.13.2",
+]
 description = "Lightweight, type-safe DAG task scheduler with multi-strategy execution."
 keywords = ["async", "dag", "scheduler", "task", "workflow"]
 license = { text = "MIT" }
@@ -86,3 +89,46 @@ reportImplicitStringConcatenation = "error"
 reportMissingTypeStubs            = "none"
 reportUnusedCallResult            = "warning"
 typeCheckingMode                  = "recommended" # 类型检查严格度：off / basic / standard / recommended(默认) / strict / all
+
+# Ruff 配置 - 与 .pre-commit-config.yaml 保持一致
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "PTH",    # flake8-use-pathlib
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "PLR0913", # too many arguments
+    "PLR2004", # magic value comparison
+    "PTH123",  # pathlib open() replacement
+    "SIM108",  # use ternary operator
+    "RUF001",  # ambiguous unicode characters in string
+    "RUF002",  # ambiguous unicode characters in docstring
+    "RUF003",  # ambiguous unicode characters in comment
+    "RUF012",  # mutable class attributes (intentional for config)
+    "PLC0415", # import should be at top-level (intentional for lazy imports)
+    "PLR0915", # too many statements (intentional for complex methods)
+    "PTH119",  # os.path.basename (intentional for sys.argv)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pyflowx"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

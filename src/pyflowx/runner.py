@@ -23,13 +23,13 @@ import argparse
 import dataclasses
 import enum
 import sys
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Sequence
 
 from .errors import PyFlowXError
 from .executors import Strategy, _normalize_strategy, run
 from .graph import Graph
 
-__all__ = ["CliRunner", "CliExitCode"]
+__all__ = ["CliExitCode", "CliRunner"]
 
 
 class CliExitCode(enum.IntEnum):
@@ -92,12 +92,16 @@ class CliRunner:
     基本用法::
 
         runner = px.CliRunner(
-            clean=px.Graph.from_specs([
-                px.TaskSpec("cargo_clean", cmd=["cargo", "clean"]),
-            ]),
-            build=px.Graph.from_specs([
-                px.TaskSpec("uv_build", cmd=["uv", "build"]),
-            ]),
+            clean=px.Graph.from_specs(
+                [
+                    px.TaskSpec("cargo_clean", cmd=["cargo", "clean"]),
+                ]
+            ),
+            build=px.Graph.from_specs(
+                [
+                    px.TaskSpec("uv_build", cmd=["uv", "build"]),
+                ]
+            ),
         )
         runner.run()  # 解析 sys.argv
 
@@ -114,7 +118,7 @@ class CliRunner:
     def __init__(
         self,
         *,
-        strategy: Union[str, Strategy] = Strategy.SEQUENTIAL,
+        strategy: str | Strategy = Strategy.SEQUENTIAL,
         description: str = "",
         verbose: bool = True,
         **graphs: Graph,
@@ -127,7 +131,7 @@ class CliRunner:
                 raise TypeError(
                     f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}"
                 )
-        self._graphs: Dict[str, Graph] = dict(graphs)
+        self._graphs: dict[str, Graph] = dict(graphs)
         self._strategy: Strategy = _normalize_strategy(strategy)
         self._description: str = description
         self._verbose: bool = verbose
@@ -136,12 +140,12 @@ class CliRunner:
     # 内省
     # ------------------------------------------------------------------ #
     @property
-    def commands(self) -> List[str]:
+    def commands(self) -> list[str]:
         """可用的命令列表 (按插入顺序)."""
         return list(self._graphs.keys())
 
     @property
-    def graphs(self) -> Dict[str, Graph]:
+    def graphs(self) -> dict[str, Graph]:
         """命令名到图的映射 (只读副本)."""
         return dict(self._graphs)
 
@@ -225,7 +229,7 @@ class CliRunner:
     # ------------------------------------------------------------------ #
     # 执行
     # ------------------------------------------------------------------ #
-    def run(self, args: Optional[Sequence[str]] = None) -> int:
+    def run(self, args: Sequence[str] | None = None) -> int:
         """解析参数并执行对应的图.
 
         Parameters
@@ -293,7 +297,7 @@ class CliRunner:
             print(f"错误: {e}", file=sys.stderr)
             return CliExitCode.FAILURE.value
 
-    def run_cli(self, args: Optional[Sequence[str]] = None) -> None:
+    def run_cli(self, args: Sequence[str] | None = None) -> None:
         """运行并以退出码退出进程.
 
         作为 CLI 工具运行时的入口点, 等价于 ``sys.exit(self.run(args))``.

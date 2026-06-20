@@ -10,7 +10,7 @@ Shows:
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
 import pyflowx as px
 
@@ -20,13 +20,13 @@ async def fetch_user(uid: int) -> dict:
     return {"id": uid, "name": f"User{uid}"}
 
 
-async def fetch_posts(uid: int) -> List[int]:
+async def fetch_posts(uid: int) -> list[int]:
     await asyncio.sleep(0.2)
     return [uid, uid + 1]
 
 
 # Context annotation → receives the full mapping of upstream results.
-def aggregate(ctx: px.Context) -> Dict[str, Any]:
+def aggregate(ctx: px.Context) -> dict[str, Any]:
     return dict(ctx)
 
 
@@ -43,7 +43,7 @@ def main() -> None:
     print("=== Dry run ===")
     px.run(graph, strategy="async", dry_run=True)
 
-    events: List[px.TaskEvent] = []
+    events: list[px.TaskEvent] = []
     print("\n=== Async execution ===")
     report = px.run(graph, strategy="async", on_event=events.append)
 

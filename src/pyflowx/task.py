@@ -30,6 +30,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
 )
 
 T = TypeVar("T")
@@ -48,7 +49,7 @@ Context = Mapping[str, Any]
 TaskCmd = Union[
     List[str],  # 命令列表, 如 ["ls", "-la"]
     str,  # shell 命令字符串
-    Callable[..., T],  # Python 函数
+    Callable[..., Any],  # Python 函数
 ]
 
 # 条件判断函数类型
@@ -151,12 +152,12 @@ class TaskSpec(Generic[T]):
             return self.fn
         raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")
 
-    def _wrap_cmd(self) -> TaskFn[T]:
+    def _wrap_cmd(self) -> TaskFn[Any]:
         """将 cmd 包装为可执行函数.
 
         Returns
         -------
-        TaskFn[T]
+        TaskFn[Any]
             包装后的执行函数.
         """
         cmd = self.cmd
@@ -184,17 +185,19 @@ class TaskSpec(Generic[T]):
                         check=False,
                     )
                 except FileNotFoundError:
-                    raise RuntimeError(f"命令未找到: {cmd_str}")
+                    raise RuntimeError(f"命令未找到: {cmd_str}") from None
                 except subprocess.TimeoutExpired:
-                    raise RuntimeError(f"命令执行超时: {cmd_str} ({timeout}s)")
+                    raise RuntimeError(
+                        f"命令执行超时: {cmd_str} ({timeout}s)"
+                    ) from None
                 except OSError as e:
-                    raise RuntimeError(f"命令执行异常: {cmd_str}: {e}")
+                    raise RuntimeError(f"命令执行异常: {cmd_str}: {e}") from e
 
                 if verbose:
                     print(f"[verbose] 返回码: {result.returncode}", flush=True)
 
                 if result.returncode == 0:
-                    return None  # type: ignore[return-value]
+                    return cast(T, None)  # type: ignore[return-value]
 
                 err_msg = f"命令执行失败: `{cmd_str}`, 返回码: {result.returncode}"
                 if not verbose and result.stderr.strip():
@@ -224,17 +227,19 @@ class TaskSpec(Generic[T]):
                         check=False,
                     )
                 except FileNotFoundError:
-                    raise RuntimeError(f"Shell 命令未找到: {cmd}")
+                    raise RuntimeError(f"Shell 命令未找到: {cmd}") from None
                 except subprocess.TimeoutExpired:
-                    raise RuntimeError(f"Shell 命令执行超时: {cmd} ({timeout}s)")
+                    raise RuntimeError(
+                        f"Shell 命令执行超时: {cmd} ({timeout}s)"
+                    ) from None
                 except OSError as e:
-                    raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}")
+                    raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}") from e
 
                 if verbose:
                     print(f"[verbose] 返回码: {result.returncode}", flush=True)
 
                 if result.returncode == 0:
-                    return None  # type: ignore[return-value]
+                    return cast(T, None)  # type: ignore[return-value]
 
                 err_msg = f"Shell 命令执行失败: `{cmd}`, 返回码: {result.returncode}"
                 if not verbose and result.stderr.strip():

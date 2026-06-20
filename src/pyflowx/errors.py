@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 
 class PyFlowXError(Exception):
@@ -55,10 +55,12 @@ class TaskFailedError(PyFlowXError):
         task: str,
         cause: BaseException,
         attempts: int,
-        layer: Optional[int] = None,
+        layer: int | None = None,
     ) -> None:
         location = f" (layer {layer})" if layer is not None else ""
-        super().__init__(f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}")
+        super().__init__(
+            f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}"
+        )
         self.task = task
         self.cause = cause
         self.attempts = attempts
@@ -85,6 +87,6 @@ class InjectionError(PyFlowXError):
 class StorageError(PyFlowXError):
     """状态后端在持久化失败时抛出。"""
 
-    def __init__(self, detail: str, cause: Optional[BaseException] = None) -> None:
+    def __init__(self, detail: str, cause: BaseException | None = None) -> None:
         super().__init__(f"State storage error: {detail}")
         self.cause: Any = cause

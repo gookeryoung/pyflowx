@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import shutil
 import sys
-from typing import Callable, Optional
+from typing import Callable
 
 # 条件判断函数类型
 Condition = Callable[[], bool]
@@ -47,7 +47,7 @@ class BuiltinConditions:
         return Constants.IS_POSIX
 
     @staticmethod
-    def PYTHON_VERSION(major: int, minor: Optional[int] = None) -> bool:
+    def PYTHON_VERSION(major: int, minor: int | None = None) -> bool:
         """检查 Python 版本是否匹配.
 
         Parameters

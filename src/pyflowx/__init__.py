@@ -81,43 +81,43 @@ from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 __version__ = "0.1.2"
 
 __all__ = [
-    # 核心类型
-    "TaskSpec",
-    "TaskStatus",
-    "TaskResult",
-    "TaskEvent",
-    "Context",
-    "TaskCmd",
-    "Graph",
-    "RunReport",
-    # 执行
-    "run",
-    "Strategy",
-    # CLI 运行器
-    "CliRunner",
-    "CliExitCode",
-    # 状态后端
-    "StateBackend",
-    "MemoryBackend",
-    "JSONBackend",
-    # 错误
-    "PyFlowXError",
-    "DuplicateTaskError",
-    "MissingDependencyError",
-    "CycleError",
-    "TaskFailedError",
-    "TaskTimeoutError",
-    "InjectionError",
-    "StorageError",
-    # 条件判断
-    "Condition",
-    "Constants",
-    "BuiltinConditions",
-    "IS_WINDOWS",
     "IS_LINUX",
     "IS_MACOS",
     "IS_POSIX",
+    "IS_WINDOWS",
+    "BuiltinConditions",
+    "CliExitCode",
+    # CLI 运行器
+    "CliRunner",
+    # 条件判断
+    "Condition",
+    "Constants",
+    "Context",
+    "CycleError",
+    "DuplicateTaskError",
+    "Graph",
+    "InjectionError",
+    "JSONBackend",
+    "MemoryBackend",
+    "MissingDependencyError",
+    # 错误
+    "PyFlowXError",
+    "RunReport",
+    # 状态后端
+    "StateBackend",
+    "StorageError",
+    "Strategy",
+    "TaskCmd",
+    "TaskEvent",
+    "TaskFailedError",
+    "TaskResult",
+    # 核心类型
+    "TaskSpec",
+    "TaskStatus",
+    "TaskTimeoutError",
     # 辅助（高级）
     "build_call_args",
     "describe_injection",
+    # 执行
+    "run",
 ]

@@ -17,9 +17,11 @@
 from __future__ import annotations
 
 import json
-import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Mapping, Optional
+from pathlib import Path
+from typing import Any, Mapping
+
+from typing_extensions import override
 
 from .errors import StorageError
 
@@ -52,20 +54,25 @@ class MemoryBackend(StateBackend):
     """进程内 dict 后端。进程退出即丢失。"""
 
     def __init__(self) -> None:
-        self._store: Dict[str, Any] = {}
+        self._store: dict[str, Any] = {}
 
+    @override
     def load(self) -> Mapping[str, Any]:
         return dict(self._store)
 
+    @override
     def save(self, name: str, value: Any) -> None:
         self._store[name] = value
 
+    @override
     def has(self, name: str) -> bool:
         return name in self._store
 
+    @override
     def get(self, name: str) -> Any:
         return self._store[name]
 
+    @override
     def clear(self) -> None:
         self._store.clear()
 
@@ -79,16 +86,16 @@ class JSONBackend(StateBackend):
     """
 
     def __init__(self, path: str) -> None:
-        self._path = path
-        self._store: Dict[str, Any] = {}
+        self._path: str = path
+        self._store: dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
-        if not os.path.exists(self._path):
+        if not Path(self._path).exists():
             return
         try:
-            with open(self._path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with open(self._path, encoding="utf-8") as fh:
+                data: Any = json.load(fh)
             if isinstance(data, dict):
                 self._store = data
         except (OSError, json.JSONDecodeError) as exc:
@@ -99,13 +106,15 @@ class JSONBackend(StateBackend):
         try:
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(self._store, fh, ensure_ascii=False, indent=2)
-            os.replace(tmp, self._path)
+            Path(tmp).replace(Path(self._path))
         except (OSError, TypeError) as exc:
             raise StorageError(f"cannot write state file {self._path!r}", exc) from exc
 
+    @override
     def load(self) -> Mapping[str, Any]:
         return dict(self._store)
 
+    @override
     def save(self, name: str, value: Any) -> None:
         # 在修改内存状态前先校验可序列化性。
         try:
@@ -115,19 +124,22 @@ class JSONBackend(StateBackend):
                 f"result of task {name!r} is not JSON-serialisable", exc
             ) from exc
         self._store[name] = value
-        self._flush()
+        _ = self._flush()
 
+    @override
     def has(self, name: str) -> bool:
         return name in self._store
 
+    @override
     def get(self, name: str) -> Any:
         return self._store[name]
 
+    @override
     def clear(self) -> None:
         self._store.clear()
-        self._flush()
+        _ = self._flush()
 
 
-def resolve_backend(backend: Optional[StateBackend]) -> StateBackend:
+def resolve_backend(backend: StateBackend | None) -> StateBackend:
     """返回 ``backend``；为 ``None`` 时返回新的 :class:`MemoryBackend`。"""
     return backend if backend is not None else MemoryBackend()

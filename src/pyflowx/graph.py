@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Dict, Iterable, List, Mapping, Sequence, Set, Tuple
+from typing import Iterable, Mapping, Sequence
 
 from typing_extensions import override
 
@@ -38,14 +38,14 @@ class Graph:
     """
 
     def __init__(self) -> None:
-        self._specs: Dict[str, TaskSpec[object]] = {}
+        self._specs: dict[str, TaskSpec[object]] = {}
         # 任务 -> 其直接依赖（前驱）。
-        self._deps: Dict[str, Tuple[str, ...]] = {}
+        self._deps: dict[str, tuple[str, ...]] = {}
 
     # ------------------------------------------------------------------ #
     # 构建
     # ------------------------------------------------------------------ #
-    def add(self, spec: TaskSpec[object]) -> "Graph":
+    def add(self, spec: TaskSpec[object]) -> Graph:
         """注册一个任务 spec，并即时校验。
 
         返回 ``self`` 以支持链式调用，但推荐入口是 :meth:`from_specs`，
@@ -60,7 +60,7 @@ class Graph:
         return self
 
     @classmethod
-    def from_specs(cls, specs: Iterable[TaskSpec[object]]) -> "Graph":
+    def from_specs(cls, specs: Iterable[TaskSpec[object]]) -> Graph:
         """从可迭代的 task spec 构建图。
 
         先收集所有 spec，再统一校验。这意味着任务可以引用*后出现*的
@@ -107,7 +107,7 @@ class Graph:
     # 内省
     # ------------------------------------------------------------------ #
     @property
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         """所有已注册任务名（按插入顺序）。"""
         return list(self._specs.keys())
 
@@ -115,7 +115,7 @@ class Graph:
         """返回 ``name`` 的 spec；不存在则 ``KeyError``。"""
         return self._specs[name]
 
-    def dependencies(self, name: str) -> Tuple[str, ...]:
+    def dependencies(self, name: str) -> tuple[str, ...]:
         """``name`` 的直接前驱。"""
         return self._deps[name]
 
@@ -123,7 +123,7 @@ class Graph:
         """name -> spec 的只读视图。"""
         return self._specs
 
-    def layers(self) -> List[List[str]]:
+    def layers(self) -> list[list[str]]:
         """将任务分组为可并行执行的层（Kahn 算法）。
 
         同层任务无相互依赖，可并发执行。层按执行顺序返回。
@@ -132,7 +132,7 @@ class Graph:
         """
         self.validate()
         sorter = _TopologicalSorter(self._deps)
-        result: List[List[str]] = []
+        result: list[list[str]] = []
         # ``get_ready`` + ``done`` 每次给出一层，正好是并行执行所需的分组。
         sorter.prepare()
         while sorter.is_active():
@@ -147,19 +147,21 @@ class Graph:
     # ------------------------------------------------------------------ #
     # 子图 / 标签过滤
     # ------------------------------------------------------------------ #
-    def subgraph(self, tags: Iterable[str]) -> "Graph":
+    def subgraph(self, tags: Iterable[str]) -> Graph:
         """返回仅包含匹配任意标签的任务的新图。
 
         依赖会被修剪，仅保留被保留任务之间的边；指向被丢弃任务的边
         会被移除（被保留的任务不再等待它们）。用于调试时运行大型
         DAG 的切片。
         """
-        wanted: Set[str] = set(tags)
-        kept: List[TaskSpec[object]] = []
+        wanted: set[str] = set(tags)
+        kept: list[TaskSpec[object]] = []
         for spec in self._specs.values():
             if wanted & set(spec.tags):
                 pruned_deps = tuple(
-                    d for d in spec.depends_on if d in self._specs and (wanted & set(self._specs[d].tags))
+                    d
+                    for d in spec.depends_on
+                    if d in self._specs and (wanted & set(self._specs[d].tags))
                 )
                 kept.append(
                     TaskSpec(
@@ -178,13 +180,13 @@ class Graph:
                 )
         return Graph.from_specs(kept)
 
-    def subgraph_by_names(self, names: Iterable[str]) -> "Graph":
+    def subgraph_by_names(self, names: Iterable[str]) -> Graph:
         """返回限定于 ``names`` 的新图（边已修剪）。"""
-        wanted: Set[str] = set(names)
+        wanted: set[str] = set(names)
         for n in wanted:
             if n not in self._specs:
                 raise KeyError(f"Unknown task name: {n!r}")
-        kept: List[TaskSpec[object]] = []
+        kept: list[TaskSpec[object]] = []
         for spec in self._specs.values():
             if spec.name in wanted:
                 pruned_deps = tuple(d for d in spec.depends_on if d in wanted)
@@ -217,8 +219,10 @@ class Graph:
         valid = {"TD", "TB", "BT", "LR", "RL"}
         orientation = orientation.upper()
         if orientation not in valid:
-            raise ValueError(f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}.")
-        lines: List[str] = [f"graph {orientation}"]
+            raise ValueError(
+                f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}."
+            )
+        lines: list[str] = [f"graph {orientation}"]
         for name in self._specs:
             lines.append(f'    {name}["{name}"]')
         for name, deps in self._deps.items():
@@ -231,7 +235,7 @@ class Graph:
     # ------------------------------------------------------------------ #
     def describe(self) -> str:
         """用于调试的人类可读多行摘要。"""
-        out: List[str] = [f"Graph(tasks={len(self._specs)})"]
+        out: list[str] = [f"Graph(tasks={len(self._specs)})"]
         for layer_idx, layer in enumerate(self.layers(), 1):
             out.append(f"  Layer {layer_idx}: {layer}")
         return "\n".join(out)

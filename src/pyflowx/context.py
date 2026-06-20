@@ -18,12 +18,12 @@ DAG 库中泛滥的样板包装器（如 ``def wrapper(): return fn(workflow.get
 from __future__ import annotations
 
 import inspect
-from typing import Any, Dict, List, Mapping, Set, Tuple
+from typing import Any, Mapping
 
 from .errors import InjectionError
 from .task import Context, TaskSpec
 
-__all__ = ["Context", "build_call_args", "describe_injection", "_is_context_annotation"]
+__all__ = ["Context", "_is_context_annotation", "build_call_args", "describe_injection"]
 
 
 def _is_context_annotation(annotation: Any) -> bool:
@@ -43,15 +43,13 @@ def _is_context_annotation(annotation: Any) -> bool:
         return annotation == "Context" or annotation.endswith(".Context")
     # 按限定名匹配，支持 ``from pyflowx import Context`` 再导出。
     name = getattr(annotation, "__name__", None) or getattr(annotation, "_name", None)
-    if name in ("Context", "Mapping"):
-        return True
-    return False
+    return name in ("Context", "Mapping")
 
 
 def build_call_args(
     spec: TaskSpec[object],
     context: Mapping[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """解析用于调用 ``spec.fn`` 的 ``(args, kwargs)``。
 
     参数
@@ -84,7 +82,9 @@ def build_call_args(
     )
 
     # 与本任务相关的上下文子集。
-    dep_context: Dict[str, Any] = {name: context[name] for name in spec.depends_on if name in context}
+    dep_context: dict[str, Any] = {
+        name: context[name] for name in spec.depends_on if name in context
+    }
 
     # 检测静态 kwargs 与依赖名的冲突。
     collisions = set(spec.kwargs) & set(dep_context)
@@ -95,12 +95,12 @@ def build_call_args(
             "rename the static kwarg or the dependency.",
         )
 
-    injected_kwargs: Dict[str, Any] = {}
-    leftover_dep_results: Dict[str, Any] = dict(dep_context)
+    injected_kwargs: dict[str, Any] = {}
+    leftover_dep_results: dict[str, Any] = dict(dep_context)
 
     # 被 spec.args 消费的位置参数。记录哪些参数名已被位置填充，
     # 以便在基于名称的注入（依赖 / Context / 静态 kwargs）时跳过。
-    positional_params: List[str] = []
+    positional_params: list[str] = []
     positional_kinds = (
         inspect.Parameter.POSITIONAL_ONLY,
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
@@ -109,7 +109,7 @@ def build_call_args(
         if param.kind in positional_kinds:
             positional_params.append(pname)
     # 前 len(spec.args) 个位置参数由 spec.args 填充。
-    args_filled: Set[str] = set(positional_params[: len(spec.args)])
+    args_filled: set[str] = set(positional_params[: len(spec.args)])
 
     for pname, param in params.items():
         # 跳过已被位置 spec.args 填充的参数。

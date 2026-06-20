@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List
+from typing import Any, Iterator
 
 from .task import TaskResult, TaskStatus
 
@@ -24,7 +24,7 @@ class RunReport:
         当且仅当所有非跳过任务都以 ``SUCCESS`` 结束时为 ``True``。
     """
 
-    results: Dict[str, TaskResult[object]] = field(default_factory=dict)
+    results: dict[str, TaskResult[object]] = field(default_factory=dict)
     success: bool = True
 
     # ---- 类型化访问 --------------------------------------------------- #
@@ -50,9 +50,9 @@ class RunReport:
         return len(self.results)
 
     # ---- 汇总 --------------------------------------------------------- #
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """用于日志/仪表盘的紧凑统计字典。"""
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         total_duration = 0.0
         for r in self.results.values():
             counts[r.status.value] = counts.get(r.status.value, 0) + 1
@@ -65,7 +65,7 @@ class RunReport:
             "total_duration_seconds": round(total_duration, 6),
         }
 
-    def failed_tasks(self) -> List[str]:
+    def failed_tasks(self) -> list[str]:
         """以 FAILED 状态结束的任务名列表。"""
         return [
             name for name, r in self.results.items() if r.status == TaskStatus.FAILED
@@ -73,7 +73,7 @@ class RunReport:
 
     def describe(self) -> str:
         """用于调试的人类可读多行报告。"""
-        lines: List[str] = [f"RunReport(success={self.success})"]
+        lines: list[str] = [f"RunReport(success={self.success})"]
         for name, r in self.results.items():
             dur = f"{r.duration:.3f}s" if r.duration is not None else "-"
             err = f" error={r.error!r}" if r.error else ""
