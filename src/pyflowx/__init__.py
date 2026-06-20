@@ -43,7 +43,7 @@ from .report import RunReport
 from .storage import JSONBackend, MemoryBackend, StateBackend
 from .task import TaskEvent, TaskResult, TaskSpec, TaskStatus
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     # 核心类型
