@@ -1,0 +1,253 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布版本号（如 v0.1.0）'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  # Trusted Publishing (OIDC) 上传 PyPI 所需
+  id-token: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 预检：发布前必须通过 CI
+  # ─────────────────────────────────────────────────────────────
+  pre-check:
+    name: Pre-release Check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 解析版本号
+        id: meta
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # 去除前缀 v
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "发布版本: $VERSION (tag: $TAG)"
+
+      - name: 校验版本号格式
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "❌ 版本号格式错误: $VERSION（应为 x.y.z 或 x.y.z-rc.n）"
+            exit 1
+          fi
+
+      - name: 校验 pyproject.toml 版本一致
+        run: |
+          # 精确提取 [project] 段的 version 字段（避免匹配到依赖的 version）
+          PY_VERSION=$(awk '/^\[project\]/{f=1} f&&/^version[[:space:]]*=/{gsub(/[" ]/,"",$3); print $3; exit}' pyproject.toml)
+          echo "pyproject.toml version: $PY_VERSION"
+          if [ "$PY_VERSION" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "❌ pyproject.toml 版本($PY_VERSION) 与 tag 版本(${{ steps.meta.outputs.version }}) 不一致"
+            echo "请先更新 pyproject.toml 中的 version 字段"
+            exit 1
+          fi
+
+  # ─────────────────────────────────────────────────────────────
+  # 构建：后端 wheel（纯 Python，单平台即可）+ 前端 dist
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: Build Artifacts
+    needs: pre-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: 设置 Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: 安装 pnpm（前端构建依赖）
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 设置 Node 22（前端构建）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: 安装前端依赖（缓存）
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建后端 wheel + sdist（自动触发前端构建）
+        run: uv build
+
+      - name: 上传后端产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: dist/*
+          retention-days: 30
+
+  build-frontend:
+    name: Build Frontend
+    needs: pre-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 设置 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: 安装依赖
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: 打包前端 dist
+        run: |
+          cd frontend
+          zip -r ../endo-frontend-${{ needs.pre-check.outputs.version }}.zip dist
+
+      - name: 上传前端产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-release
+          path: endo-frontend-*.zip
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────
+  # 发布：上传到 PyPI（Trusted Publishing / OIDC）
+  # ─────────────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [pre-check, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/endo/${{ needs.pre-check.outputs.version }}
+    permissions:
+      id-token: write
+    steps:
+      - name: 下载后端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: dist
+
+      - name: 校验产物
+        run: |
+          echo "待上传产物："
+          ls -la dist/
+          if [ -z "$(ls -A dist/*.whl dist/*.tar.gz 2>/dev/null)" ]; then
+            echo "❌ 未找到 wheel 或 sdist 产物"
+            exit 1
+          fi
+
+      - name: 上传到 PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  # ─────────────────────────────────────────────────────────────
+  # 发布：创建 GitHub Release
+  # ─────────────────────────────────────────────────────────────
+  release:
+    name: Publish Release
+    needs: [pre-check, build, build-frontend, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: 整理发布产物
+        run: |
+          mkdir -p assets
+          find release-assets -name "*.whl" -exec cp {} assets/ \;
+          find release-assets -name "*.tar.gz" -exec cp {} assets/ \;
+          find release-assets -name "*.zip" -exec cp {} assets/ \;
+          ls -la assets/
+
+      - name: 生成 Release Notes
+        id: notes
+        run: |
+          {
+            echo "## endo ${{ needs.pre-check.outputs.version }}"
+            echo ""
+            echo "### 下载"
+            echo ""
+            echo "- **后端 wheel**: \`endo-${{ needs.pre-check.outputs.version }}-py3-none-any.whl\`"
+            echo "- **源码包**: \`endo-${{ needs.pre-check.outputs.version }}.tar.gz\`"
+            echo "- **前端 dist**: \`endo-frontend-${{ needs.pre-check.outputs.version }}.zip\`"
+            echo ""
+            echo "### 安装"
+            echo ""
+            echo '```bash'
+            echo "# 后端"
+            echo "pip install endo-${{ needs.pre-check.outputs.version }}-py3-none-any.whl"
+            echo ""
+            echo "# 前端"
+            echo "unzip endo-frontend-${{ needs.pre-check.outputs.version }}.zip -d frontend-dist"
+            echo '```'
+            echo ""
+            echo "### 完整变更日志"
+          } > RELEASE_NOTES.md
+          {
+            echo "content<<EOF"
+            cat RELEASE_NOTES.md
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.pre-check.outputs.tag }}
+          name: endo ${{ needs.pre-check.outputs.version }}
+          body: ${{ steps.notes.outputs.content }}
+          files: assets/*
+          draft: false
+          prerelease: ${{ contains(needs.pre-check.outputs.version, '-') }}
+          generate_release_notes: true
