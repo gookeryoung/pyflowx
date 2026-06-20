@@ -24,6 +24,7 @@ pymake = "pyflowx.cli.pymake:main"
 
 [project.optional-dependencies]
 dev = [
+    "basedpyright>=1.39.8",
     "hatch>=1.14.2",
     "httpx>=0.28.0",
     "prek>=0.4.5",
@@ -42,6 +43,10 @@ dev = [
 build-backend = "hatchling.build"
 requires      = ["hatchling"]
 
+[[tool.uv.index]]
+default = true
+url     = "https://mirrors.aliyun.com/pypi/simple/"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyflowx"]
 
@@ -50,10 +55,6 @@ packages = ["src/pyflowx"]
 
 [tool.uv.sources]
 pyflowx = { workspace = true }
-
-[[tool.uv.index]]
-default = true
-url     = "https://mirrors.aliyun.com/pypi/simple/"
 
 [dependency-groups]
 dev = ["pyflowx[dev]"]
