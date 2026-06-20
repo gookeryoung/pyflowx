@@ -6,7 +6,6 @@ from datetime import datetime
 
 import pytest
 
-import pyflowx as px
 from pyflowx.task import TaskResult, TaskSpec, TaskStatus
 
 
@@ -51,9 +50,7 @@ def test_task_result_duration_computed() -> None:
     spec: TaskSpec[None] = TaskSpec("a", _fn)
     start = datetime(2024, 1, 1, 0, 0, 0)
     end = datetime(2024, 1, 1, 0, 0, 5)
-    result: TaskResult[None] = TaskResult(
-        spec=spec, started_at=start, finished_at=end
-    )
+    result: TaskResult[None] = TaskResult(spec=spec, started_at=start, finished_at=end)
     assert result.duration == 5.0
 
 

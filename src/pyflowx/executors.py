@@ -1,16 +1,15 @@
-"""Executors and the public :func:`run` entry point.
+"""执行器与公共 :func:`run` 入口。
 
-Three execution strategies share a common layer-by-layer driver:
+三种执行策略共享一个逐层驱动器：
 
-* ``sequential`` — deterministic, one task at a time. Best for debugging.
-* ``thread``     — layer-internal concurrency via a thread pool. Best for
-                   I/O-bound sync tasks.
-* ``async``      — layer-internal concurrency via ``asyncio.gather``.
-                   Sync tasks are offloaded to a thread pool; async tasks
-                   run on the event loop. Best for I/O-bound async tasks.
+* ``sequential`` —— 确定性、一次一个任务。最适合调试。
+* ``thread``     —— 通过线程池实现层内并发。最适合 I/O 密集型同步任务。
+* ``async``      —— 通过 ``asyncio.gather`` 实现层内并发。同步任务被
+                    卸载到线程池；异步任务运行在事件循环上。最适合
+                    I/O 密集型异步任务。
 
-All three honour ``retries``, ``timeout``, context injection, state
-backends (resume), and emit :class:`~pyflowx.task.TaskEvent` for observers.
+三者都遵循 ``retries``、``timeout``、上下文注入、状态后端（续跑），
+并向观察者发出 :class:`~pyflowx.task.TaskEvent`。
 """
 
 from __future__ import annotations
@@ -31,15 +30,15 @@ from .task import TaskEvent, TaskResult, TaskSpec, TaskStatus
 
 logger = logging.getLogger("pyflowx")
 
-# Observer callback type.
+# 观察者回调类型。
 EventCallback = Callable[[TaskEvent], None]
 
-# Strategy selector literal.
+# 策略选择字面量。
 Strategy = str  # "sequential" | "thread" | "async"
 
 
 def _is_async_fn(spec: TaskSpec[object]) -> bool:
-    """True if ``spec.fn`` is a coroutine function."""
+    """判断 ``spec.fn`` 是否为协程函数。"""
     return inspect.iscoroutinefunction(spec.fn)
 
 
@@ -47,7 +46,7 @@ def _emit(
     on_event: Optional[EventCallback],
     result: TaskResult[object],
 ) -> None:
-    """Fire an observer event if a callback is registered."""
+    """若注册了回调则触发一个观察者事件。"""
     if on_event is None:
         return
     on_event(
@@ -91,7 +90,7 @@ def _run_sync_with_retry(
     context: Mapping[str, Any],
     layer_idx: Optional[int],
 ) -> TaskResult[object]:
-    """Execute a sync task with retries; return a populated TaskResult."""
+    """执行同步任务并带重试；返回填充好的 TaskResult。"""
     result: TaskResult[object] = TaskResult(spec=spec)
     result.started_at = datetime.now()
     max_attempts = spec.retries + 1
@@ -104,7 +103,7 @@ def _run_sync_with_retry(
             result.status = TaskStatus.SUCCESS
             result.finished_at = datetime.now()
             return result
-        except Exception as exc:  # noqa: BLE001 - user code may raise anything
+        except Exception as exc:  # noqa: BLE001 - 用户代码可能抛任何异常
             result.error = exc
             if result.attempts >= max_attempts:
                 _finalize_failure(result, layer_idx)  # pragma: no cover
@@ -117,7 +116,7 @@ async def _run_async_with_retry(
     context: Mapping[str, Any],
     layer_idx: Optional[int],
 ) -> TaskResult[object]:
-    """Execute a task (sync or async) on the event loop with retries."""
+    """在事件循环上执行任务（同步或异步）并带重试。"""
     result: TaskResult[object] = TaskResult(spec=spec)
     result.started_at = datetime.now()
     max_attempts = spec.retries + 1
@@ -134,8 +133,10 @@ async def _run_async_with_retry(
                 else:
                     result.value = await coro
             else:
-                # Offload sync work to a thread so the event loop stays alive.
-                fn_call: Callable[[], Any] = lambda: spec.fn(*args, **kwargs)
+                # 将同步工作卸载到线程，保持事件循环存活。
+                def fn_call() -> Any:
+                    return spec.fn(*args, **kwargs)
+
                 if spec.timeout is not None:
                     result.value = await asyncio.wait_for(
                         loop.run_in_executor(None, fn_call), timeout=spec.timeout
@@ -164,13 +165,13 @@ async def _run_async_with_retry(
 
 
 # ---------------------------------------------------------------------- #
-# Layer driver
+# 层驱动器
 # ---------------------------------------------------------------------- #
 def _build_context(
     spec: TaskSpec[object],
     global_context: Mapping[str, Any],
 ) -> Mapping[str, Any]:
-    """Restrict the global context to this task's dependencies."""
+    """将全局上下文限制为本任务的依赖。"""
     return {
         dep: global_context[dep] for dep in spec.depends_on if dep in global_context
     }
@@ -185,7 +186,7 @@ def _execute_layer_sequential(
     layer_idx: int,
     on_event: Optional[EventCallback],
 ) -> None:
-    """Run a layer's tasks one by one."""
+    """逐个运行某层的任务。"""
     for name in layer:
         spec = graph.spec(name)
         if backend.has(name):
@@ -213,8 +214,8 @@ def _execute_layer_threaded(
     on_event: Optional[EventCallback],
     max_workers: int,
 ) -> None:
-    """Run a layer's tasks concurrently in a thread pool."""
-    # First, satisfy cached tasks synchronously.
+    """在线程池中并发运行某层的任务。"""
+    # 先同步满足已缓存任务。
     to_run: List[str] = []
     for name in layer:
         if backend.has(name):
@@ -235,14 +236,14 @@ def _execute_layer_threaded(
         future_to_name: Dict[concurrent.futures.Future[TaskResult[object]], str] = {}
         for name in to_run:
             spec = graph.spec(name)
-            # Snapshot the context for this task to avoid races.
+            # 为本任务快照上下文以避免竞态。
             task_ctx = _build_context(spec, context)
             fut = pool.submit(_run_sync_with_retry, spec, task_ctx, layer_idx)
             future_to_name[fut] = name
 
         for fut in concurrent.futures.as_completed(future_to_name):
             name = future_to_name[fut]
-            result = fut.result()  # raises TaskFailedError on failure
+            result = fut.result()  # 失败时抛出 TaskFailedError
             context[name] = result.value
             backend.save(name, result.value)
             report.results[name] = result
@@ -258,7 +259,7 @@ async def _execute_layer_async(
     layer_idx: int,
     on_event: Optional[EventCallback],
 ) -> None:
-    """Run a layer's tasks concurrently on the event loop."""
+    """在事件循环上并发运行某层的任务。"""
     to_run: List[str] = []
     for name in layer:
         if backend.has(name):
@@ -290,7 +291,7 @@ async def _execute_layer_async(
 
 
 # ---------------------------------------------------------------------- #
-# Public API
+# 公共 API
 # ---------------------------------------------------------------------- #
 def run(
     graph: Graph,
@@ -301,32 +302,32 @@ def run(
     on_event: Optional[EventCallback] = None,
     state: Optional[StateBackend] = None,
 ) -> RunReport:
-    """Execute a graph and return a :class:`RunReport`.
+    """执行图并返回 :class:`RunReport`。
 
-    Parameters
-    ----------
+    参数
+    ----
     graph:
-        The validated :class:`Graph` to execute.
+        待执行的已校验 :class:`Graph`。
     strategy:
-        ``"sequential"`` (default), ``"thread"``, or ``"async"``.
+        ``"sequential"``（默认）、``"thread"`` 或 ``"async"``。
     max_workers:
-        Thread-pool size for ``"thread"``. Defaults to ``min(32, len(layer))``.
+        ``"thread"`` 的线程池大小。默认 ``min(32, len(layer))``。
     dry_run:
-        If ``True``, print the execution plan (layers + injection) and
-        return an empty report without executing anything.
+        若为 ``True``，打印执行计划（层 + 注入）并返回空报告，不执行
+        任何任务。
     on_event:
-        Optional callback invoked on every status transition.
+        可选回调，在每次状态转换时调用。
     state:
-        Optional :class:`StateBackend` for resumable runs. Defaults to an
-        in-memory backend (no persistence across processes).
+        可选 :class:`StateBackend`，用于断点续跑。默认为内存后端
+        （不跨进程持久化）。
 
-    Raises
-    ------
+    抛出
+    ----
     ValueError
-        If ``strategy`` is not recognised.
+        ``strategy`` 不被识别时。
     TaskFailedError
-        If any task fails after exhausting retries. The run aborts at the
-        failing layer; tasks in later layers are not attempted.
+        任何任务耗尽重试后仍失败时。运行在失败层中止；后续层的任务
+        不会被执行。
     """
     if strategy not in ("sequential", "thread", "async"):
         raise ValueError(
@@ -361,7 +362,7 @@ def run(
 
 
 def _print_dry_run(graph: Graph, layers: List[List[str]]) -> None:
-    """Print the execution plan without running anything."""
+    """打印执行计划但不运行任何任务。"""
     print(f"Dry run: {len(graph)} tasks, {len(layers)} layers")
     for idx, layer in enumerate(layers, 1):
         print(f"  Layer {idx}: {layer}")

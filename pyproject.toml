@@ -73,7 +73,7 @@ dev = ["pyflowx[dev]"]
 
 [tool.coverage.run]
 branch      = true
-concurrency = ["greenlet", "thread"]
+concurrency = ["thread"]
 source      = ["pyflowx"]
 
 [tool.coverage.report]

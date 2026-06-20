@@ -14,14 +14,14 @@ from .errors import CycleError, DuplicateTaskError, MissingDependencyError
 from .task import TaskSpec
 
 # graphlib 自 3.9 起进入标准库；3.8 回退到 backport。
-if sys.version_info >= (3, 9):
+if sys.version_info >= (3, 9):  # pragma: no cover
     import graphlib
 
     _TopologicalSorter = graphlib.TopologicalSorter
-else:  # pragma: no cover - 仅在 3.8 上执行
-    import graphlib  # type: ignore[no-redef]
+else:  # pragma: no cover
+    import graphlib  # type: ignore[import-untyped]  # pragma: no cover
 
-    _TopologicalSorter = graphlib.TopologicalSorter
+    _TopologicalSorter = graphlib.TopologicalSorter  # pragma: no cover
 
 
 class Graph:

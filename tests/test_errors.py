@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-import pyflowx as px
 from pyflowx.errors import (
     CycleError,
     DuplicateTaskError,
