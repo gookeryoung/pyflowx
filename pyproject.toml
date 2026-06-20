@@ -9,6 +9,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
+dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
 description = "Lightweight, type-safe DAG task scheduler with multi-strategy execution."
 keywords = ["async", "dag", "scheduler", "task", "workflow"]
 license = { text = "MIT" }
@@ -16,8 +17,9 @@ name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
 version = "0.1.1"
-# graphlib_backport only needed on Python 3.8 (stdlib graphlib exists in 3.9+)
-dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
+
+[project.scripts]
+pyflowx-demo = "pyflowx.__main__:main"
 
 [project.optional-dependencies]
 dev = [
