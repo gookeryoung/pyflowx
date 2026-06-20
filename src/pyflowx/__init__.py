@@ -74,7 +74,7 @@ from .errors import (
 from .executors import Strategy, run
 from .graph import Graph
 from .report import RunReport
-from .cli import CliExitCode, CliRunner
+from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
 from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 

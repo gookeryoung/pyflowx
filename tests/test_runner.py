@@ -491,7 +491,7 @@ class TestCliRunnerErrorHandling:
         def raise_interrupt(*args: Any, **kwargs: Any) -> None:
             raise KeyboardInterrupt
 
-        with patch("pyflowx.cli.runner.run", side_effect=raise_interrupt):
+        with patch("pyflowx.runner.run", side_effect=raise_interrupt):
             exit_code = runner.run(["echo"])
         assert exit_code == CliExitCode.INTERRUPTED.value
         captured = capsys.readouterr()
@@ -506,7 +506,7 @@ class TestCliRunnerErrorHandling:
         def raise_error(*args: Any, **kwargs: Any) -> None:
             raise TaskFailedError("echo", RuntimeError("boom"), 1)
 
-        with patch("pyflowx.cli.runner.run", side_effect=raise_error):
+        with patch("pyflowx.runner.run", side_effect=raise_error):
             exit_code = runner.run(["echo"])
         assert exit_code == CliExitCode.FAILURE.value
         captured = capsys.readouterr()
@@ -523,7 +523,7 @@ class TestCliRunnerErrorHandling:
         def raise_custom(*args: Any, **kwargs: Any) -> None:
             raise CustomError("unexpected")
 
-        with patch("pyflowx.cli.runner.run", side_effect=raise_custom):
+        with patch("pyflowx.runner.run", side_effect=raise_custom):
             with pytest.raises(CustomError):
                 runner.run(["echo"])
 

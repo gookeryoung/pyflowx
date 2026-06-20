@@ -18,7 +18,6 @@
     "evenBetterToml.formatter.arrayAutoCollapse": true,
     "evenBetterToml.formatter.arrayAutoExpand": true,
     "evenBetterToml.formatter.arrayTrailingComma": true,
-    "evenBetterToml.formatter.columnWidth": 120,
     "evenBetterToml.formatter.compactEntries": false,
     "evenBetterToml.formatter.indentEntries": false,
     "evenBetterToml.formatter.indentTables": false,

@@ -7,17 +7,26 @@
 - MapSkill 通过继承 + create_scheduler_map 构建命令映射
 - CliRunner 通过关键字参数直接注入命令到图的映射, 更声明式
 - CliRunner 复用 pyflowx 的 DAG 调度能力 (run/Graph/TaskSpec)
+
+verbose 模式
+------------
+``CliRunner`` 默认 ``verbose=True``, 会:
+1. 打印任务生命周期 (开始/成功/失败/跳过) 到 stdout
+2. 对 ``cmd`` 类任务, 显示执行的命令及其标准输出/标准错误
+
+可通过构造参数 ``verbose=False`` 或命令行 ``--quiet`` 关闭.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import enum
 import sys
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Union
 
 from .errors import PyFlowXError
-from .executors import Strategy, run
+from .executors import Strategy, _normalize_strategy, run
 from .graph import Graph
 
 __all__ = ["CliRunner", "CliExitCode"]
@@ -31,6 +40,33 @@ class CliExitCode(enum.IntEnum):
     INTERRUPTED = 130  # 与 POSIX 信号中断一致
 
 
+def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
+    """创建新图, 其中所有 TaskSpec 的 verbose 字段被设置为指定值.
+
+    使用 ``dataclasses.replace`` 在不可变的 TaskSpec 上创建带 verbose 标记的副本.
+    依赖关系、标签等元数据全部保留.
+
+    Parameters
+    ----------
+    graph : Graph
+        原始图.
+    verbose : bool
+        要设置的 verbose 值.
+
+    Returns
+    -------
+    Graph
+        所有 spec 的 verbose 字段已更新的新图.
+    """
+    new_specs = []
+    for spec in graph.all_specs().values():
+        if spec.verbose == verbose:
+            new_specs.append(spec)
+        else:
+            new_specs.append(dataclasses.replace(spec, verbose=verbose))
+    return Graph.from_specs(new_specs)
+
+
 class CliRunner:
     """命令行运行器: 根据用户输入执行对应的任务流图.
 
@@ -39,11 +75,14 @@ class CliRunner:
 
     Parameters
     ----------
-    strategy : str
-        默认执行策略 (``"sequential"`` / ``"thread"`` / ``"async"``).
-        可被命令行 ``--strategy`` 覆盖.
+    strategy : str | Strategy
+        默认执行策略 (``Strategy.SEQUENTIAL`` / ``Strategy.THREAD`` /
+        ``Strategy.ASYNC`` 或对应字符串). 可被命令行 ``--strategy`` 覆盖.
     description : str
         CLI 描述文本, 显示在 ``--help`` 中.
+    verbose : bool
+        是否显示详细执行过程. ``True`` 时打印任务生命周期和 subprocess 输出.
+        默认 ``True``. 可被命令行 ``--quiet`` 关闭.
     **graphs : Graph
         命令名到图的映射. 每个 key 是一个命令名, value 是对应的
         :class:`~pyflowx.graph.Graph`.
@@ -65,20 +104,33 @@ class CliRunner:
     指定策略与描述::
 
         runner = px.CliRunner(
-            strategy="thread",
+            strategy=px.Strategy.THREAD,
             description="My build tool",
             test=px.Graph.from_specs([...]),
         )
         runner.run(["test", "--strategy", "sequential"])
     """
 
-    def __init__(self, *, strategy: Strategy = "sequential", description: str = "", graphs: Dict[str, Graph]) -> None:
+    def __init__(
+        self,
+        *,
+        strategy: Union[str, Strategy] = Strategy.SEQUENTIAL,
+        description: str = "",
+        verbose: bool = True,
+        **graphs: Graph,
+    ) -> None:
         if not graphs:
             raise ValueError("CliRunner 至少需要一个命令 (通过关键字参数提供)")
-
+        # 校验所有值都是 Graph
+        for name, graph in graphs.items():
+            if not isinstance(graph, Graph):
+                raise TypeError(
+                    f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}"
+                )
         self._graphs: Dict[str, Graph] = dict(graphs)
-        self._strategy: Strategy = strategy
+        self._strategy: Strategy = _normalize_strategy(strategy)
         self._description: str = description
+        self._verbose: bool = verbose
 
     # ------------------------------------------------------------------ #
     # 内省
@@ -103,6 +155,11 @@ class CliRunner:
         """CLI 描述文本."""
         return self._description
 
+    @property
+    def verbose(self) -> bool:
+        """是否显示详细执行过程."""
+        return self._verbose
+
     # ------------------------------------------------------------------ #
     # 参数解析
     # ------------------------------------------------------------------ #
@@ -116,8 +173,8 @@ class CliRunner:
         """创建参数解析器.
 
         子类可覆盖此方法以添加自定义参数. 覆盖时应保留 ``command``
-        位置参数与 ``--strategy`` / ``--dry-run`` / ``--list`` 选项,
-        否则 :meth:`run` 的默认逻辑可能失效.
+        位置参数与 ``--strategy`` / ``--dry-run`` / ``--list`` / ``--quiet``
+        选项, 否则 :meth:`run` 的默认逻辑可能失效.
 
         Returns
         -------
@@ -130,26 +187,31 @@ class CliRunner:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=self._format_commands_help(),
         )
-        _ = parser.add_argument(
+        parser.add_argument(
             "command",
             nargs="?",
             help="要执行的命令",
         )
-        _ = parser.add_argument(
+        parser.add_argument(
             "--strategy",
-            choices=["sequential", "thread", "async"],
-            default=self._strategy,
+            choices=[s.value for s in Strategy],
+            default=self._strategy.value,
             help="执行策略 (默认: %(default)s)",
         )
-        _ = parser.add_argument(
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="只打印执行计划, 不实际运行",
         )
-        _ = parser.add_argument(
+        parser.add_argument(
             "--list",
             action="store_true",
             help="列出所有可用命令",
+        )
+        parser.add_argument(
+            "--quiet",
+            action="store_true",
+            help="静默模式, 不显示执行过程 (覆盖默认 verbose)",
         )
         return parser
 
@@ -203,15 +265,27 @@ class CliRunner:
             )
             return CliExitCode.FAILURE.value
 
-        # 执行对应的图
+        # 确定是否 verbose: --quiet 覆盖默认值
+        verbose = self._verbose and not parsed.quiet
+
+        # 对图应用 verbose 设置 (重建带 verbose 标记的 spec)
         graph = self._graphs[parsed.command]
+        if verbose:
+            graph = _apply_verbose_to_graph(graph, verbose=True)
+
+        # 执行对应的图
         try:
             report = run(
                 graph,
                 strategy=parsed.strategy,
                 dry_run=parsed.dry_run,
+                verbose=verbose,
             )
-            return CliExitCode.SUCCESS.value if report.success else CliExitCode.FAILURE.value
+            return (
+                CliExitCode.SUCCESS.value
+                if report.success
+                else CliExitCode.FAILURE.value
+            )
         except KeyboardInterrupt:
             print("\n操作已取消", file=sys.stderr)
             return CliExitCode.INTERRUPTED.value
