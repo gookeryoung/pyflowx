@@ -52,15 +52,14 @@
 from __future__ import annotations
 
 from .conditions import (
-    BuiltinConditions,
-    Constants,
-    Condition,
     IS_LINUX,
     IS_MACOS,
     IS_POSIX,
     IS_WINDOWS,
+    BuiltinConditions,
+    Condition,
+    Constants,
 )
-from .cli import CliExitCode, CliRunner
 from .context import Context, build_call_args, describe_injection
 from .errors import (
     CycleError,
@@ -75,6 +74,7 @@ from .errors import (
 from .executors import run
 from .graph import Graph
 from .report import RunReport
+from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
 from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 
