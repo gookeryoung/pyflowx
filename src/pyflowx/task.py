@@ -15,16 +15,16 @@
 * ``TaskStatus`` 是封闭枚举；执行器绝不发明临时字符串。
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import (
     Any,
     Callable,
     Coroutine,
     Generic,
+    List,
     Mapping,
     Optional,
     Tuple,
@@ -43,6 +43,16 @@ TaskFn = Union[
 # 跨任务结果映射。值刻意使用 ``Any``，因为不同任务返回不同类型；
 # 单任务类型由函数签名本身保留。
 Context = Mapping[str, Any]
+
+# 命令类型支持
+TaskCmd = Union[
+    List[str],  # 命令列表, 如 ["ls", "-la"]
+    str,  # shell 命令字符串
+    Callable[..., T],  # Python 函数
+]
+
+# 条件判断函数类型
+Condition = Callable[[], bool]
 
 
 class TaskStatus(Enum):
@@ -66,6 +76,13 @@ class TaskSpec(Generic[T]):
     fn:
         待执行的可调用对象，可为同步或异步。其参数名驱动自动上下文
         注入（见 :mod:`pyflowx.context`）。
+        若提供 ``cmd`` 参数，则此参数会被忽略。
+    cmd:
+        命令列表或 shell 字符串，支持三种形态：
+        - ``list[str]``: 命令及参数列表，如 ``["ls", "-la"]``
+        - ``str``: shell 命令字符串，如 ``"pip freeze > requirements.txt"``
+        - ``Callable``: Python 函数，与 ``fn`` 参数等效
+        若提供此参数，会自动包装为执行函数，覆盖 ``fn`` 参数。
     depends_on:
         必须先完成才能运行本任务的任务名列表。顺序无关；框架会做
         拓扑排序。
@@ -83,16 +100,26 @@ class TaskSpec(Generic[T]):
         取消 worker future。
     tags:
         自由标签，供 :meth:`Graph.subgraph` 做选择性执行与调试。
+    conditions:
+        条件判断函数列表，只有所有条件都返回 ``True`` 时才执行任务。
+        若任一条件返回 ``False``，任务会被标记为 SKIPPED。
+        用于平台判断、环境变量检查等场景。
+    cwd:
+        命令执行的工作目录，仅在使用 ``cmd`` 参数时有效。
+        ``None`` 表示当前目录。
     """
 
     name: str
-    fn: TaskFn[T]
+    fn: Optional[TaskFn[T]] = None
+    cmd: Optional[TaskCmd] = None
     depends_on: Tuple[str, ...] = ()
     args: Tuple[Any, ...] = ()
     kwargs: Mapping[str, Any] = field(default_factory=dict)
     retries: int = 0
     timeout: Optional[float] = None
     tags: Tuple[str, ...] = ()
+    conditions: Tuple[Condition, ...] = ()
+    cwd: Optional[Path] = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -103,6 +130,117 @@ class TaskSpec(Generic[T]):
             raise ValueError(f"TaskSpec '{self.name}': timeout must be > 0.")
         if self.name in self.depends_on:
             raise ValueError(f"TaskSpec '{self.name}' cannot depend on itself.")
+        if self.fn is None and self.cmd is None:
+            raise ValueError(f"TaskSpec '{self.name}': 必须提供 fn 或 cmd 参数。")
+
+    @property
+    def effective_fn(self) -> TaskFn[T]:
+        """获取有效的执行函数.
+
+        若提供了 ``cmd`` 参数，则返回包装后的命令执行函数；
+        否则返回 ``fn`` 参数。
+        """
+        if self.cmd is not None:
+            return self._wrap_cmd()
+        if self.fn is not None:
+            return self.fn
+        raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")
+
+    def _wrap_cmd(self) -> TaskFn[T]:
+        """将 cmd 包装为可执行函数.
+
+        Returns
+        -------
+        TaskFn[T]
+            包装后的执行函数.
+        """
+        cmd = self.cmd
+        cwd = self.cwd
+        timeout = self.timeout
+
+        if isinstance(cmd, list):
+
+            def _run_list() -> T:
+                import subprocess
+
+                cmd_str = " ".join(str(arg) for arg in cmd)
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        cwd=cwd,
+                        timeout=timeout,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                except FileNotFoundError:
+                    raise RuntimeError(f"命令未找到: {cmd_str}")
+                except subprocess.TimeoutExpired:
+                    raise RuntimeError(f"命令执行超时: {cmd_str} ({timeout}s)")
+                except OSError as e:
+                    raise RuntimeError(f"命令执行异常: {cmd_str}: {e}")
+
+                if result.returncode == 0:
+                    return None  # type: ignore[return-value]
+
+                err_msg = f"命令执行失败: `{cmd_str}`, 返回码: {result.returncode}"
+                if result.stderr.strip():
+                    err_msg += f"\n{result.stderr.strip()}"
+                raise RuntimeError(err_msg)
+
+            _run_list.__name__ = self.name
+            return _run_list  # type: ignore[return-value]
+
+        if isinstance(cmd, str):
+
+            def _run_shell() -> T:
+                import subprocess
+
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        shell=True,
+                        cwd=cwd,
+                        timeout=timeout,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                except FileNotFoundError:
+                    raise RuntimeError(f"Shell 命令未找到: {cmd}")
+                except subprocess.TimeoutExpired:
+                    raise RuntimeError(f"Shell 命令执行超时: {cmd} ({timeout}s)")
+                except OSError as e:
+                    raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}")
+
+                if result.returncode == 0:
+                    return None  # type: ignore[return-value]
+
+                err_msg = f"Shell 命令执行失败: `{cmd}`, 返回码: {result.returncode}"
+                if result.stderr.strip():
+                    err_msg += f"\n{result.stderr.strip()}"
+                raise RuntimeError(err_msg)
+
+            _run_shell.__name__ = self.name
+            return _run_shell  # type: ignore[return-value]
+
+        if callable(cmd):
+            return cmd  # type: ignore[return-value]
+
+        raise TypeError(
+            f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}"
+        )
+
+    def should_execute(self) -> bool:
+        """检查任务是否应该执行.
+
+        Returns
+        -------
+        bool
+            若所有条件都返回 ``True``，则返回 ``True``；
+            否则返回 ``False``。
+        """
+        return all(condition() for condition in self.conditions)
 
 
 @dataclass

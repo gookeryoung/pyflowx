@@ -72,7 +72,9 @@ def build_call_args(
     InjectionError
         若必需参数无法满足，或静态 ``kwargs`` 与注入依赖名冲突。
     """
-    sig = inspect.signature(spec.fn)
+    # 使用 effective_fn 而不是 fn，以支持 cmd 参数
+    fn = spec.effective_fn
+    sig = inspect.signature(fn)
     params = sig.parameters
 
     # 检测特殊参数类型。
@@ -160,7 +162,9 @@ def describe_injection(spec: TaskSpec[object]) -> str:
 
     供 ``dry_run`` 使用，在不执行的情况下展示执行计划。
     """
-    sig = inspect.signature(spec.fn)
+    # 使用 effective_fn 而不是 fn，以支持 cmd 参数
+    fn = spec.effective_fn
+    sig = inspect.signature(fn)
     # 确定哪些位置参数由 spec.args 填充。
     positional_params = [
         p

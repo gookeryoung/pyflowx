@@ -165,12 +165,15 @@ class Graph:
                     TaskSpec(
                         name=spec.name,
                         fn=spec.fn,
+                        cmd=spec.cmd,
                         depends_on=pruned_deps,
                         args=spec.args,
                         kwargs=spec.kwargs,
                         retries=spec.retries,
                         timeout=spec.timeout,
                         tags=spec.tags,
+                        conditions=spec.conditions,
+                        cwd=spec.cwd,
                     )
                 )
         return Graph.from_specs(kept)
@@ -189,12 +192,15 @@ class Graph:
                     TaskSpec(
                         name=spec.name,
                         fn=spec.fn,
+                        cmd=spec.cmd,
                         depends_on=pruned_deps,
                         args=spec.args,
                         kwargs=spec.kwargs,
                         retries=spec.retries,
                         timeout=spec.timeout,
                         tags=spec.tags,
+                        conditions=spec.conditions,
+                        cwd=spec.cwd,
                     )
                 )
         return Graph.from_specs(kept)

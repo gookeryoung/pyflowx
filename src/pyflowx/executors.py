@@ -38,8 +38,8 @@ Strategy = str  # "sequential" | "thread" | "async"
 
 
 def _is_async_fn(spec: TaskSpec[object]) -> bool:
-    """判断 ``spec.fn`` 是否为协程函数。"""
-    return inspect.iscoroutinefunction(spec.fn)
+    """判断 ``spec.effective_fn`` 是否为协程函数。"""
+    return inspect.iscoroutinefunction(spec.effective_fn)
 
 
 def _emit(
@@ -92,6 +92,14 @@ def _run_sync_with_retry(
 ) -> TaskResult[object]:
     """执行同步任务并带重试；返回填充好的 TaskResult。"""
     result: TaskResult[object] = TaskResult(spec=spec)
+
+    # 检查条件是否满足
+    if spec.conditions and not spec.should_execute():
+        result.status = TaskStatus.SKIPPED
+        result.finished_at = datetime.now()
+        logger.info("task %r skipped (条件不满足)", spec.name)
+        return result
+
     result.started_at = datetime.now()
     max_attempts = spec.retries + 1
     args, kwargs = build_call_args(spec, context)
@@ -99,7 +107,7 @@ def _run_sync_with_retry(
     while True:
         result.attempts += 1
         try:
-            result.value = spec.fn(*args, **kwargs)
+            result.value = spec.effective_fn(*args, **kwargs)
             result.status = TaskStatus.SUCCESS
             result.finished_at = datetime.now()
             return result
@@ -118,6 +126,14 @@ async def _run_async_with_retry(
 ) -> TaskResult[object]:
     """在事件循环上执行任务（同步或异步）并带重试。"""
     result: TaskResult[object] = TaskResult(spec=spec)
+
+    # 检查条件是否满足
+    if spec.conditions and not spec.should_execute():
+        result.status = TaskStatus.SKIPPED
+        result.finished_at = datetime.now()
+        logger.info("task %r skipped (条件不满足)", spec.name)
+        return result
+
     result.started_at = datetime.now()
     max_attempts = spec.retries + 1
     args, kwargs = build_call_args(spec, context)
@@ -127,7 +143,7 @@ async def _run_async_with_retry(
         result.attempts += 1
         try:
             if _is_async_fn(spec):
-                coro = cast(Awaitable[Any], spec.fn(*args, **kwargs))
+                coro = cast(Awaitable[Any], spec.effective_fn(*args, **kwargs))
                 if spec.timeout is not None:
                     result.value = await asyncio.wait_for(coro, timeout=spec.timeout)
                 else:
@@ -135,7 +151,7 @@ async def _run_async_with_retry(
             else:
                 # 将同步工作卸载到线程，保持事件循环存活。
                 def fn_call() -> Any:
-                    return spec.fn(*args, **kwargs)
+                    return spec.effective_fn(*args, **kwargs)
 
                 if spec.timeout is not None:
                     result.value = await asyncio.wait_for(

@@ -22,10 +22,44 @@
     ])
     report = px.run(graph, strategy="sequential")
     print(report["double"])  # [2, 4, 6]
+
+命令行任务示例
+--------------
+    import pyflowx as px
+    from pyflowx.conditions import IS_WINDOWS, BuiltinConditions
+
+    graph = px.Graph.from_specs([
+        # 使用命令列表
+        px.TaskSpec("list_files", cmd=["ls", "-la"]),
+        # 使用 shell 命令
+        px.TaskSpec("check_git", cmd="git status"),
+        # 条件执行：仅在 Windows 上运行
+        px.TaskSpec(
+            "win_only",
+            cmd=["dir"],
+            conditions=(IS_WINDOWS,)
+        ),
+        # 条件执行：仅在 git 已安装时运行
+        px.TaskSpec(
+            "git_check",
+            cmd=["git", "--version"],
+            conditions=(BuiltinConditions.HAS_APP_INSTALLED("git"),)
+        ),
+    ])
+    report = px.run(graph)
 """
 
 from __future__ import annotations
 
+from .conditions import (
+    BuiltinConditions,
+    Constants,
+    Condition,
+    IS_LINUX,
+    IS_MACOS,
+    IS_POSIX,
+    IS_WINDOWS,
+)
 from .context import Context, build_call_args, describe_injection
 from .errors import (
     CycleError,
@@ -41,7 +75,7 @@ from .executors import run
 from .graph import Graph
 from .report import RunReport
 from .storage import JSONBackend, MemoryBackend, StateBackend
-from .task import TaskEvent, TaskResult, TaskSpec, TaskStatus
+from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 
 __version__ = "0.1.2"
 
@@ -52,6 +86,7 @@ __all__ = [
     "TaskResult",
     "TaskEvent",
     "Context",
+    "TaskCmd",
     "Graph",
     "RunReport",
     # 执行
@@ -69,6 +104,14 @@ __all__ = [
     "TaskTimeoutError",
     "InjectionError",
     "StorageError",
+    # 条件判断
+    "Condition",
+    "Constants",
+    "BuiltinConditions",
+    "IS_WINDOWS",
+    "IS_LINUX",
+    "IS_MACOS",
+    "IS_POSIX",
     # 辅助（高级）
     "build_call_args",
     "describe_injection",
