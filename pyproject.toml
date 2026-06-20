@@ -15,7 +15,7 @@ license = { text = "MIT" }
 name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.0"
+version = "0.1.1"
 # graphlib_backport only needed on Python 3.8 (stdlib graphlib exists in 3.9+)
 dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
 
