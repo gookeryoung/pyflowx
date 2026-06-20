@@ -60,6 +60,7 @@ from .conditions import (
     IS_POSIX,
     IS_WINDOWS,
 )
+from .cli import CliExitCode, CliRunner
 from .context import Context, build_call_args, describe_injection
 from .errors import (
     CycleError,
@@ -91,6 +92,9 @@ __all__ = [
     "RunReport",
     # 执行
     "run",
+    # CLI 运行器
+    "CliRunner",
+    "CliExitCode",
     # 状态后端
     "StateBackend",
     "MemoryBackend",
