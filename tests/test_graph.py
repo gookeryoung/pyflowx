@@ -16,8 +16,8 @@ def test_from_specs_builds_graph() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, ("a",)),
-            px.TaskSpec("c", _fn, ("a", "b")),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
+            px.TaskSpec("c", _fn, depends_on=("a", "b")),
         ]
     )
     assert set(graph.names) == {"a", "b", "c"}
@@ -30,7 +30,7 @@ def test_from_specs_allows_forward_references() -> None:
     # b depends on a, but a is declared after b — order should not matter.
     graph = px.Graph.from_specs(
         [
-            px.TaskSpec("b", _fn, ("a",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
             px.TaskSpec("a", _fn),
         ]
     )
@@ -49,7 +49,7 @@ def test_duplicate_task_raises() -> None:
 
 def test_missing_dependency_raises() -> None:
     with pytest.raises(MissingDependencyError) as exc_info:
-        px.Graph.from_specs([px.TaskSpec("b", _fn, ("a",))])
+        px.Graph.from_specs([px.TaskSpec("b", _fn, depends_on=("a",))])
     assert exc_info.value.task == "b"
     assert exc_info.value.dependency == "a"
 
@@ -58,9 +58,9 @@ def test_cycle_detection() -> None:
     with pytest.raises(CycleError):
         px.Graph.from_specs(
             [
-                px.TaskSpec("a", _fn, ("c",)),
-                px.TaskSpec("b", _fn, ("a",)),
-                px.TaskSpec("c", _fn, ("b",)),
+                px.TaskSpec("a", _fn, depends_on=("c",)),
+                px.TaskSpec("b", _fn, depends_on=("a",)),
+                px.TaskSpec("c", _fn, depends_on=("b",)),
             ]
         )
 
@@ -70,8 +70,8 @@ def test_layers_grouping() -> None:
         [
             px.TaskSpec("a", _fn),
             px.TaskSpec("b", _fn),
-            px.TaskSpec("c", _fn, ("a", "b")),
-            px.TaskSpec("d", _fn, ("c",)),
+            px.TaskSpec("c", _fn, depends_on=("a", "b")),
+            px.TaskSpec("d", _fn, depends_on=("c",)),
         ]
     )
     layers = graph.layers()
@@ -80,14 +80,14 @@ def test_layers_grouping() -> None:
 
 def test_self_dependency_rejected() -> None:
     with pytest.raises(ValueError):
-        px.TaskSpec("a", _fn, ("a",))
+        px.TaskSpec("a", _fn, depends_on=("a",))
 
 
 def test_to_mermaid() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, ("a",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
         ]
     )
     mermaid = graph.to_mermaid()
@@ -106,8 +106,8 @@ def test_subgraph_by_tags() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn, tags=("ingest",)),
-            px.TaskSpec("b", _fn, ("a",), tags=("ingest",)),
-            px.TaskSpec("c", _fn, ("b",), tags=("report",)),
+            px.TaskSpec("b", _fn, depends_on=("a",), tags=("ingest",)),
+            px.TaskSpec("c", _fn, depends_on=("b",), tags=("report",)),
         ]
     )
     sub = graph.subgraph(["ingest"])
@@ -121,8 +121,8 @@ def test_subgraph_by_names() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, ("a",)),
-            px.TaskSpec("c", _fn, ("b",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
+            px.TaskSpec("c", _fn, depends_on=("b",)),
         ]
     )
     sub = graph.subgraph_by_names(["a", "b"])
@@ -141,7 +141,7 @@ def test_describe() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, ("a",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
         ]
     )
     desc = graph.describe()
@@ -160,7 +160,7 @@ def test_add_chains_and_validates() -> None:
     assert "a" in graph
     # 缺失依赖应即时报错
     with pytest.raises(MissingDependencyError):
-        graph.add(px.TaskSpec("b", _fn, ("missing",)))
+        graph.add(px.TaskSpec("b", _fn, depends_on=("missing",)))
 
 
 def test_add_duplicate_raises() -> None:
@@ -189,7 +189,7 @@ def test_dependencies_accessor() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, ("a",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
         ]
     )
     assert graph.dependencies("a") == ()

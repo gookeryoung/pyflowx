@@ -29,7 +29,7 @@ def test_sequential_basic() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("extract", extract),
-            px.TaskSpec("double", double, ("extract",)),
+            px.TaskSpec("double", double, depends_on=("extract",)),
         ]
     )
     report = px.run(graph, strategy="sequential")
@@ -51,9 +51,9 @@ def test_sequential_diamond() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", make("a")),
-            px.TaskSpec("b", make("b"), ("a",)),
-            px.TaskSpec("c", make("c"), ("a",)),
-            px.TaskSpec("d", make("d"), ("b", "c")),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
+            px.TaskSpec("c", make("c"), depends_on=("a",)),
+            px.TaskSpec("d", make("d"), depends_on=("b", "c")),
         ]
     )
     report = px.run(graph, strategy="sequential")
@@ -72,7 +72,7 @@ def test_failure_propagates() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("boom", boom),
-            px.TaskSpec("downstream", downstream, ("boom",)),
+            px.TaskSpec("downstream", downstream, depends_on=("boom",)),
         ]
     )
     with pytest.raises(TaskFailedError) as exc_info:
@@ -147,7 +147,7 @@ def test_threaded_layer_barrier() -> None:
         [
             px.TaskSpec("a", make("a")),
             px.TaskSpec("b", make("b")),
-            px.TaskSpec("c", make("c"), ("a", "b")),
+            px.TaskSpec("c", make("c"), depends_on=("a", "b")),
         ]
     )
     report = px.run(graph, strategy="thread", max_workers=2)
@@ -171,7 +171,7 @@ def test_async_basic() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("fetch", fetch),
-            px.TaskSpec("transform", transform, ("fetch",)),
+            px.TaskSpec("transform", transform, depends_on=("fetch",)),
         ]
     )
     report = px.run(graph, strategy="async")
@@ -209,7 +209,7 @@ def test_async_mixed_sync_and_async() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("sync_task", sync_task),
-            px.TaskSpec("async_task", async_task, ("sync_task",)),
+            px.TaskSpec("async_task", async_task, depends_on=("sync_task",)),
         ]
     )
     report = px.run(graph, strategy="async")
@@ -262,7 +262,7 @@ def test_memory_backend_resume() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", make("a")),
-            px.TaskSpec("b", make("b"), ("a",)),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
         ]
     )
     backend = MemoryBackend()
@@ -402,7 +402,7 @@ def test_threaded_skips_cached_tasks() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", make("a")),
-            px.TaskSpec("b", make("b"), ("a",)),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
         ]
     )
     backend = px.MemoryBackend()
@@ -447,7 +447,7 @@ def test_async_skips_cached_tasks() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", a),
-            px.TaskSpec("b", b, ("a",)),
+            px.TaskSpec("b", b, depends_on=("a",)),
         ]
     )
     backend = px.MemoryBackend()

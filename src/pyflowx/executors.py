@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import enum
 import inspect
 import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, cast
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Union, cast
 
 from .context import build_call_args, describe_injection
 from .errors import TaskFailedError, TaskTimeoutError
@@ -33,8 +34,53 @@ logger = logging.getLogger("pyflowx")
 # 观察者回调类型。
 EventCallback = Callable[[TaskEvent], None]
 
-# 策略选择字面量。
-Strategy = str  # "sequential" | "thread" | "async"
+
+class Strategy(enum.Enum):
+    """任务图执行策略.
+
+    Members
+    -------
+    SEQUENTIAL
+        顺序执行: 逐个运行任务, 确定性最高, 适合调试.
+    THREAD
+        线程池执行: 层内任务通过线程池并发, 适合 I/O 密集型同步任务.
+    ASYNC
+        异步执行: 通过 ``asyncio.gather`` 实现层内并发, 适合 I/O 密集型异步任务.
+    """
+
+    SEQUENTIAL = "sequential"
+    THREAD = "thread"
+    ASYNC = "async"
+
+
+def _normalize_strategy(strategy: Union[str, Strategy]) -> Strategy:
+    """将字符串或 Strategy 归一化为 Strategy 枚举.
+
+    Parameters
+    ----------
+    strategy : str | Strategy
+        策略值, 接受字符串 (``"sequential"`` / ``"thread"`` / ``"async"``)
+        或 :class:`Strategy` 枚举成员.
+
+    Returns
+    -------
+    Strategy
+        归一化后的枚举成员.
+
+    Raises
+    ------
+    ValueError
+        策略不被识别时.
+    """
+    if isinstance(strategy, Strategy):
+        return strategy
+    if isinstance(strategy, str):
+        try:
+            return Strategy(strategy)
+        except ValueError:
+            valid = ", ".join(repr(s.value) for s in Strategy)
+            raise ValueError(f"unknown strategy {strategy!r}; expected one of {valid}.") from None
+    raise TypeError(f"strategy must be str or Strategy, got {type(strategy).__name__}")
 
 
 def _is_async_fn(spec: TaskSpec[object]) -> bool:
@@ -299,12 +345,51 @@ async def _execute_layer_async(
 # ---------------------------------------------------------------------- #
 # 公共 API
 # ---------------------------------------------------------------------- #
+def _make_verbose_callback(
+    on_event: Optional[EventCallback],
+) -> Optional[EventCallback]:
+    """包装 on_event 回调, 在 verbose 模式下打印任务生命周期.
+
+    Parameters
+    ----------
+    on_event : EventCallback | None
+        用户提供的原始回调, 若为 None 则仅打印.
+
+    Returns
+    -------
+    EventCallback | None
+        包装后的回调.
+    """
+
+    def _verbose_callback(event: TaskEvent) -> None:
+        # 先打印生命周期信息
+        dur = f" ({event.duration:.3f}s)" if event.duration is not None else ""
+        if event.status == TaskStatus.RUNNING:
+            print(f"[verbose] 任务 {event.task!r} 开始执行...", flush=True)
+        elif event.status == TaskStatus.SUCCESS:
+            print(f"[verbose] 任务 {event.task!r} 成功{dur}", flush=True)
+        elif event.status == TaskStatus.FAILED:
+            err = f": {event.error}" if event.error else ""
+            print(
+                f"[verbose] 任务 {event.task!r} 失败{dur} (尝试 {event.attempts} 次){err}",
+                flush=True,
+            )
+        elif event.status == TaskStatus.SKIPPED:
+            print(f"[verbose] 任务 {event.task!r} 跳过", flush=True)
+        # 再调用用户回调
+        if on_event is not None:
+            on_event(event)
+
+    return _verbose_callback
+
+
 def run(
     graph: Graph,
-    strategy: Strategy = "sequential",
+    strategy: Union[str, Strategy] = Strategy.SEQUENTIAL,
     *,
     max_workers: Optional[int] = None,
     dry_run: bool = False,
+    verbose: bool = False,
     on_event: Optional[EventCallback] = None,
     state: Optional[StateBackend] = None,
 ) -> RunReport:
@@ -315,12 +400,16 @@ def run(
     graph:
         待执行的已校验 :class:`Graph`。
     strategy:
-        ``"sequential"``（默认）、``"thread"`` 或 ``"async"``。
+        执行策略, 接受 :class:`Strategy` 枚举成员或字符串
+        (``"sequential"`` / ``"thread"`` / ``"async"``). 默认 ``Strategy.SEQUENTIAL``.
     max_workers:
         ``"thread"`` 的线程池大小。默认 ``min(32, len(layer))``。
     dry_run:
         若为 ``True``，打印执行计划（层 + 注入）并返回空报告，不执行
         任何任务。
+    verbose:
+        若为 ``True``, 打印任务生命周期 (开始/成功/失败/跳过) 到 stdout.
+        注意: subprocess 命令的输出由 :class:`TaskSpec` 的 ``verbose`` 字段控制.
     on_event:
         可选回调，在每次状态转换时调用。
     state:
@@ -335,8 +424,7 @@ def run(
         任何任务耗尽重试后仍失败时。运行在失败层中止；后续层的任务
         不会被执行。
     """
-    if strategy not in ("sequential", "thread", "async"):
-        raise ValueError(f"unknown strategy {strategy!r}; expected 'sequential', 'thread', or 'async'.")
+    normalized = _normalize_strategy(strategy)
 
     graph.validate()
     layers = graph.layers()
@@ -345,17 +433,20 @@ def run(
         _print_dry_run(graph, layers)
         return RunReport(success=True)
 
+    # verbose 模式下包装事件回调
+    effective_callback: Optional[EventCallback] = _make_verbose_callback(on_event) if verbose else on_event
+
     backend = resolve_backend(state)
     report = RunReport()
     context: Dict[str, Any] = {}
 
     try:
-        if strategy == "sequential":
-            _drive_sequential(graph, layers, context, report, backend, on_event)
-        elif strategy == "thread":
-            _drive_threaded(graph, layers, context, report, backend, on_event, max_workers)
+        if normalized == Strategy.SEQUENTIAL:
+            _drive_sequential(graph, layers, context, report, backend, effective_callback)
+        elif normalized == Strategy.THREAD:
+            _drive_threaded(graph, layers, context, report, backend, effective_callback, max_workers)
         else:
-            _drive_async(graph, layers, context, report, backend, on_event)
+            _drive_async(graph, layers, context, report, backend, effective_callback)
     except TaskFailedError:
         report.success = False
         raise

@@ -71,10 +71,10 @@ from .errors import (
     TaskFailedError,
     TaskTimeoutError,
 )
-from .executors import run
+from .executors import Strategy, run
 from .graph import Graph
 from .report import RunReport
-from .runner import CliExitCode, CliRunner
+from .cli import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
 from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 
@@ -92,6 +92,7 @@ __all__ = [
     "RunReport",
     # 执行
     "run",
+    "Strategy",
     # CLI 运行器
     "CliRunner",
     "CliExitCode",

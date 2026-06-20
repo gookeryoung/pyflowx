@@ -15,7 +15,7 @@ def test_inject_by_parameter_name() -> None:
     def fn(a: int, b: str) -> str:
         return f"{a}{b}"
 
-    spec = px.TaskSpec("c", fn, ("a", "b"))
+    spec = px.TaskSpec("c", fn, depends_on=("a", "b"))
     args, kwargs = build_call_args(spec, {"a": 1, "b": "x"})
     assert args == ()
     assert kwargs == {"a": 1, "b": "x"}
@@ -25,7 +25,7 @@ def test_inject_context_annotation() -> None:
     def fn(ctx: px.Context) -> int:
         return len(ctx)
 
-    spec = px.TaskSpec("agg", fn, ("a", "b"))
+    spec = px.TaskSpec("agg", fn, depends_on=("a", "b"))
     args, kwargs = build_call_args(spec, {"a": 1, "b": 2, "c": 99})
     # Only the task's own deps are passed.
     assert kwargs == {"ctx": {"a": 1, "b": 2}}
@@ -35,7 +35,7 @@ def test_inject_var_keyword() -> None:
     def fn(**kwargs: Any) -> int:
         return sum(kwargs.values())
 
-    spec = px.TaskSpec("agg", fn, ("a", "b"))
+    spec = px.TaskSpec("agg", fn, depends_on=("a", "b"))
     args, kwargs = build_call_args(spec, {"a": 1, "b": 2})
     assert kwargs == {"a": 1, "b": 2}
 
@@ -54,7 +54,7 @@ def test_default_param_not_required() -> None:
     def fn(a: int, flag: bool = True) -> int:
         return a if flag else 0
 
-    spec = px.TaskSpec("t", fn, ("a",))
+    spec = px.TaskSpec("t", fn, depends_on=("a",))
     args, kwargs = build_call_args(spec, {"a": 5})
     assert kwargs == {"a": 5}
 
@@ -63,7 +63,7 @@ def test_unresolved_required_param_raises() -> None:
     def fn(a: int, missing: str) -> None:
         return None
 
-    spec = px.TaskSpec("t", fn, ("a",))
+    spec = px.TaskSpec("t", fn, depends_on=("a",))
     with pytest.raises(InjectionError) as exc_info:
         build_call_args(spec, {"a": 1})
     assert "missing" in str(exc_info.value)
@@ -73,7 +73,7 @@ def test_static_kwargs_collide_with_dependency() -> None:
     def fn(a: int) -> int:
         return a
 
-    spec = px.TaskSpec("t", fn, ("a",), kwargs={"a": 99})
+    spec = px.TaskSpec("t", fn, depends_on=("a",), kwargs={"a": 99})
     with pytest.raises(InjectionError):
         build_call_args(spec, {"a": 1})
 
@@ -82,7 +82,7 @@ def test_describe_injection() -> None:
     def fn(a: int, ctx: px.Context, flag: bool = False) -> None:
         return None
 
-    spec = px.TaskSpec("t", fn, ("a",))
+    spec = px.TaskSpec("t", fn, depends_on=("a",))
     desc = describe_injection(spec)
     assert "a=<result:a>" in desc
     assert "ctx=<Context>" in desc
@@ -147,7 +147,7 @@ def test_describe_injection_var_keyword() -> None:
     def fn(**kwargs: Any) -> None:
         return None
 
-    spec = px.TaskSpec("t", fn, ("a",))
+    spec = px.TaskSpec("t", fn, depends_on=("a",))
     desc = describe_injection(spec)
     assert "**kwargs=<all-deps>" in desc
 
@@ -207,7 +207,7 @@ def test_build_call_args_var_keyword_consumes_leftover() -> None:
     def fn(a: int, **rest: Any) -> int:
         return a + sum(rest.values())
 
-    spec = px.TaskSpec("t", fn, ("a", "b", "c"))
+    spec = px.TaskSpec("t", fn, depends_on=("a", "b", "c"))
     args, kwargs = build_call_args(spec, {"a": 1, "b": 2, "c": 3})
     assert kwargs == {"a": 1, "b": 2, "c": 3}
 
@@ -218,7 +218,7 @@ def test_build_call_args_no_var_keyword_drops_leftover() -> None:
     def fn(a: int) -> int:
         return a
 
-    spec = px.TaskSpec("t", fn, ("a", "b"))
+    spec = px.TaskSpec("t", fn, depends_on=("a", "b"))
     # b 是依赖但 fn 不接收它 —— 应正常工作
     args, kwargs = build_call_args(spec, {"a": 1, "b": 2})
     assert kwargs == {"a": 1}
@@ -230,6 +230,6 @@ def test_build_call_args_context_annotation_only_deps() -> None:
     def fn(ctx: px.Context) -> int:
         return len(ctx)
 
-    spec = px.TaskSpec("t", fn, ("a", "b"))
+    spec = px.TaskSpec("t", fn, depends_on=("a", "b"))
     args, kwargs = build_call_args(spec, {"a": 1, "b": 2, "c": 99})
     assert kwargs == {"ctx": {"a": 1, "b": 2}}

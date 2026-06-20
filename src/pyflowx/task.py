@@ -107,6 +107,10 @@ class TaskSpec(Generic[T]):
     cwd:
         命令执行的工作目录，仅在使用 ``cmd`` 参数时有效。
         ``None`` 表示当前目录。
+    verbose:
+        是否在命令执行时显示详细输出。``True`` 时会打印执行的命令
+        及其标准输出/标准错误。仅在使用 ``cmd`` 参数时有效。
+        ``False`` 时静默捕获输出（失败时仍会包含在错误信息中）。
     """
 
     name: str
@@ -120,6 +124,7 @@ class TaskSpec(Generic[T]):
     tags: Tuple[str, ...] = ()
     conditions: Tuple[Condition, ...] = ()
     cwd: Optional[Path] = None
+    verbose: bool = False
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -157,6 +162,7 @@ class TaskSpec(Generic[T]):
         cmd = self.cmd
         cwd = self.cwd
         timeout = self.timeout
+        verbose = self.verbose
 
         if isinstance(cmd, list):
 
@@ -164,12 +170,16 @@ class TaskSpec(Generic[T]):
                 import subprocess
 
                 cmd_str = " ".join(str(arg) for arg in cmd)
+                if verbose:
+                    print(f"[verbose] 执行命令: {cmd_str}", flush=True)
+                    if cwd is not None:
+                        print(f"[verbose] 工作目录: {cwd}", flush=True)
                 try:
                     result = subprocess.run(
                         cmd,
                         cwd=cwd,
                         timeout=timeout,
-                        capture_output=True,
+                        capture_output=not verbose,
                         text=True,
                         check=False,
                     )
@@ -180,11 +190,14 @@ class TaskSpec(Generic[T]):
                 except OSError as e:
                     raise RuntimeError(f"命令执行异常: {cmd_str}: {e}")
 
+                if verbose:
+                    print(f"[verbose] 返回码: {result.returncode}", flush=True)
+
                 if result.returncode == 0:
                     return None  # type: ignore[return-value]
 
                 err_msg = f"命令执行失败: `{cmd_str}`, 返回码: {result.returncode}"
-                if result.stderr.strip():
+                if not verbose and result.stderr.strip():
                     err_msg += f"\n{result.stderr.strip()}"
                 raise RuntimeError(err_msg)
 
@@ -196,13 +209,17 @@ class TaskSpec(Generic[T]):
             def _run_shell() -> T:
                 import subprocess
 
+                if verbose:
+                    print(f"[verbose] 执行 Shell: {cmd}", flush=True)
+                    if cwd is not None:
+                        print(f"[verbose] 工作目录: {cwd}", flush=True)
                 try:
                     result = subprocess.run(
                         cmd,
                         shell=True,
                         cwd=cwd,
                         timeout=timeout,
-                        capture_output=True,
+                        capture_output=not verbose,
                         text=True,
                         check=False,
                     )
@@ -213,11 +230,14 @@ class TaskSpec(Generic[T]):
                 except OSError as e:
                     raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}")
 
+                if verbose:
+                    print(f"[verbose] 返回码: {result.returncode}", flush=True)
+
                 if result.returncode == 0:
                     return None  # type: ignore[return-value]
 
                 err_msg = f"Shell 命令执行失败: `{cmd}`, 返回码: {result.returncode}"
-                if result.stderr.strip():
+                if not verbose and result.stderr.strip():
                     err_msg += f"\n{result.stderr.strip()}"
                 raise RuntimeError(err_msg)
 
@@ -227,7 +247,9 @@ class TaskSpec(Generic[T]):
         if callable(cmd):
             return cmd  # type: ignore[return-value]
 
-        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")
+        raise TypeError(
+            f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}"
+        )
 
     def should_execute(self) -> bool:
         """检查任务是否应该执行.
