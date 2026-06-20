@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
 import pyflowx as px
 from pyflowx.task import TaskResult, TaskSpec, TaskStatus
@@ -16,21 +17,21 @@ def _make_result(
     name: str = "a",
     status: TaskStatus = TaskStatus.SUCCESS,
     value: object = 42,
-    error: object = None,
+    error: Optional[object] = None,
     duration: float = 0.5,
     attempts: int = 1,
 ) -> TaskResult[object]:
-    spec: TaskSpec[object] = TaskSpec(name, _fn)  # type: ignore[arg-type]
+    spec: TaskSpec[object] = TaskSpec[object](name, _fn)
     start = datetime(2024, 1, 1, 0, 0, 0)
     # 用 timedelta 精确表达秒数，避免 int() 截断小数
     from datetime import timedelta
 
     end = start + timedelta(seconds=duration) if duration else None
-    return TaskResult(
+    return TaskResult[object](
         spec=spec,
         status=status,
-        value=value,  # type: ignore[arg-type]
-        error=error,  # type: ignore[arg-type]
+        value=value,
+        error=error,
         attempts=attempts,
         started_at=start,
         finished_at=end,
