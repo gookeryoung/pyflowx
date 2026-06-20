@@ -1,16 +1,16 @@
-"""PyFlowX — lightweight, type-safe DAG task scheduler.
+"""PyFlowX —— 轻量、类型安全的 DAG 任务调度器。
 
-Public API
-----------
-* :class:`TaskSpec` — immutable task descriptor (the only thing you configure).
-* :class:`Graph` — DAG built from a list of specs; validates, layers, visualises.
-* :func:`run` — execute a graph with ``sequential`` / ``thread`` / ``async``.
-* :class:`RunReport` — typed, queryable result of a run.
-* :class:`Context` — annotation marker for whole-context injection.
-* State backends: :class:`StateBackend`, :class:`MemoryBackend`, :class:`JSONBackend`.
+公共 API
+--------
+* :class:`TaskSpec` —— 不可变任务描述符（唯一需要配置的东西）。
+* :class:`Graph` —— 由一组 spec 构建的 DAG；负责校验、分层、可视化。
+* :func:`run` —— 以 ``sequential`` / ``thread`` / ``async`` 策略执行图。
+* :class:`RunReport` —— 类型化、可查询的运行结果。
+* :class:`Context` —— 整体上下文注入的标注标记。
+* 状态后端：:class:`StateBackend`、:class:`MemoryBackend`、:class:`JSONBackend`。
 
-Quick start
------------
+快速上手
+--------
     import pyflowx as px
 
     def extract() -> list[int]: return [1, 2, 3]
@@ -46,7 +46,7 @@ from .task import TaskEvent, TaskResult, TaskSpec, TaskStatus
 __version__ = "0.1.0"
 
 __all__ = [
-    # core types
+    # 核心类型
     "TaskSpec",
     "TaskStatus",
     "TaskResult",
@@ -54,13 +54,13 @@ __all__ = [
     "Context",
     "Graph",
     "RunReport",
-    # execution
+    # 执行
     "run",
-    # state backends
+    # 状态后端
     "StateBackend",
     "MemoryBackend",
     "JSONBackend",
-    # errors
+    # 错误
     "PyFlowXError",
     "DuplicateTaskError",
     "MissingDependencyError",
@@ -69,7 +69,7 @@ __all__ = [
     "TaskTimeoutError",
     "InjectionError",
     "StorageError",
-    # helpers (advanced)
+    # 辅助（高级）
     "build_call_args",
     "describe_injection",
 ]

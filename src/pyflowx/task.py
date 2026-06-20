@@ -1,20 +1,18 @@
-"""Core task data structures for PyFlowX.
+"""PyFlowX 核心任务数据结构。
 
-Everything here is a plain, immutable data structure — no decorators, no
-side effects. A :class:`TaskSpec` fully describes a task node; the
-:class:`Graph` (see :mod:`pyflowx.graph`) consumes a list of specs and
-builds the DAG.
+本模块全部为纯不可变数据结构——无装饰器、无副作用。一个
+:class:`TaskSpec` 完整描述一个任务节点；:class:`Graph`
+（见 :mod:`pyflowx.graph`）消费一组 spec 并构建 DAG。
 
-Design notes
-------------
-* ``TaskSpec`` is a ``Generic[T]`` so that ``TaskSpec[int]`` carries the
-  return type of ``fn`` all the way to :class:`RunReport`, giving callers
-  typed access to ``report["name"]``.
-* ``Context`` is the only intentionally-dynamic type: results from
-  upstream tasks are heterogeneous, so the cross-task mapping is
-  ``Mapping[str, Any]``. Within a single task the types remain fully
-  static because the function signature is checked by mypy.
-* ``TaskStatus`` is a closed enum; executors never invent ad-hoc strings.
+设计要点
+--------
+* ``TaskSpec`` 是 ``Generic[T]``，因此 ``TaskSpec[int]`` 会把 ``fn`` 的
+  返回类型一路传递到 :class:`RunReport`，让调用者可以类型安全地访问
+  ``report["name"]``。
+* ``Context`` 是唯一刻意保留动态类型的类型：上游任务的结果异构，因此
+  跨任务映射为 ``Mapping[str, Any]``。单个任务内部类型仍然完全静态，
+  因为函数签名由 mypy 检查。
+* ``TaskStatus`` 是封闭枚举；执行器绝不发明临时字符串。
 """
 
 from __future__ import annotations
@@ -36,59 +34,55 @@ from typing import (
 
 T = TypeVar("T")
 
-# A task callable may be synchronous or asynchronous. We keep the union
-# explicit so mypy understands both shapes.
+# 任务可调用对象可以是同步或异步的。显式保留联合类型，让 mypy 理解两种形态。
 TaskFn = Union[
     Callable[..., T],
     Callable[..., Coroutine[Any, Any, T]],
 ]
 
-# The cross-task result mapping. Deliberately ``Any`` for values because
-# different tasks return different types; per-task typing is preserved by
-# the function signature itself.
+# 跨任务结果映射。值刻意使用 ``Any``，因为不同任务返回不同类型；
+# 单任务类型由函数签名本身保留。
 Context = Mapping[str, Any]
 
 
 class TaskStatus(Enum):
-    """Lifecycle states of a task during a single run."""
+    """任务在单次运行内的生命周期状态。"""
 
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
-    SKIPPED = "skipped"  # used by resumable runs and subgraph filtering
+    SKIPPED = "skipped"  # 用于断点续跑与子图过滤
 
 
 @dataclass(frozen=True)
 class TaskSpec(Generic[T]):
-    """Immutable description of a single DAG node.
+    """单个 DAG 节点的不可变描述。
 
-    Parameters
-    ----------
+    参数
+    ----
     name:
-        Unique identifier of the task within a graph. Other tasks reference
-        this name in ``depends_on``.
+        任务在图内的唯一标识。其他任务通过 ``depends_on`` 引用此名称。
     fn:
-        The callable to execute. May be sync or async. Its parameter names
-        drive automatic context injection (see :mod:`pyflowx.context`).
+        待执行的可调用对象，可为同步或异步。其参数名驱动自动上下文
+        注入（见 :mod:`pyflowx.context`）。
     depends_on:
-        Names of tasks whose results must be available before this task
-        runs. Order is irrelevant; the framework topologically sorts.
+        必须先完成才能运行本任务的任务名列表。顺序无关；框架会做
+        拓扑排序。
     args:
-        Static positional arguments appended *after* injected parameters.
-        Useful for parameterised tasks (e.g. ``fetch_user(uid)``).
+        静态位置参数，追加在注入参数*之后*。适用于参数化任务
+        （如 ``fetch_user(uid)``）。
     kwargs:
-        Static keyword arguments. Conflict with injected names raises
-        :class:`~pyflowx.errors.InjectionError`.
+        静态关键字参数。若与注入名冲突则抛出
+        :class:`~pyflowx.errors.InjectionError`。
     retries:
-        Number of retry attempts on failure. ``0`` means a single attempt.
+        失败后的重试次数。``0`` 表示仅尝试一次。
     timeout:
-        Maximum execution time in seconds. ``None`` disables the timeout.
-        For async tasks this uses :func:`asyncio.wait_for`; for sync tasks
-        in the threaded/async executors it cancels the worker future.
+        最大执行时长（秒）。``None`` 表示不限制。异步任务使用
+        :func:`asyncio.wait_for`；线程/异步执行器中的同步任务会
+        取消 worker future。
     tags:
-        Free-form labels used by :meth:`Graph.subgraph` for selective
-        execution and debugging.
+        自由标签，供 :meth:`Graph.subgraph` 做选择性执行与调试。
     """
 
     name: str
@@ -113,10 +107,10 @@ class TaskSpec(Generic[T]):
 
 @dataclass
 class TaskResult(Generic[T]):
-    """Mutable per-task record produced during a run.
+    """运行期间产生的可变单任务记录。
 
-    A fresh :class:`TaskResult` is created for every run; the spec itself
-    stays immutable. This keeps the same graph safely re-runnable.
+    每次运行都会创建全新的 :class:`TaskResult`；spec 本身保持不可变。
+    这让同一个图可以安全地重复运行。
     """
 
     spec: TaskSpec[T]
@@ -129,7 +123,7 @@ class TaskResult(Generic[T]):
 
     @property
     def duration(self) -> Optional[float]:
-        """Elapsed seconds between start and finish, or ``None``."""
+        """从开始到结束的耗时（秒），未开始/未结束则为 ``None``。"""
         if self.started_at is None or self.finished_at is None:
             return None
         return (self.finished_at - self.started_at).total_seconds()
@@ -137,11 +131,10 @@ class TaskResult(Generic[T]):
 
 @dataclass(frozen=True)
 class TaskEvent:
-    """Immutable event emitted during execution for observers.
+    """执行期间向观察者发出的不可变事件。
 
-    Passed to the ``on_event`` callback of :func:`pyflowx.run` so callers
-    can build progress bars, metrics, or structured logs without coupling
-    to executor internals.
+    传递给 :func:`pyflowx.run` 的 ``on_event`` 回调，让调用者无需耦合
+    执行器内部即可构建进度条、指标或结构化日志。
     """
 
     task: str

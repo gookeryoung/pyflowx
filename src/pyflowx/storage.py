@@ -1,19 +1,17 @@
-"""State persistence backends for resumable runs.
+"""用于断点续跑的状态持久化后端。
 
-A :class:`StateBackend` stores the result of every successfully completed
-task. On a subsequent run, the executor asks the backend whether a task
-already has a stored result; if so, the task is skipped and its stored
-value is injected into downstream tasks.
+:class:`StateBackend` 存储每个成功完成任务的结果。在后续运行中，
+执行器向后端查询某任务是否已有存储结果；若有则跳过该任务，并将其
+存储值注入下游任务。
 
-This is intentionally minimal: only *successful* results are persisted
-(failed tasks are re-run), and the storage shape is a flat
-``{task_name: result}`` mapping. Two backends ship in-tree:
+本模块刻意保持最小化：仅持久化*成功*结果（失败任务会重跑），存储
+形态为扁平的 ``{task_name: result}`` 映射。内置两个后端：
 
-* :class:`MemoryBackend` — fast, in-process, no I/O. Default.
-* :class:`JSONBackend` — persists to a JSON file for cross-process resume.
+* :class:`MemoryBackend` —— 快速、进程内、无 I/O。默认。
+* :class:`JSONBackend` —— 持久化到 JSON 文件，支持跨进程续跑。
 
-Both are zero-dependency (``json`` is stdlib). Users can subclass
-:class:`StateBackend` to plug in SQLite, Redis, etc.
+两者均零依赖（``json`` 为标准库）。用户可子类化
+:class:`StateBackend` 接入 SQLite、Redis 等。
 """
 
 from __future__ import annotations
@@ -27,31 +25,31 @@ from .errors import StorageError
 
 
 class StateBackend(ABC):
-    """Abstract base for resumable state storage."""
+    """可续跑状态存储的抽象基类。"""
 
     @abstractmethod
     def load(self) -> Mapping[str, Any]:
-        """Return the full stored mapping (may be empty)."""
+        """返回完整的存储映射（可能为空）。"""
 
     @abstractmethod
     def save(self, name: str, value: Any) -> None:
-        """Persist a single task's successful result."""
+        """持久化单个任务的成功结果。"""
 
     @abstractmethod
     def has(self, name: str) -> bool:
-        """Whether ``name`` has a stored result."""
+        """``name`` 是否已有存储结果。"""
 
     @abstractmethod
     def get(self, name: str) -> Any:
-        """Return the stored result for ``name`` (raise ``KeyError`` if absent)."""
+        """返回 ``name`` 的存储结果（不存在则抛 ``KeyError``）。"""
 
     @abstractmethod
     def clear(self) -> None:
-        """Remove all stored state."""
+        """清除所有存储状态。"""
 
 
 class MemoryBackend(StateBackend):
-    """In-process dict backend. Lost when the process exits."""
+    """进程内 dict 后端。进程退出即丢失。"""
 
     def __init__(self) -> None:
         self._store: Dict[str, Any] = {}
@@ -73,11 +71,11 @@ class MemoryBackend(StateBackend):
 
 
 class JSONBackend(StateBackend):
-    """File-backed JSON storage for cross-process resume.
+    """基于文件的 JSON 存储，用于跨进程续跑。
 
-    Results must be JSON-serialisable. Non-serialisable values raise
-    :class:`~pyflowx.errors.StorageError` (the run itself is not aborted;
-    only persistence of that one result fails).
+    结果必须可 JSON 序列化。不可序列化的值会抛出
+    :class:`~pyflowx.errors.StorageError`（运行本身不会中止；仅该条
+    结果的持久化失败）。
     """
 
     def __init__(self, path: str) -> None:
@@ -109,7 +107,7 @@ class JSONBackend(StateBackend):
         return dict(self._store)
 
     def save(self, name: str, value: Any) -> None:
-        # Validate serialisability before mutating in-memory state.
+        # 在修改内存状态前先校验可序列化性。
         try:
             json.dumps(value)
         except (TypeError, ValueError) as exc:
@@ -131,5 +129,5 @@ class JSONBackend(StateBackend):
 
 
 def resolve_backend(backend: Optional[StateBackend]) -> StateBackend:
-    """Return ``backend`` or a fresh :class:`MemoryBackend` if ``None``."""
+    """返回 ``backend``；为 ``None`` 时返回新的 :class:`MemoryBackend`。"""
     return backend if backend is not None else MemoryBackend()

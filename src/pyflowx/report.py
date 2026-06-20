@@ -1,46 +1,43 @@
-"""Run report: typed, queryable result of a single :func:`pyflowx.run`.
+"""运行报告：单次 :func:`pyflowx.run` 的类型化、可查询结果。
 
-The report is the single source of truth after execution. It exposes
-per-task results via ``report["name"]`` (typed as ``Any`` because the
-mapping is heterogeneous), summary statistics, and a flag indicating
-whether the whole run succeeded.
+报告是执行后的唯一事实来源。它通过 ``report["name"]`` 暴露单任务结果
+（类型为 ``Any``，因为映射异构）、汇总统计，以及整次运行是否成功的标志。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Mapping, Optional
+from typing import Any, Dict, Iterator, List
 
 from .task import TaskResult, TaskStatus
 
 
 @dataclass
 class RunReport:
-    """Aggregated outcome of a workflow run.
+    """工作流运行的聚合结果。
 
-    Attributes
-    ----------
+    属性
+    ----
     results:
-        Mapping of task name -> :class:`TaskResult`. Insertion order
-        matches the order tasks finished.
+        任务名 -> :class:`TaskResult` 的映射。插入顺序与任务完成顺序一致。
     success:
-        ``True`` iff every non-skipped task ended in ``SUCCESS``.
+        当且仅当所有非跳过任务都以 ``SUCCESS`` 结束时为 ``True``。
     """
 
     results: Dict[str, TaskResult[object]] = field(default_factory=dict)
     success: bool = True
 
-    # ---- typed access ------------------------------------------------- #
+    # ---- 类型化访问 --------------------------------------------------- #
     def __getitem__(self, name: str) -> Any:
-        """Return the *value* of task ``name`` (not the TaskResult).
+        """返回任务 ``name`` 的*值*（而非 TaskResult）。
 
-        Raises ``KeyError`` if the task was not part of the run. Returns
-        ``None`` for tasks that did not reach SUCCESS.
+        任务不在本次运行中则抛出 ``KeyError``。未达到 SUCCESS 的任务
+        返回 ``None``。
         """
         return self.results[name].value
 
     def result_of(self, name: str) -> TaskResult[object]:
-        """Return the full :class:`TaskResult` for ``name``."""
+        """返回 ``name`` 的完整 :class:`TaskResult`。"""
         return self.results[name]
 
     def __contains__(self, name: object) -> bool:
@@ -52,9 +49,9 @@ class RunReport:
     def __len__(self) -> int:
         return len(self.results)
 
-    # ---- summary ------------------------------------------------------ #
+    # ---- 汇总 --------------------------------------------------------- #
     def summary(self) -> Dict[str, Any]:
-        """Compact statistics dict for logging / dashboards."""
+        """用于日志/仪表盘的紧凑统计字典。"""
         counts: Dict[str, int] = {}
         total_duration = 0.0
         for r in self.results.values():
@@ -69,14 +66,18 @@ class RunReport:
         }
 
     def failed_tasks(self) -> List[str]:
-        """Names of tasks that ended in FAILED status."""
-        return [name for name, r in self.results.items() if r.status == TaskStatus.FAILED]
+        """以 FAILED 状态结束的任务名列表。"""
+        return [
+            name for name, r in self.results.items() if r.status == TaskStatus.FAILED
+        ]
 
     def describe(self) -> str:
-        """Human-readable multi-line report for debugging."""
+        """用于调试的人类可读多行报告。"""
         lines: List[str] = [f"RunReport(success={self.success})"]
         for name, r in self.results.items():
             dur = f"{r.duration:.3f}s" if r.duration is not None else "-"
             err = f" error={r.error!r}" if r.error else ""
-            lines.append(f"  {name}: {r.status.value} ({dur} attempts={r.attempts}){err}")
+            lines.append(
+                f"  {name}: {r.status.value} ({dur} attempts={r.attempts}){err}"
+            )
         return "\n".join(lines)

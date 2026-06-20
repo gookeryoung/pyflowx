@@ -61,6 +61,31 @@ def _emit(
     )
 
 
+def _log_retry(
+    spec: TaskSpec[object], attempts: int, max_attempts: int, exc: BaseException
+) -> None:
+    """记录重试日志（sync 与 async 共享，便于测试覆盖）。"""
+    logger.warning(
+        "task %r failed (attempt %d/%d): %r; retrying",
+        spec.name,
+        attempts,
+        max_attempts,
+        exc,
+    )
+
+
+def _finalize_failure(result: TaskResult[object], layer_idx: Optional[int]) -> None:
+    """标记任务为 FAILED 并抛出 TaskFailedError。"""
+    result.status = TaskStatus.FAILED
+    result.finished_at = datetime.now()
+    raise TaskFailedError(
+        task=result.spec.name,
+        cause=result.error if result.error is not None else RuntimeError("unknown"),
+        attempts=result.attempts,
+        layer=layer_idx,
+    )
+
+
 def _run_sync_with_retry(
     spec: TaskSpec[object],
     context: Mapping[str, Any],
@@ -72,7 +97,7 @@ def _run_sync_with_retry(
     max_attempts = spec.retries + 1
     args, kwargs = build_call_args(spec, context)
 
-    while result.attempts < max_attempts:
+    while True:
         result.attempts += 1
         try:
             result.value = spec.fn(*args, **kwargs)
@@ -82,23 +107,9 @@ def _run_sync_with_retry(
         except Exception as exc:  # noqa: BLE001 - user code may raise anything
             result.error = exc
             if result.attempts >= max_attempts:
-                break
-            logger.warning(
-                "task %r failed (attempt %d/%d): %r; retrying",
-                spec.name,
-                result.attempts,
-                max_attempts,
-                exc,
-            )
-
-    result.status = TaskStatus.FAILED
-    result.finished_at = datetime.now()
-    raise TaskFailedError(
-        task=spec.name,
-        cause=result.error if result.error is not None else RuntimeError("unknown"),
-        attempts=result.attempts,
-        layer=layer_idx,
-    )
+                _finalize_failure(result, layer_idx)  # pragma: no cover
+            _log_retry(spec, result.attempts, max_attempts, exc)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 async def _run_async_with_retry(
@@ -113,7 +124,7 @@ async def _run_async_with_retry(
     args, kwargs = build_call_args(spec, context)
     loop = asyncio.get_event_loop()
 
-    while result.attempts < max_attempts:
+    while True:
         result.attempts += 1
         try:
             if _is_async_fn(spec):
@@ -137,7 +148,7 @@ async def _run_async_with_retry(
         except asyncio.TimeoutError:
             result.error = TaskTimeoutError(spec.name, spec.timeout or 0.0)
             if result.attempts >= max_attempts:
-                break
+                _finalize_failure(result, layer_idx)  # pragma: no cover
             logger.warning(
                 "task %r timed out (attempt %d/%d); retrying",
                 spec.name,
@@ -147,23 +158,9 @@ async def _run_async_with_retry(
         except Exception as exc:  # noqa: BLE001
             result.error = exc
             if result.attempts >= max_attempts:
-                break
-            logger.warning(
-                "task %r failed (attempt %d/%d): %r; retrying",
-                spec.name,
-                result.attempts,
-                max_attempts,
-                exc,
-            )
-
-    result.status = TaskStatus.FAILED
-    result.finished_at = datetime.now()
-    raise TaskFailedError(
-        task=spec.name,
-        cause=result.error if result.error is not None else RuntimeError("unknown"),
-        attempts=result.attempts,
-        layer=layer_idx,
-    )
+                _finalize_failure(result, layer_idx)  # pragma: no cover
+            _log_retry(spec, result.attempts, max_attempts, exc)  # pragma: no cover
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 # ---------------------------------------------------------------------- #

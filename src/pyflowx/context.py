@@ -1,22 +1,18 @@
-"""Context injection: turn upstream results into function arguments.
+"""上下文注入：把上游结果转换为函数参数。
 
-This is the mechanism that lets users write plain functions whose
-parameter names *are* the dependency declarations, removing the boiler-
-plate wrappers that plague other DAG libraries (e.g. ``def wrapper():
-return fn(workflow.get_task_result('x'))``).
+本机制让用户可以编写普通函数，其参数名*就是*依赖声明，从而消除其他
+DAG 库中泛滥的样板包装器（如 ``def wrapper(): return fn(workflow.get_task_result('x'))``）。
 
-Injection rules (evaluated in order)
------------------------------------
-1. A parameter whose **annotation is** :class:`Context` receives the full
-   result mapping. Useful for tasks that need to iterate over all inputs.
-2. A parameter whose **name matches a dependency** receives that
-   dependency's result.
-3. A ``**kwargs`` parameter receives *all* dependency results as a dict.
-4. ``TaskSpec.args`` / ``TaskSpec.kwargs`` supply static values for
-   parameters that are *not* dependencies.
+注入规则（按顺序求值）
+----------------------
+1. **标注为** :class:`Context` 的参数接收完整结果映射。适用于需要遍历
+   所有输入的任务。
+2. **名称匹配某个依赖**的参数接收该依赖的结果。
+3. ``**kwargs`` 参数以 dict 形式接收*所有*依赖结果。
+4. ``TaskSpec.args`` / ``TaskSpec.kwargs`` 为*非依赖*参数提供静态值。
 
-If a parameter cannot be resolved and has no default, an
-:class:`~pyflowx.errors.InjectionError` is raised with a precise message.
+若某参数无法解析且无默认值，则抛出 :class:`~pyflowx.errors.InjectionError`，
+并附带精确错误信息。
 """
 
 from __future__ import annotations
@@ -27,26 +23,25 @@ from typing import Any, Dict, List, Mapping, Set, Tuple
 from .errors import InjectionError
 from .task import Context, TaskSpec
 
-__all__ = ["Context", "build_call_args", "describe_injection"]
+__all__ = ["Context", "build_call_args", "describe_injection", "_is_context_annotation"]
 
 
 def _is_context_annotation(annotation: Any) -> bool:
-    """True when a parameter annotation is (or refers to) ``Context``.
+    """判断参数标注是否为（或指向）``Context``。
 
-    Handles three forms:
-    * the ``Context`` alias object itself;
-    * a typing alias whose ``__name__``/``_name`` is ``Context`` or ``Mapping``;
-    * a *string* annotation (``from __future__ import annotations`` makes all
-      annotations strings at runtime) such as ``"Context"`` or ``"px.Context"``.
+    处理三种形式：
+    * ``Context`` 别名对象本身；
+    * ``__name__``/``_name`` 为 ``Context`` 或 ``Mapping`` 的 typing 别名；
+    * *字符串*标注（``from __future__ import annotations`` 会在运行时
+      把所有标注变为字符串），如 ``"Context"`` 或 ``"px.Context"``。
     """
     if annotation is Context:
         return True
-    # String annotation from `from __future__ import annotations`.
+    # `from __future__ import annotations` 产生的字符串标注。
     if isinstance(annotation, str):
-        # Match "Context", "px.Context", "pyflowx.Context", etc.
+        # 匹配 "Context"、"px.Context"、"pyflowx.Context" 等。
         return annotation == "Context" or annotation.endswith(".Context")
-    # Match by qualified name to support ``from pyflowx import Context``
-    # re-exports.
+    # 按限定名匹配，支持 ``from pyflowx import Context`` 再导出。
     name = getattr(annotation, "__name__", None) or getattr(annotation, "_name", None)
     if name in ("Context", "Mapping"):
         return True
@@ -57,43 +52,41 @@ def build_call_args(
     spec: TaskSpec[object],
     context: Mapping[str, Any],
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    """Resolve the ``(args, kwargs)`` to call ``spec.fn`` with.
+    """解析用于调用 ``spec.fn`` 的 ``(args, kwargs)``。
 
-    Parameters
-    ----------
+    参数
+    ----
     spec:
-        The task spec, providing ``fn``, ``depends_on``, ``args``, ``kwargs``.
+        任务 spec，提供 ``fn``、``depends_on``、``args``、``kwargs``。
     context:
-        Mapping of dependency-name -> result value. Only the task's own
-        ``depends_on`` entries are guaranteed present; other tasks' results
-        are excluded to keep injection deterministic.
+        依赖名 -> 结果值的映射。仅保证本任务自身的 ``depends_on`` 条目
+        存在；其他任务的结果被排除，以保持注入的确定性。
 
-    Returns
-    -------
+    返回
+    ----
     (args, kwargs)
-        Ready to splat into ``spec.fn(*args, **kwargs)``.
+        可直接展开为 ``spec.fn(*args, **kwargs)``。
 
-    Raises
-    ------
+    抛出
+    ----
     InjectionError
-        If a required parameter cannot be satisfied, or if static
-        ``kwargs`` collide with an injected dependency name.
+        若必需参数无法满足，或静态 ``kwargs`` 与注入依赖名冲突。
     """
     sig = inspect.signature(spec.fn)
     params = sig.parameters
 
-    # Detect special parameter kinds.
+    # 检测特殊参数类型。
     var_keyword = next(
         (p for p in params.values() if p.kind == inspect.Parameter.VAR_KEYWORD),
         None,
     )
 
-    # The subset of context relevant to this task.
+    # 与本任务相关的上下文子集。
     dep_context: Dict[str, Any] = {
         name: context[name] for name in spec.depends_on if name in context
     }
 
-    # Detect collisions between static kwargs and dependency names.
+    # 检测静态 kwargs 与依赖名的冲突。
     collisions = set(spec.kwargs) & set(dep_context)
     if collisions:
         raise InjectionError(
@@ -105,9 +98,8 @@ def build_call_args(
     injected_kwargs: Dict[str, Any] = {}
     leftover_dep_results: Dict[str, Any] = dict(dep_context)
 
-    # Positional parameters consumed by spec.args. We track which param
-    # names are filled positionally so they are skipped during name-based
-    # injection (dependency / Context / static kwargs).
+    # 被 spec.args 消费的位置参数。记录哪些参数名已被位置填充，
+    # 以便在基于名称的注入（依赖 / Context / 静态 kwargs）时跳过。
     positional_params: List[str] = []
     positional_kinds = (
         inspect.Parameter.POSITIONAL_ONLY,
@@ -116,33 +108,33 @@ def build_call_args(
     for pname, param in params.items():
         if param.kind in positional_kinds:
             positional_params.append(pname)
-    # The first len(spec.args) positional params are filled by spec.args.
+    # 前 len(spec.args) 个位置参数由 spec.args 填充。
     args_filled: Set[str] = set(positional_params[: len(spec.args)])
 
     for pname, param in params.items():
-        # Skip params already filled by positional spec.args.
+        # 跳过已被位置 spec.args 填充的参数。
         if pname in args_filled:
             continue
 
-        # Rule 1: annotated as Context -> full mapping.
+        # 规则 1：标注为 Context -> 完整映射。
         if _is_context_annotation(param.annotation):
             injected_kwargs[pname] = dep_context
             continue
 
-        # Rule 2: name matches a dependency.
+        # 规则 2：名称匹配某个依赖。
         if pname in dep_context:
             injected_kwargs[pname] = dep_context[pname]
             leftover_dep_results.pop(pname, None)
             continue
 
-        # Rule 3: handled after the loop via **kwargs.
+        # 规则 3：在循环后通过 **kwargs 处理。
 
-        # Rule 4: static kwargs fill the rest.
+        # 规则 4：静态 kwargs 填充其余参数。
         if pname in spec.kwargs:
             injected_kwargs[pname] = spec.kwargs[pname]
             continue
 
-        # No source for this parameter: must have a default, else error.
+        # 该参数无来源：必须有默认值，否则报错。
         if param.default is inspect.Parameter.empty and param.kind not in (
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
@@ -152,10 +144,9 @@ def build_call_args(
                 f"parameter {pname!r} has no dependency, static value, or default.",
             )
 
-    # Rule 3: **kwargs swallows remaining dependency results.
+    # 规则 3：**kwargs 吞掉剩余依赖结果。
     if var_keyword is not None and leftover_dep_results:
-        # Merge static kwargs first, then dependency results (static wins
-        # on collision — but we already rejected collisions above).
+        # 先合并静态 kwargs，再合并依赖结果（冲突已在上方拒绝）。
         merged = dict(spec.kwargs)
         merged.update(injected_kwargs)
         merged.update(leftover_dep_results)
@@ -165,12 +156,12 @@ def build_call_args(
 
 
 def describe_injection(spec: TaskSpec[object]) -> str:
-    """Human-readable description of how a task's args will be injected.
+    """生成任务参数注入方式的人类可读描述。
 
-    Used by ``dry_run`` to show the execution plan without executing it.
+    供 ``dry_run`` 使用，在不执行的情况下展示执行计划。
     """
     sig = inspect.signature(spec.fn)
-    # Determine which positional params are filled by spec.args.
+    # 确定哪些位置参数由 spec.args 填充。
     positional_params = [
         p
         for p, param in sig.parameters.items()

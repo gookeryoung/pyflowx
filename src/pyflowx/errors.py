@@ -1,8 +1,7 @@
-"""PyFlowX error hierarchy.
+"""PyFlowX 错误层级。
 
-All errors are concrete subclasses of :class:`PyFlowXError` so callers can
-catch the entire family with a single ``except`` clause, while still being
-able to discriminate by type for fine-grained handling.
+所有错误都是 :class:`PyFlowXError` 的具体子类，调用者可以用单个
+``except`` 子句捕获整个错误家族，同时仍可按类型区分以做细粒度处理。
 """
 
 from __future__ import annotations
@@ -11,11 +10,11 @@ from typing import Any, Iterable, Optional
 
 
 class PyFlowXError(Exception):
-    """Base class for every PyFlowX error."""
+    """所有 PyFlowX 错误的基类。"""
 
 
 class DuplicateTaskError(PyFlowXError):
-    """Raised when a task name is registered more than once."""
+    """任务名被重复注册时抛出。"""
 
     def __init__(self, name: str) -> None:
         super().__init__(f"Task '{name}' is already registered in the graph.")
@@ -23,7 +22,7 @@ class DuplicateTaskError(PyFlowXError):
 
 
 class MissingDependencyError(PyFlowXError):
-    """Raised when a task depends on a name that is not in the graph."""
+    """任务依赖了图中不存在的名称时抛出。"""
 
     def __init__(self, task: str, dependency: str) -> None:
         super().__init__(
@@ -35,7 +34,7 @@ class MissingDependencyError(PyFlowXError):
 
 
 class CycleError(PyFlowXError):
-    """Raised when the dependency graph contains a cycle."""
+    """依赖图存在环时抛出。"""
 
     def __init__(self, cycle: Iterable[str]) -> None:
         cycle_list = list(cycle)
@@ -45,10 +44,10 @@ class CycleError(PyFlowXError):
 
 
 class TaskFailedError(PyFlowXError):
-    """Raised when a task fails after exhausting all retries.
+    """任务耗尽所有重试后仍失败时抛出。
 
-    The original exception is preserved on :attr:`__cause__` and also exposed
-    via :attr:`cause` for convenient access in user code.
+    原始异常保留在 :attr:`__cause__` 上，同时通过 :attr:`cause` 暴露，
+    便于用户代码访问。
     """
 
     def __init__(
@@ -69,7 +68,7 @@ class TaskFailedError(PyFlowXError):
 
 
 class TaskTimeoutError(PyFlowXError):
-    """Raised when a task exceeds its configured timeout."""
+    """任务超出配置的超时时间时抛出。"""
 
     def __init__(self, task: str, timeout: float) -> None:
         super().__init__(f"Task '{task}' timed out after {timeout:.3f}s.")
@@ -78,7 +77,7 @@ class TaskTimeoutError(PyFlowXError):
 
 
 class InjectionError(PyFlowXError):
-    """Raised when context injection cannot satisfy a task signature."""
+    """上下文注入无法满足任务签名时抛出。"""
 
     def __init__(self, task: str, detail: str) -> None:
         super().__init__(f"Cannot inject context for task '{task}': {detail}")
@@ -86,7 +85,7 @@ class InjectionError(PyFlowXError):
 
 
 class StorageError(PyFlowXError):
-    """Raised by state backends on persistence failures."""
+    """状态后端在持久化失败时抛出。"""
 
     def __init__(self, detail: str, cause: Optional[BaseException] = None) -> None:
         super().__init__(f"State storage error: {detail}")
