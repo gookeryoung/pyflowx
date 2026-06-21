@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pyflowx as px
@@ -14,18 +13,20 @@ import pyflowx as px
 
 def init_sub_dirs() -> None:
     """初始化子目录的Git仓库."""
-    origin = Path.cwd()
     sub_dirs = [subdir for subdir in Path.cwd().iterdir() if subdir.is_dir()]
     for subdir in sub_dirs:
-        os.chdir(str(subdir))
-        _ = px.run(
-            [
-                ["git", "init"],
-                ["git", "add", "."],
-                ["git", "commit", "-m", "init commit"],
-            ],
+        px.run(
+            px.Graph.from_specs(
+                [
+                    px.TaskSpec("init", cmd=["git", "init"], cwd=str(subdir)),
+                    px.TaskSpec("add", cmd=["git", "add", "."], depends_on=["init"], cwd=str(subdir)),
+                    px.TaskSpec(
+                        "commit", cmd=["git", "commit", "-m", "init commit"], depends_on=["add"], cwd=str(subdir)
+                    ),
+                ]
+            ),
+            verbose=True,
         )
-    os.chdir(str(origin))
 
 
 push: px.TaskSpec = px.TaskSpec("push", cmd=["git", "push"])
