@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 from pathlib import Path
+from typing import Literal, get_args
 
 import pyflowx as px
 
@@ -34,8 +36,11 @@ RUSTUP_MIRRORS: dict[str, dict[str, str]] = {
     },
 }
 
-DEFAULT_PYTHON_VERSION: str = "nightly"
-DEFAULT_MIRROR: str = "aliyun"
+UsableRustVersion = Literal["stable", "nightly", "beta"]
+UsableMirror = Literal["aliyun", "ustc", "tsinghua"]
+
+DEFAULT_RUST_VERSION: str = "stable"
+DEFAULT_MIRROR: UsableMirror = "tsinghua"
 
 
 # ============================================================================
@@ -43,7 +48,7 @@ DEFAULT_MIRROR: str = "aliyun"
 # ============================================================================
 
 
-def set_rust_mirror(mirror: str = "aliyun") -> None:
+def set_rust_mirror(mirror: UsableMirror = DEFAULT_MIRROR) -> None:
     """设置 Rust 镜像源.
 
     Parameters
@@ -51,7 +56,7 @@ def set_rust_mirror(mirror: str = "aliyun") -> None:
     mirror : str
         镜像源名称: aliyun, ustc, tsinghua
     """
-    mirror_dict = RUSTUP_MIRRORS.get(mirror, RUSTUP_MIRRORS["aliyun"])
+    mirror_dict = RUSTUP_MIRRORS.get(mirror, RUSTUP_MIRRORS[DEFAULT_MIRROR])
     server = mirror_dict["RUSTUP_DIST_SERVER"]
     update_root = mirror_dict["RUSTUP_UPDATE_ROOT"]
     toml_registry = mirror_dict["TOML_REGISTRY"]
@@ -79,7 +84,7 @@ index = "sparse+{toml_registry}"
     print(f"已设置 Rust 镜像源: {mirror}")
 
 
-def install_rust(version: str = "nightly") -> None:
+def install_rust(version: UsableRustVersion = DEFAULT_RUST_VERSION) -> None:
     """安装 Rust 工具链.
 
     Parameters
@@ -96,40 +101,50 @@ def install_rust(version: str = "nightly") -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-envrs_aliyun: px.TaskSpec = px.TaskSpec("envrs_aliyun", fn=lambda: set_rust_mirror("aliyun"))
-envrs_ustc: px.TaskSpec = px.TaskSpec("envrs_ustc", fn=lambda: set_rust_mirror("ustc"))
-envrs_tsinghua: px.TaskSpec = px.TaskSpec("envrs_tsinghua", fn=lambda: set_rust_mirror("tsinghua"))
-
-rust_install_stable: px.TaskSpec = px.TaskSpec("rust_install_stable", cmd=["rustup", "toolchain", "install", "stable"])
-rust_install_nightly: px.TaskSpec = px.TaskSpec(
-    "rust_install_nightly", cmd=["rustup", "toolchain", "install", "nightly"]
-)
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """Rust 环境配置工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="EnvRs - Rust 环境配置工具",
-        graphs={
-            # 设置阿里云镜像源
-            "a": px.Graph.from_specs([envrs_aliyun]),
-            # 设置中科大镜像源
-            "u": px.Graph.from_specs([envrs_ustc]),
-            # 设置清华镜像源
-            "t": px.Graph.from_specs([envrs_tsinghua]),
-            # 安装 stable 版本
-            "s": px.Graph.from_specs([rust_install_stable]),
-            # 安装 nightly 版本
-            "n": px.Graph.from_specs([rust_install_nightly]),
-        },
+        usage="envrs <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 设置镜像源命令
+    mirror_parser = subparsers.add_parser("mirror", help="设置 Rust 镜像源")
+    mirror_parser.add_argument(
+        "name",
+        nargs="?",
+        default=DEFAULT_MIRROR,
+        choices=get_args(UsableMirror),
+        help=f"镜像源名称 ({get_args(UsableMirror)})",
+    )
+
+    # 安装 Rust 命令
+    install_parser = subparsers.add_parser("install", help="安装 Rust 工具链")
+    install_parser.add_argument(
+        "version",
+        nargs="?",
+        default=DEFAULT_RUST_VERSION,
+        choices=get_args(UsableRustVersion),
+        help=f"Rust 版本 ({get_args(UsableRustVersion)})",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "mirror":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("set_rust_mirror", fn=set_rust_mirror, args=(args.name,), verbose=True)
+        ])
+    elif args.command == "install":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("install_rust", cmd=["rustup", "toolchain", "install", args.version], verbose=True)
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread", verbose=True)

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 
@@ -91,28 +92,31 @@ def set_pip_mirror(mirror: str = "tsinghua", token: str | None = None) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-envpy_tsinghua: px.TaskSpec = px.TaskSpec("envpy_tsinghua", fn=lambda: set_pip_mirror("tsinghua"))
-envpy_aliyun: px.TaskSpec = px.TaskSpec("envpy_aliyun", fn=lambda: set_pip_mirror("aliyun"))
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """Python 环境配置工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="EnvPy - Python 环境配置工具",
-        graphs={
-            # 设置清华镜像源
-            "t": px.Graph.from_specs([envpy_tsinghua]),
-            # 设置阿里云镜像源
-            "a": px.Graph.from_specs([envpy_aliyun]),
-        },
+        usage="envpy <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 设置镜像源命令
+    mirror_parser = subparsers.add_parser("mirror", help="设置 pip 镜像源")
+    mirror_parser.add_argument("name", choices=["tsinghua", "aliyun"], help="镜像源名称")
+    mirror_parser.add_argument("--token", type=str, help="PyPI token for publishing")
+
+    args = parser.parse_args()
+
+    if args.command == "mirror":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("set_pip_mirror", fn=set_pip_mirror, args=(args.name,), kwargs={"token": args.token})
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

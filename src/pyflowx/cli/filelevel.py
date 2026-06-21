@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pyflowx as px
@@ -105,37 +106,31 @@ def process_files_level(targets: list[Path], level: int = 0) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-filelevel_clear: px.TaskSpec = px.TaskSpec("filelevel_clear", fn=lambda: process_files_level([], level=0))
-filelevel_pub: px.TaskSpec = px.TaskSpec("filelevel_pub", fn=lambda: process_files_level([], level=1))
-filelevel_int: px.TaskSpec = px.TaskSpec("filelevel_int", fn=lambda: process_files_level([], level=2))
-filelevel_con: px.TaskSpec = px.TaskSpec("filelevel_con", fn=lambda: process_files_level([], level=3))
-filelevel_cla: px.TaskSpec = px.TaskSpec("filelevel_cla", fn=lambda: process_files_level([], level=4))
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """文件等级重命名工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="FileLevel - 文件等级重命名工具",
-        graphs={
-            # 清除等级标记
-            "c": px.Graph.from_specs([filelevel_clear]),
-            # 设置公开等级 (PUB)
-            "pub": px.Graph.from_specs([filelevel_pub]),
-            # 设置内部等级 (INT)
-            "int": px.Graph.from_specs([filelevel_int]),
-            # 设置机密等级 (CON)
-            "con": px.Graph.from_specs([filelevel_con]),
-            # 设置绝密等级 (CLA)
-            "cla": px.Graph.from_specs([filelevel_cla]),
-        },
+        usage="filelevel <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 设置等级命令
+    level_parser = subparsers.add_parser("set", help="设置文件等级")
+    level_parser.add_argument("files", nargs="+", help="文件路径")
+    level_parser.add_argument("--level", type=int, choices=[0, 1, 2, 3, 4], required=True, help="文件等级 (0-4)")
+
+    args = parser.parse_args()
+
+    if args.command == "set":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("process_files_level", fn=process_files_level, args=([Path(f) for f in args.files], args.level))
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

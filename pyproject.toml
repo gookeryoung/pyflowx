@@ -39,7 +39,7 @@ pymake   = "pyflowx.cli.pymake:main"
 scrcap   = "pyflowx.cli.screenshot:main"
 sshcopy  = "pyflowx.cli.sshcopyid:main"
 taskk    = "pyflowx.cli.taskkill:main"
-whichcmd = "pyflowx.cli.which:main"
+wch      = "pyflowx.cli.which:main"
 
 [project.optional-dependencies]
 dev = [

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import fnmatch
 import subprocess
 from pathlib import Path
@@ -20,12 +21,10 @@ PACKAGE_DIR = "packages"
 REQUIREMENTS_FILE = "requirements.txt"
 
 # 受保护的包名集合
-_PROTECTED_PACKAGES: frozenset[str] = frozenset(
-    {
-        "pyflowx",
-        "bitool",
-    }
-)
+_PROTECTED_PACKAGES: frozenset[str] = frozenset({
+    "pyflowx",
+    "bitool",
+})
 
 
 # ============================================================================
@@ -119,46 +118,70 @@ def pip_freeze() -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-pip_install: px.TaskSpec = px.TaskSpec("pip_install", cmd=["pip", "install", "."])
-pip_upgrade: px.TaskSpec = px.TaskSpec("pip_upgrade", cmd=["python", "-m", "pip", "install", "--upgrade", "pip"])
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """pip 工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="PipTool - pip 包管理工具",
-        graphs={
-            # 安装包
-            "i": px.Graph.from_specs([pip_install]),
-            # 升级 pip
-            "up": px.Graph.from_specs([pip_upgrade]),
-            # 卸载包 (需要参数)
-            "u": px.Graph.from_specs(
-                [
-                    px.TaskSpec("pip_uninstall", fn=lambda: pip_uninstall([])),
-                ]
-            ),
-            # 下载包
-            "d": px.Graph.from_specs(
-                [
-                    px.TaskSpec("pip_download", fn=lambda: pip_download([])),
-                ]
-            ),
-            # 冻结依赖
-            "f": px.Graph.from_specs(
-                [
-                    px.TaskSpec("pip_freeze", fn=pip_freeze),
-                ]
-            ),
-        },
+        usage="piptool <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 安装命令
+    install_parser = subparsers.add_parser("i", help="安装包")
+    install_parser.add_argument("packages", nargs="+", help="要安装的包名")
+
+    # 卸载命令
+    uninstall_parser = subparsers.add_parser("u", help="卸载包")
+    uninstall_parser.add_argument("packages", nargs="+", help="要卸载的包名 (支持通配符)")
+
+    # 重装命令
+    reinstall_parser = subparsers.add_parser("r", help="重新安装包")
+    reinstall_parser.add_argument("packages", nargs="+", help="要重装的包名")
+    reinstall_parser.add_argument("--offline", action="store_true", help="使用离线模式")
+
+    # 下载命令
+    download_parser = subparsers.add_parser("d", help="下载包")
+    download_parser.add_argument("packages", nargs="+", help="要下载的包名")
+    download_parser.add_argument("--offline", action="store_true", help="使用离线模式")
+
+    # 升级 pip 命令
+    subparsers.add_parser("up", help="升级 pip")
+
+    # 冻结依赖命令
+    subparsers.add_parser("f", help="冻结依赖到 requirements.txt")
+
+    args = parser.parse_args()
+
+    if args.command == "i":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_install", cmd=["pip", "install", *args.packages], verbose=True)
+        ])
+    elif args.command == "u":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_uninstall", fn=pip_uninstall, args=(args.packages,), verbose=True)
+        ])
+    elif args.command == "r":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_reinstall", fn=pip_reinstall, args=(args.packages,), kwargs={"offline": args.offline}, verbose=True)
+        ])
+    elif args.command == "d":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_download", fn=pip_download, args=(args.packages,), kwargs={"offline": args.offline}, verbose=True)
+        ])
+    elif args.command == "up":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_upgrade", cmd=["python", "-m", "pip", "install", "--upgrade", "pip"], verbose=True)
+        ])
+    elif args.command == "f":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_freeze", fn=pip_freeze, verbose=True)
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

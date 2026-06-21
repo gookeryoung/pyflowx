@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 import time
 from pathlib import Path
@@ -89,28 +90,48 @@ def process_files_date(targets: list[Path], clear: bool = False) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-filedate_clear: px.TaskSpec = px.TaskSpec("filedate_clear", fn=lambda: process_files_date([], clear=True))
-filedate_add: px.TaskSpec = px.TaskSpec("filedate_add", fn=lambda: process_files_date([], clear=False))
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """文件日期处理工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="FileDate - 文件日期处理工具",
-        graphs={
-            # 清除日期前缀
-            "c": px.Graph.from_specs([filedate_clear]),
-            # 添加日期前缀
-            "a": px.Graph.from_specs([filedate_add]),
-        },
+        usage="filedate <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 添加日期前缀命令
+    add_parser = subparsers.add_parser("add", help="添加日期前缀")
+    add_parser.add_argument("files", nargs="+", help="文件路径")
+
+    # 清除日期前缀命令
+    clear_parser = subparsers.add_parser("clear", help="清除日期前缀")
+    clear_parser.add_argument("files", nargs="+", help="文件路径")
+
+    args = parser.parse_args()
+
+    if args.command == "add":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "process_files_date",
+                fn=process_files_date,
+                args=([Path(f) for f in args.files],),
+                kwargs={"clear": False},
+            )
+        ])
+    elif args.command == "clear":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "process_files_date",
+                fn=process_files_date,
+                args=([Path(f) for f in args.files],),
+                kwargs={"clear": True},
+            )
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

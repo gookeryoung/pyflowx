@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
 import zipfile
@@ -247,59 +248,92 @@ def clean_build_dir(build_dir: Path) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-# 源码打包
-pack_source_default: px.TaskSpec = px.TaskSpec("pack_source", fn=lambda: pack_source(Path(), Path(DEFAULT_BUILD_DIR)))
-
-# 依赖打包
-pack_deps_default: px.TaskSpec = px.TaskSpec("pack_deps", fn=lambda: pack_dependencies(Path(DEFAULT_LIB_DIR), []))
-
-# Wheel 打包
-pack_wheel_default: px.TaskSpec = px.TaskSpec("pack_wheel", fn=lambda: pack_wheel(Path(), Path(DEFAULT_DIST_DIR)))
-
-# 嵌入式 Python 安装
-install_embed_default: px.TaskSpec = px.TaskSpec(
-    "install_embed", fn=lambda: install_embed_python("3.10", Path("python"))
-)
-
-# ZIP 打包
-create_zip_default: px.TaskSpec = px.TaskSpec("create_zip", fn=lambda: create_zip_package(Path(), Path("package.zip")))
-
-# 清理构建目录
-clean_build: px.TaskSpec = px.TaskSpec("clean_build", fn=lambda: clean_build_dir(Path(DEFAULT_BUILD_DIR)))
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """Python 打包工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="PackTool - Python 打包工具",
-        graphs={
-            # 源码打包
-            "src": px.Graph.from_specs([pack_source_default]),
-            # 依赖打包
-            "deps": px.Graph.from_specs([pack_deps_default]),
-            # Wheel 打包
-            "wheel": px.Graph.from_specs([pack_wheel_default]),
-            # 嵌入式 Python 安装
-            "embed": px.Graph.from_specs([install_embed_default]),
-            # ZIP 打包
-            "zip": px.Graph.from_specs([create_zip_default]),
-            # 清理构建目录
-            "clean": px.Graph.from_specs([clean_build]),
-            # 完整打包流程
-            "all": px.Graph.from_specs([
-                pack_source_default,
-                pack_deps_default,
-                pack_wheel_default,
-            ]),
-        },
+        usage="packtool <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 源码打包命令
+    src_parser = subparsers.add_parser("src", help="打包项目源码")
+    src_parser.add_argument("--project-dir", type=str, default=".", help="项目目录")
+    src_parser.add_argument("--output-dir", type=str, default=DEFAULT_BUILD_DIR, help="输出目录")
+
+    # 依赖打包命令
+    deps_parser = subparsers.add_parser("deps", help="打包项目依赖")
+    deps_parser.add_argument("--lib-dir", type=str, default=DEFAULT_LIB_DIR, help="依赖库目录")
+    deps_parser.add_argument("dependencies", nargs="*", help="依赖列表")
+
+    # Wheel 打包命令
+    wheel_parser = subparsers.add_parser("wheel", help="打包项目为 wheel 文件")
+    wheel_parser.add_argument("--project-dir", type=str, default=".", help="项目目录")
+    wheel_parser.add_argument("--output-dir", type=str, default=DEFAULT_DIST_DIR, help="输出目录")
+
+    # 嵌入式 Python 安装命令
+    embed_parser = subparsers.add_parser("embed", help="安装嵌入式 Python")
+    embed_parser.add_argument("--version", type=str, default="3.10", help="Python 版本")
+    embed_parser.add_argument("--output-dir", type=str, default="python", help="输出目录")
+
+    # ZIP 打包命令
+    zip_parser = subparsers.add_parser("zip", help="创建 ZIP 打包文件")
+    zip_parser.add_argument("--source-dir", type=str, default=".", help="源目录")
+    zip_parser.add_argument("--output-file", type=str, default="package.zip", help="输出文件")
+
+    # 清理命令
+    subparsers.add_parser("clean", help="清理构建目录")
+
+    args = parser.parse_args()
+
+    if args.command == "src":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pack_source",
+                fn=pack_source,
+                args=(Path(args.project_dir), Path(args.output_dir)),
+            )
+        ])
+    elif args.command == "deps":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pack_deps",
+                fn=pack_dependencies,
+                args=(Path(args.lib_dir), args.dependencies),
+            )
+        ])
+    elif args.command == "wheel":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pack_wheel",
+                fn=pack_wheel,
+                args=(Path(args.project_dir), Path(args.output_dir)),
+            )
+        ])
+    elif args.command == "embed":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "install_embed",
+                fn=install_embed_python,
+                args=(args.version, Path(args.output_dir)),
+            )
+        ])
+    elif args.command == "zip":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "create_zip",
+                fn=create_zip_package,
+                args=(Path(args.source_dir), Path(args.output_file)),
+            )
+        ])
+    elif args.command == "clean":
+        graph = px.Graph.from_specs([px.TaskSpec("clean_build", fn=clean_build_dir, args=(Path(DEFAULT_BUILD_DIR),))])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

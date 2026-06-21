@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
 import subprocess
 from pathlib import Path
@@ -228,46 +229,58 @@ def format_all(root_dir: Path) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-# ruff format
-ruff_format: px.TaskSpec = px.TaskSpec("ruff_format", cmd=["ruff", "format", "."])
-
-# ruff check
-ruff_check: px.TaskSpec = px.TaskSpec("ruff_check", cmd=["ruff", "check", "--fix", "--unsafe-fixes", "."])
-
-# 自动添加 docstring
-auto_docstring: px.TaskSpec = px.TaskSpec("auto_docstring", fn=lambda: auto_add_docstrings(Path()))
-
-# 同步 pyproject.toml 配置
-sync_config: px.TaskSpec = px.TaskSpec("sync_config", fn=lambda: sync_pyproject_config(Path()))
-
-# 格式化所有文件
-format_all_files: px.TaskSpec = px.TaskSpec("format_all", fn=lambda: format_all(Path()))
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """自动格式化工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="AutoFmt - 自动格式化工具",
-        graphs={
-            # ruff format
-            "fmt": px.Graph.from_specs([ruff_format]),
-            # ruff check
-            "lint": px.Graph.from_specs([ruff_check]),
-            # 自动添加 docstring
-            "doc": px.Graph.from_specs([auto_docstring]),
-            # 同步 pyproject.toml 配置
-            "sync": px.Graph.from_specs([sync_config]),
-            # 格式化所有文件
-            "all": px.Graph.from_specs([ruff_format, ruff_check]),
-        },
+        usage="autofmt <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # ruff format 命令
+    format_parser = subparsers.add_parser("fmt", help="使用 ruff 格式化代码")
+    format_parser.add_argument("--target", type=str, default=".", help="目标路径")
+
+    # ruff check 命令
+    lint_parser = subparsers.add_parser("lint", help="使用 ruff 检查代码")
+    lint_parser.add_argument("--target", type=str, default=".", help="目标路径")
+    lint_parser.add_argument("--fix", action="store_true", help="自动修复")
+
+    # 自动添加 docstring 命令
+    doc_parser = subparsers.add_parser("doc", help="自动添加 docstring")
+    doc_parser.add_argument("--root-dir", type=str, default=".", help="根目录")
+
+    # 同步配置命令
+    sync_parser = subparsers.add_parser("sync", help="同步 pyproject.toml 配置")
+    sync_parser.add_argument("--root-dir", type=str, default=".", help="根目录")
+
+    args = parser.parse_args()
+
+    if args.command == "fmt":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("ruff_format", cmd=["ruff", "format", args.target], verbose=True)
+        ])
+    elif args.command == "lint":
+        cmd = ["ruff", "check", args.target]
+        if args.fix:
+            cmd.extend(["--fix", "--unsafe-fixes"])
+        graph = px.Graph.from_specs([
+            px.TaskSpec("ruff_check", cmd=cmd, verbose=True)
+        ])
+    elif args.command == "doc":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("auto_docstring", fn=auto_add_docstrings, args=(Path(args.root_dir),), verbose=True)
+        ])
+    elif args.command == "sync":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("sync_config", fn=sync_pyproject_config, args=(Path(args.root_dir),), verbose=True)
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

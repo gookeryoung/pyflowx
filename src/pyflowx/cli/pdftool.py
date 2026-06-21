@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pyflowx as px
@@ -341,118 +342,175 @@ def pdf_repair(input_path: Path, output_path: Path) -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-# PDF 合并
-pdf_merge_default: px.TaskSpec = px.TaskSpec("pdf_merge", fn=lambda: pdf_merge([], Path("merged.pdf")))
-
-# PDF 拆分
-pdf_split_default: px.TaskSpec = px.TaskSpec("pdf_split", fn=lambda: pdf_split(Path("input.pdf"), Path("split")))
-
-# PDF 压缩
-pdf_compress_default: px.TaskSpec = px.TaskSpec(
-    "pdf_compress", fn=lambda: pdf_compress(Path("input.pdf"), Path("compressed.pdf"))
-)
-
-# PDF 加密
-pdf_encrypt_default: px.TaskSpec = px.TaskSpec(
-    "pdf_encrypt", fn=lambda: pdf_encrypt(Path("input.pdf"), Path("encrypted.pdf"), "password")
-)
-
-# PDF 解密
-pdf_decrypt_default: px.TaskSpec = px.TaskSpec(
-    "pdf_decrypt", fn=lambda: pdf_decrypt(Path("input.pdf"), Path("decrypted.pdf"), "password")
-)
-
-# PDF 提取文本
-pdf_extract_text_default: px.TaskSpec = px.TaskSpec(
-    "pdf_extract_text", fn=lambda: pdf_extract_text(Path("input.pdf"), Path("output.txt"))
-)
-
-# PDF 提取图片
-pdf_extract_images_default: px.TaskSpec = px.TaskSpec(
-    "pdf_extract_images", fn=lambda: pdf_extract_images(Path("input.pdf"), Path("images"))
-)
-
-# PDF 添加水印
-pdf_watermark_default: px.TaskSpec = px.TaskSpec(
-    "pdf_watermark", fn=lambda: pdf_add_watermark(Path("input.pdf"), Path("watermarked.pdf"))
-)
-
-# PDF 旋转
-pdf_rotate_default: px.TaskSpec = px.TaskSpec(
-    "pdf_rotate", fn=lambda: pdf_rotate(Path("input.pdf"), Path("rotated.pdf"), 90)
-)
-
-# PDF 裁剪
-pdf_crop_default: px.TaskSpec = px.TaskSpec(
-    "pdf_crop", fn=lambda: pdf_crop(Path("input.pdf"), Path("cropped.pdf"), (10, 10, 10, 10))
-)
-
-# PDF 信息
-pdf_info_default: px.TaskSpec = px.TaskSpec("pdf_info", fn=lambda: pdf_info(Path("input.pdf")))
-
-# PDF OCR
-pdf_ocr_default: px.TaskSpec = px.TaskSpec("pdf_ocr", fn=lambda: pdf_ocr(Path("input.pdf"), Path("ocr.pdf")))
-
-# PDF 重排
-pdf_reorder_default: px.TaskSpec = px.TaskSpec(
-    "pdf_reorder", fn=lambda: pdf_reorder(Path("input.pdf"), Path("reordered.pdf"), [])
-)
-
-# PDF 转图片
-pdf_to_images_default: px.TaskSpec = px.TaskSpec(
-    "pdf_to_images", fn=lambda: pdf_to_images(Path("input.pdf"), Path("images"))
-)
-
-# PDF 修复
-pdf_repair_default: px.TaskSpec = px.TaskSpec(
-    "pdf_repair", fn=lambda: pdf_repair(Path("input.pdf"), Path("repaired.pdf"))
-)
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """PDF 工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="PDFTool - PDF 文件工具集",
-        graphs={
-            # 合并 PDF
-            "m": px.Graph.from_specs([pdf_merge_default]),
-            # 拆分 PDF
-            "s": px.Graph.from_specs([pdf_split_default]),
-            # 压缩 PDF
-            "c": px.Graph.from_specs([pdf_compress_default]),
-            # 加密 PDF
-            "e": px.Graph.from_specs([pdf_encrypt_default]),
-            # 解密 PDF
-            "d": px.Graph.from_specs([pdf_decrypt_default]),
-            # 提取文本
-            "xt": px.Graph.from_specs([pdf_extract_text_default]),
-            # 提取图片
-            "xi": px.Graph.from_specs([pdf_extract_images_default]),
-            # 添加水印
-            "w": px.Graph.from_specs([pdf_watermark_default]),
-            # 旋转 PDF
-            "r": px.Graph.from_specs([pdf_rotate_default]),
-            # 裁剪 PDF
-            "crop": px.Graph.from_specs([pdf_crop_default]),
-            # 显示信息
-            "i": px.Graph.from_specs([pdf_info_default]),
-            # OCR 识别
-            "ocr": px.Graph.from_specs([pdf_ocr_default]),
-            # 重排页面
-            "order": px.Graph.from_specs([pdf_reorder_default]),
-            # 转换图片
-            "img": px.Graph.from_specs([pdf_to_images_default]),
-            # 修复 PDF
-            "repair": px.Graph.from_specs([pdf_repair_default]),
-        },
+        usage="pdftool <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 合并 PDF 命令
+    merge_parser = subparsers.add_parser("m", help="合并 PDF 文件")
+    merge_parser.add_argument("inputs", nargs="+", help="输入 PDF 文件路径")
+    merge_parser.add_argument("--output", type=str, default="merged.pdf", help="输出文件路径")
+
+    # 拆分 PDF 命令
+    split_parser = subparsers.add_parser("s", help="拆分 PDF 文件为单页")
+    split_parser.add_argument("input", help="输入 PDF 文件路径")
+    split_parser.add_argument("--output-dir", type=str, default="split", help="输出目录")
+
+    # 压缩 PDF 命令
+    compress_parser = subparsers.add_parser("c", help="压缩 PDF 文件")
+    compress_parser.add_argument("input", help="输入 PDF 文件路径")
+    compress_parser.add_argument("--output", type=str, default="compressed.pdf", help="输出文件路径")
+
+    # 加密 PDF 命令
+    encrypt_parser = subparsers.add_parser("e", help="加密 PDF 文件")
+    encrypt_parser.add_argument("input", help="输入 PDF 文件路径")
+    encrypt_parser.add_argument("--output", type=str, default="encrypted.pdf", help="输出文件路径")
+    encrypt_parser.add_argument("--password", type=str, required=True, help="密码")
+
+    # 解密 PDF 命令
+    decrypt_parser = subparsers.add_parser("d", help="解密 PDF 文件")
+    decrypt_parser.add_argument("input", help="输入 PDF 文件路径")
+    decrypt_parser.add_argument("--output", type=str, default="decrypted.pdf", help="输出文件路径")
+    decrypt_parser.add_argument("--password", type=str, required=True, help="密码")
+
+    # 提取文本命令
+    extract_text_parser = subparsers.add_parser("xt", help="提取 PDF 文本")
+    extract_text_parser.add_argument("input", help="输入 PDF 文件路径")
+    extract_text_parser.add_argument("--output", type=str, default="output.txt", help="输出文件路径")
+
+    # 提取图片命令
+    extract_images_parser = subparsers.add_parser("xi", help="提取 PDF 图片")
+    extract_images_parser.add_argument("input", help="输入 PDF 文件路径")
+    extract_images_parser.add_argument("--output-dir", type=str, default="images", help="输出目录")
+
+    # 添加水印命令
+    watermark_parser = subparsers.add_parser("w", help="添加 PDF 水印")
+    watermark_parser.add_argument("input", help="输入 PDF 文件路径")
+    watermark_parser.add_argument("--output", type=str, default="watermarked.pdf", help="输出文件路径")
+    watermark_parser.add_argument("--text", type=str, default="CONFIDENTIAL", help="水印文本")
+
+    # 旋转 PDF 命令
+    rotate_parser = subparsers.add_parser("r", help="旋转 PDF 页面")
+    rotate_parser.add_argument("input", help="输入 PDF 文件路径")
+    rotate_parser.add_argument("--output", type=str, default="rotated.pdf", help="输出文件路径")
+    rotate_parser.add_argument("--rotation", type=int, default=90, help="旋转角度 (90, 180, 270)")
+
+    # 裁剪 PDF 命令
+    crop_parser = subparsers.add_parser("crop", help="裁剪 PDF 页面")
+    crop_parser.add_argument("input", help="输入 PDF 文件路径")
+    crop_parser.add_argument("--output", type=str, default="cropped.pdf", help="输出文件路径")
+    crop_parser.add_argument("--left", type=int, default=10, help="左边裁剪")
+    crop_parser.add_argument("--top", type=int, default=10, help="顶部裁剪")
+    crop_parser.add_argument("--right", type=int, default=10, help="右边裁剪")
+    crop_parser.add_argument("--bottom", type=int, default=10, help="底部裁剪")
+
+    # 显示信息命令
+    info_parser = subparsers.add_parser("i", help="显示 PDF 信息")
+    info_parser.add_argument("input", help="输入 PDF 文件路径")
+
+    # OCR 识别命令
+    ocr_parser = subparsers.add_parser("ocr", help="PDF OCR 识别")
+    ocr_parser.add_argument("input", help="输入 PDF 文件路径")
+    ocr_parser.add_argument("--output", type=str, default="ocr.pdf", help="输出文件路径")
+    ocr_parser.add_argument("--lang", type=str, default="chi_sim+eng", help="OCR 语言")
+
+    # 转换图片命令
+    to_images_parser = subparsers.add_parser("img", help="PDF 转图片")
+    to_images_parser.add_argument("input", help="输入 PDF 文件路径")
+    to_images_parser.add_argument("--output-dir", type=str, default="images", help="输出目录")
+    to_images_parser.add_argument("--dpi", type=int, default=300, help="图片 DPI")
+
+    # 修复 PDF 命令
+    repair_parser = subparsers.add_parser("repair", help="修复 PDF 文件")
+    repair_parser.add_argument("input", help="输入 PDF 文件路径")
+    repair_parser.add_argument("--output", type=str, default="repaired.pdf", help="输出文件路径")
+
+    args = parser.parse_args()
+
+    if args.command == "m":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_merge", fn=pdf_merge, args=([Path(p) for p in args.inputs], Path(args.output)))
+        ])
+    elif args.command == "s":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_split", fn=pdf_split, args=(Path(args.input), Path(args.output_dir)))
+        ])
+    elif args.command == "c":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_compress", fn=pdf_compress, args=(Path(args.input), Path(args.output)))
+        ])
+    elif args.command == "e":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_encrypt", fn=pdf_encrypt, args=(Path(args.input), Path(args.output), args.password))
+        ])
+    elif args.command == "d":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_decrypt", fn=pdf_decrypt, args=(Path(args.input), Path(args.output), args.password))
+        ])
+    elif args.command == "xt":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_extract_text", fn=pdf_extract_text, args=(Path(args.input), Path(args.output)))
+        ])
+    elif args.command == "xi":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_extract_images", fn=pdf_extract_images, args=(Path(args.input), Path(args.output_dir)))
+        ])
+    elif args.command == "w":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pdf_watermark",
+                fn=pdf_add_watermark,
+                args=(Path(args.input), Path(args.output)),
+                kwargs={"text": args.text},
+            )
+        ])
+    elif args.command == "r":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pdf_rotate",
+                fn=pdf_rotate,
+                args=(Path(args.input), Path(args.output)),
+                kwargs={"rotation": args.rotation},
+            )
+        ])
+    elif args.command == "crop":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pdf_crop",
+                fn=pdf_crop,
+                args=(Path(args.input), Path(args.output)),
+                kwargs={"margins": (args.left, args.top, args.right, args.bottom)},
+            )
+        ])
+    elif args.command == "i":
+        graph = px.Graph.from_specs([px.TaskSpec("pdf_info", fn=pdf_info, args=(Path(args.input),))])
+    elif args.command == "ocr":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_ocr", fn=pdf_ocr, args=(Path(args.input), Path(args.output)), kwargs={"lang": args.lang})
+        ])
+    elif args.command == "img":
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pdf_to_images",
+                fn=pdf_to_images,
+                args=(Path(args.input), Path(args.output_dir)),
+                kwargs={"dpi": args.dpi},
+            )
+        ])
+    elif args.command == "repair":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pdf_repair", fn=pdf_repair, args=(Path(args.input), Path(args.output)))
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

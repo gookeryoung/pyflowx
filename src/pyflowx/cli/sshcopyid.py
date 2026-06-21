@@ -90,29 +90,30 @@ grep -qF '{pub_key.split()[1]}' authorized_keys 2>/dev/null || echo '{pub_key}' 
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-# SSH 密钥部署需要参数，这里提供默认示例
-ssh_deploy_default: px.TaskSpec = px.TaskSpec(
-    "ssh_deploy_default",
-    fn=lambda: ssh_copy_id("localhost", "user", "password"),
-)
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """SSH 密钥部署工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="SSHCopyID - SSH 密钥部署工具",
-        graphs={
-            # 部署 SSH 密钥 (需要参数)
-            "d": px.Graph.from_specs([ssh_deploy_default]),
-        },
+        usage="sshcopyid <hostname> <username> <password> [--port PORT] [--keypath KEYPATH]",
     )
-    runner.run_cli()
+    parser.add_argument("hostname", type=str, help="远程服务器主机名或 IP 地址")
+    parser.add_argument("username", type=str, help="远程服务器用户名")
+    parser.add_argument("password", type=str, help="远程服务器密码")
+    parser.add_argument("--port", type=int, default=22, help="SSH 端口 (默认: 22)")
+    parser.add_argument("--keypath", type=str, default="~/.ssh/id_rsa.pub", help="公钥文件路径")
+    parser.add_argument("--timeout", type=int, default=30, help="SSH 操作超时秒数 (默认: 30)")
+    args = parser.parse_args()
+
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "ssh_deploy",
+            fn=ssh_copy_id,
+            args=(args.hostname, args.username, args.password),
+            kwargs={"port": args.port, "keypath": args.keypath, "timeout": args.timeout},
+        )
+    ])
+    px.run(graph, strategy="thread")

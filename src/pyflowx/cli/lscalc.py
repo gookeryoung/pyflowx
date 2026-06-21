@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 from pathlib import Path
 
@@ -129,39 +130,45 @@ def check_ls_dyna_status() -> None:
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-lscalc_default: px.TaskSpec = px.TaskSpec(
-    "lscalc_default",
-    fn=lambda: run_ls_dyna(DEFAULT_INPUT_FILE, DEFAULT_NCPU),
-)
-
-lscalc_mpi: px.TaskSpec = px.TaskSpec(
-    "lscalc_mpi",
-    fn=lambda: run_ls_dyna_mpi(DEFAULT_INPUT_FILE, DEFAULT_NCPU),
-)
-
-lscalc_status: px.TaskSpec = px.TaskSpec("lscalc_status", fn=check_ls_dyna_status)
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """LS-DYNA 计算工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="LSCalc - LS-DYNA 计算工具",
-        graphs={
-            # 运行 LS-DYNA 计算
-            "r": px.Graph.from_specs([lscalc_default]),
-            # 运行 LS-DYNA MPI 计算
-            "mpi": px.Graph.from_specs([lscalc_mpi]),
-            # 检查进程状态
-            "s": px.Graph.from_specs([lscalc_status]),
-        },
+        usage="lscalc <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 运行计算命令
+    run_parser = subparsers.add_parser("run", help="运行 LS-DYNA 计算")
+    run_parser.add_argument("input_file", help="输入文件路径")
+    run_parser.add_argument("--ncpu", type=int, default=DEFAULT_NCPU, help="CPU 核心数")
+
+    # 运行 MPI 计算命令
+    mpi_parser = subparsers.add_parser("mpi", help="运行 LS-DYNA MPI 计算")
+    mpi_parser.add_argument("input_file", help="输入文件路径")
+    mpi_parser.add_argument("--ncpu", type=int, default=DEFAULT_NCPU, help="CPU 核心数")
+
+    # 检查进程状态命令
+    subparsers.add_parser("status", help="检查 LS-DYNA 进程状态")
+
+    args = parser.parse_args()
+
+    if args.command == "run":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("run_ls_dyna", fn=run_ls_dyna, args=(args.input_file,), kwargs={"ncpu": args.ncpu})
+        ])
+    elif args.command == "mpi":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("run_ls_dyna_mpi", fn=run_ls_dyna_mpi, args=(args.input_file,), kwargs={"ncpu": args.ncpu})
+        ])
+    elif args.command == "status":
+        graph = px.Graph.from_specs([px.TaskSpec("check_ls_dyna_status", fn=check_ls_dyna_status)])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")

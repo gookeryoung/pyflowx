@@ -125,28 +125,38 @@ $bitmap.Dispose()
 
 
 # ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-screenshot_full: px.TaskSpec = px.TaskSpec("screenshot_full", fn=take_screenshot_full)
-screenshot_area: px.TaskSpec = px.TaskSpec("screenshot_area", fn=take_screenshot_area)
-
-
-# ============================================================================
 # CLI Runner
 # ============================================================================
 
 
 def main() -> None:
     """截图工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
+    parser = argparse.ArgumentParser(
         description="Screenshot - 截图工具",
-        graphs={
-            # 全屏截图
-            "f": px.Graph.from_specs([screenshot_full]),
-            # 区域截图
-            "a": px.Graph.from_specs([screenshot_area]),
-        },
+        usage="screenshot <command> [options]",
     )
-    runner.run_cli()
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 全屏截图命令
+    full_parser = subparsers.add_parser("full", help="全屏截图")
+    full_parser.add_argument("--filename", type=str, help="文件名")
+
+    # 区域截图命令
+    area_parser = subparsers.add_parser("area", help="区域截图")
+    area_parser.add_argument("--filename", type=str, help="文件名")
+
+    args = parser.parse_args()
+
+    if args.command == "full":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("screenshot_full", fn=take_screenshot_full, kwargs={"filename": args.filename})
+        ])
+    elif args.command == "area":
+        graph = px.Graph.from_specs([
+            px.TaskSpec("screenshot_area", fn=take_screenshot_area, kwargs={"filename": args.filename})
+        ])
+    else:
+        parser.print_help()
+        return
+
+    px.run(graph, strategy="thread")
