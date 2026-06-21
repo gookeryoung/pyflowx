@@ -2,7 +2,7 @@
 
 > 轻量、类型安全的 DAG 任务调度器。
 
-[![CI](https://github.com/pyflowx/pyflowx/actions/workflows/ci.yml/badge.svg)](https://github.com/pyflowx/pyflowx/actions/workflows/ci.yml)
+[![CI](https://github.com/gookeryoung/pyflowx/actions/workflows/ci.yml/badge.svg)](https://github.com/gookeryoung/pyflowx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyflowx.svg)](https://pypi.org/project/pyflowx/)
 [![Python](https://img.shields.io/pypi/pyversions/pyflowx.svg)](https://pypi.org/project/pyflowx/)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/pyflowx/pyflowx)
