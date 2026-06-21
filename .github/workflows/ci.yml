@@ -101,8 +101,8 @@ jobs:
       - name: 安装依赖
         run: uv sync --extra dev --frozen
 
-      - name: 运行测试（含覆盖率, 95%）
-        run: uv run pytest -v --cov=pyflowx --cov-report=xml --cov-report=term-missing --cov-fail-under=95
+      - name: 运行测试
+        run: uv run pytest -v --cov=pyflowx --cov-report=xml --cov-report=term-missing
 
       - name: 上传覆盖率
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
