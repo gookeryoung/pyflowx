@@ -276,9 +276,7 @@ class TestCliRunnerRunSuccess:
 class TestCliRunnerVerbose:
     """测试 verbose 模式."""
 
-    def test_verbose_default_prints_lifecycle(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_default_prints_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """默认 verbose=True 应打印任务生命周期."""
         runner = px.CliRunner({"echo": _echo_graph()})
         _ = runner.run(["echo"])
@@ -286,9 +284,7 @@ class TestCliRunnerVerbose:
         # verbose 模式下应打印任务生命周期
         assert "[verbose]" in captured.out
 
-    def test_quiet_flag_disables_verbose(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_quiet_flag_disables_verbose(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--quiet 应关闭 verbose 输出."""
         runner = px.CliRunner({"echo": _echo_graph()})
         _ = runner.run(["echo", "--quiet"])
@@ -296,18 +292,14 @@ class TestCliRunnerVerbose:
         # quiet 模式下不应有 [verbose] 前缀的输出
         assert "[verbose]" not in captured.out
 
-    def test_verbose_false_constructor_disables_verbose(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_false_constructor_disables_verbose(self, capsys: pytest.CaptureFixture[str]) -> None:
         """构造时 verbose=False 应关闭 verbose 输出."""
         runner = px.CliRunner({"echo": _echo_graph()}, verbose=False)
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "[verbose]" not in captured.out
 
-    def test_verbose_prints_command_for_cmd_task(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_prints_command_for_cmd_task(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下 cmd 任务应打印执行的命令."""
         runner = px.CliRunner({"echo": _echo_graph(msg="verbose-test")})
         _ = runner.run(["echo"])
@@ -317,18 +309,14 @@ class TestCliRunnerVerbose:
         # 应打印返回码
         assert "返回码" in captured.out
 
-    def test_verbose_prints_success_lifecycle(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_prints_success_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下成功任务应打印成功信息."""
         runner = px.CliRunner({"echo": _echo_graph()})
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "成功" in captured.out
 
-    def test_verbose_prints_skip_lifecycle(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_prints_skip_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下跳过的任务应打印跳过信息."""
         graph = px.Graph.from_specs(
             [
@@ -344,9 +332,7 @@ class TestCliRunnerVerbose:
         captured = capsys.readouterr()
         assert "跳过" in captured.out
 
-    def test_verbose_prints_failure_lifecycle(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_prints_failure_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下失败任务应打印失败信息."""
         runner = px.CliRunner({"fail": _failing_graph()})
         _ = runner.run(["fail"])
@@ -362,9 +348,7 @@ class TestCliRunnerVerbose:
 class TestCliRunnerRunFailure:
     """测试 CliRunner.run 的失败执行路径."""
 
-    def test_run_unknown_command_returns_failure(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_unknown_command_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """未知命令应返回 1 并打印错误."""
         runner = px.CliRunner({"clean": _echo_graph()})
         exit_code = runner.run(["unknown"])
@@ -373,9 +357,7 @@ class TestCliRunnerRunFailure:
         assert "未知命令" in captured.err
         assert "clean" in captured.err
 
-    def test_run_no_command_returns_failure(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_no_command_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """无命令时应返回 1 并打印帮助."""
         runner = px.CliRunner({"clean": _echo_graph()})
         exit_code = runner.run([])
@@ -389,9 +371,7 @@ class TestCliRunnerRunFailure:
         exit_code = runner.run(["fail"])
         assert exit_code == CliExitCode.FAILURE.value
 
-    def test_run_failing_task_prints_error(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_failing_task_prints_error(self, capsys: pytest.CaptureFixture[str]) -> None:
         """任务失败时应打印错误信息."""
         runner = px.CliRunner({"fail": _failing_graph()})
         _ = runner.run(["fail"])
@@ -445,9 +425,7 @@ class TestCliRunnerList:
 class TestCliRunnerErrorHandling:
     """测试错误处理."""
 
-    def test_keyboard_interrupt_returns_130(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_keyboard_interrupt_returns_130(self, capsys: pytest.CaptureFixture[str]) -> None:
         """KeyboardInterrupt 应返回 130."""
         runner = px.CliRunner({"echo": _echo_graph()})
 
@@ -460,9 +438,7 @@ class TestCliRunnerErrorHandling:
         captured = capsys.readouterr()
         assert "取消" in captured.err
 
-    def test_pyflowx_error_returns_failure(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_pyflowx_error_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """PyFlowXError 应返回 1."""
         runner = px.CliRunner({"echo": _echo_graph()})
 
@@ -486,9 +462,7 @@ class TestCliRunnerErrorHandling:
         def raise_custom(*_args: Any, **_kwargs: Any) -> None:
             raise CustomError("unexpected")
 
-        with patch("pyflowx.runner.run", side_effect=raise_custom), pytest.raises(
-            CustomError
-        ):
+        with patch("pyflowx.runner.run", side_effect=raise_custom), pytest.raises(CustomError):
             _ = runner.run(["echo"])
 
 
@@ -512,9 +486,7 @@ class TestCliRunnerRunCli:
             runner.run_cli(["fail"])
         assert exc_info.value.code == CliExitCode.FAILURE.value
 
-    def test_run_cli_no_args_uses_sys_argv(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_cli_no_args_uses_sys_argv(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """run_cli 无参数时应使用 sys.argv."""
         monkeypatch.setattr(sys, "argv", ["pymake", "echo"])
         runner = px.CliRunner({"echo": _echo_graph()})
@@ -607,12 +579,8 @@ class TestCliRunnerIntegration:
         """混合 fn 和 cmd 的命令应都能执行."""
         runner = px.CliRunner(
             {
-                "fn_cmd": px.Graph.from_specs(
-                    [px.TaskSpec("fn", fn=lambda: "fn-result")]
-                ),
-                "cmd_cmd": px.Graph.from_specs(
-                    [px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]
-                ),
+                "fn_cmd": px.Graph.from_specs([px.TaskSpec("fn", fn=lambda: "fn-result")]),
+                "cmd_cmd": px.Graph.from_specs([px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]),
             }
         )
         assert runner.run(["fn_cmd"]) == CliExitCode.SUCCESS.value
@@ -629,9 +597,53 @@ class TestCliRunnerIntegration:
             else:
                 ls_cmd = ["ls"]
 
-            graph = px.Graph.from_specs(
-                [px.TaskSpec("ls", cmd=ls_cmd, cwd=Path(tmpdir))]
-            )
+            graph = px.Graph.from_specs([px.TaskSpec("ls", cmd=ls_cmd, cwd=Path(tmpdir))])
             runner = px.CliRunner({"ls": graph})
             exit_code = runner.run(["ls"])
             assert exit_code == CliExitCode.SUCCESS.value
+
+
+# ---------------------------------------------------------------------- #
+# 构造校验 (补充覆盖)
+# ---------------------------------------------------------------------- #
+class TestCliRunnerConstructionValidation:
+    """测试 CliRunner 的构造校验 (补充覆盖)."""
+
+    def test_non_graph_value_raises_type_error(self) -> None:
+        """非 Graph 值应抛出 TypeError (覆盖 runner.py line 119)."""
+        with pytest.raises(TypeError, match="必须是 Graph 实例"):
+            _ = px.CliRunner(graphs={"bad": "not a graph"})  # type: ignore[dict-item]
+
+    def test_non_graph_value_dict_raises_type_error(self) -> None:
+        """dict 中包含非 Graph 值应抛出 TypeError."""
+        with pytest.raises(TypeError, match="必须是 Graph 实例"):
+            _ = px.CliRunner(graphs={"good": _echo_graph(), "bad": 123})  # type: ignore[dict-item]
+
+
+# ---------------------------------------------------------------------- #
+# _apply_verbose_to_graph (补充覆盖)
+# ---------------------------------------------------------------------- #
+class TestApplyVerboseToGraph:
+    """测试 _apply_verbose_to_graph 函数 (补充覆盖)."""
+
+    def test_specs_with_matching_verbose_are_kept(self) -> None:
+        """spec.verbose 已与目标值匹配时应保留原 spec (覆盖 runner.py line 57)."""
+        from pyflowx.runner import _apply_verbose_to_graph
+
+        # 创建 verbose=True 的 spec
+        graph = px.Graph.from_specs([px.TaskSpec("a", cmd=[*ECHO_CMD, "a"], verbose=True)])
+        # 应用 verbose=True, spec.verbose 已匹配, 应保留原 spec
+        new_graph = _apply_verbose_to_graph(graph, verbose=True)
+        new_spec = new_graph.spec("a")
+        assert new_spec.verbose is True
+
+    def test_specs_with_non_matching_verbose_are_replaced(self) -> None:
+        """spec.verbose 与目标值不匹配时应替换 (覆盖 else 分支)."""
+        from pyflowx.runner import _apply_verbose_to_graph
+
+        # 创建 verbose=False 的 spec
+        graph = px.Graph.from_specs([px.TaskSpec("a", cmd=[*ECHO_CMD, "a"], verbose=False)])
+        # 应用 verbose=True, spec.verbose 不匹配, 应替换
+        new_graph = _apply_verbose_to_graph(graph, verbose=True)
+        new_spec = new_graph.spec("a")
+        assert new_spec.verbose is True

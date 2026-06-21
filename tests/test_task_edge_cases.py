@@ -1,8 +1,10 @@
 """Tests for task module edge cases."""
 
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -140,3 +142,72 @@ def test_taskspec_conditions_multiple_one_false():
     )
 
     assert spec.should_execute() is False
+
+
+def test_taskspec_list_cmd_timeout_mocked():
+    """Test TaskSpec._wrap_cmd handles list command timeout (mocked)."""
+    spec = TaskSpec("test", cmd=["sleep", "10"], timeout=0.1)
+    wrapped_fn = spec.effective_fn
+
+    with patch(
+        "subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["sleep", "10"], timeout=0.1)
+    ), pytest.raises(RuntimeError, match="命令执行超时"):
+        _ = wrapped_fn()
+
+
+def test_taskspec_shell_cmd_timeout_mocked():
+    """Test TaskSpec._wrap_cmd handles shell command timeout (mocked)."""
+    spec = TaskSpec("test", cmd="sleep 10", timeout=0.1)
+    wrapped_fn = spec.effective_fn
+
+    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="sleep 10", timeout=0.1)), pytest.raises(
+        RuntimeError, match="Shell 命令执行超时"
+    ):
+        _ = wrapped_fn()
+
+
+def test_taskspec_shell_cmd_file_not_found_mocked():
+    """Test TaskSpec._wrap_cmd handles shell command FileNotFoundError (mocked)."""
+    spec = TaskSpec("test", cmd="nonexistent_shell_command")
+    wrapped_fn = spec.effective_fn
+
+    with patch("subprocess.run", side_effect=FileNotFoundError("not found")), pytest.raises(
+        RuntimeError, match="Shell 命令未找到"
+    ):
+        _ = wrapped_fn()
+
+
+def test_taskspec_shell_cmd_with_cwd_verbose(capsys):
+    """Test TaskSpec._wrap_cmd with shell command, cwd and verbose=True."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if sys.platform == "win32":
+            shell_cmd = "cmd /c echo hello"
+        else:
+            shell_cmd = "echo hello"
+        spec = TaskSpec("test", cmd=shell_cmd, cwd=Path(tmpdir), verbose=True)
+        wrapped_fn = spec.effective_fn
+        result = wrapped_fn()
+        assert result is None
+        captured = capsys.readouterr()
+        assert "执行 Shell" in captured.out
+        assert "工作目录" in captured.out
+
+
+def test_taskspec_list_cmd_os_error_mocked():
+    """Test TaskSpec._wrap_cmd handles list command OSError (mocked)."""
+    spec = TaskSpec("test", cmd=["ls"])
+    wrapped_fn = spec.effective_fn
+
+    with patch("subprocess.run", side_effect=OSError("os error")), pytest.raises(RuntimeError, match="命令执行异常"):
+        _ = wrapped_fn()
+
+
+def test_taskspec_shell_cmd_os_error_mocked():
+    """Test TaskSpec._wrap_cmd handles shell command OSError (mocked)."""
+    spec = TaskSpec("test", cmd="ls")
+    wrapped_fn = spec.effective_fn
+
+    with patch("subprocess.run", side_effect=OSError("os error")), pytest.raises(
+        RuntimeError, match="Shell 命令执行异常"
+    ):
+        _ = wrapped_fn()

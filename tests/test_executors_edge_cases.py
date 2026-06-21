@@ -54,6 +54,61 @@ def test_verbose_event_callback_running():
     assert report.success
 
 
+def test_verbose_run_with_success_lifecycle(capsys):
+    """Test px.run with verbose=True prints SUCCESS lifecycle."""
+    spec = px.TaskSpec("test", fn=lambda: "result")
+    graph = px.Graph.from_specs([spec])
+    report = px.run(graph, strategy="sequential", verbose=True)
+    assert report.success
+    captured = capsys.readouterr()
+    assert "成功" in captured.out
+
+
+def test_verbose_run_with_failed_lifecycle(capsys):
+    """Test px.run with verbose=True prints FAILED lifecycle with error."""
+
+    def raise_error():
+        raise ValueError("test error")
+
+    spec = px.TaskSpec("test", fn=raise_error)
+    graph = px.Graph.from_specs([spec])
+
+    with pytest.raises(px.TaskFailedError):
+        px.run(graph, strategy="sequential", verbose=True)
+    captured = capsys.readouterr()
+    assert "失败" in captured.out
+    assert "test error" in captured.out
+
+
+def test_verbose_run_with_skipped_lifecycle(capsys):
+    """Test px.run with verbose=True prints SKIPPED lifecycle."""
+    spec = px.TaskSpec(
+        "test",
+        fn=lambda: "result",
+        conditions=(lambda: False,),
+    )
+    graph = px.Graph.from_specs([spec])
+    report = px.run(graph, strategy="sequential", verbose=True)
+    assert report.success
+    captured = capsys.readouterr()
+    assert "跳过" in captured.out
+
+
+def test_verbose_run_with_user_callback():
+    """Test px.run with verbose=True and user callback both called."""
+    events = []
+
+    def on_event(event):
+        events.append(event)
+
+    spec = px.TaskSpec("test", fn=lambda: "result")
+    graph = px.Graph.from_specs([spec])
+    report = px.run(graph, strategy="sequential", verbose=True, on_event=on_event)
+    assert report.success
+    assert len(events) == 1
+    assert events[0].status == px.TaskStatus.SUCCESS
+
+
 def test_verbose_event_callback_success():
     """Test verbose event callback for SUCCESS status."""
     # Create a graph with verbose callback

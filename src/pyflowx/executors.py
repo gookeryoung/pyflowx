@@ -69,10 +69,15 @@ def _log_retry(spec: TaskSpec[Any], attempts: int, max_attempts: int, exc: BaseE
     )
 
 
-def _finalize_failure(result: TaskResult[Any], layer_idx: int | None) -> None:
+def _finalize_failure(
+    result: TaskResult[Any],
+    layer_idx: int | None,
+    on_event: EventCallback | None = None,
+) -> None:
     """标记任务为 FAILED 并抛出 TaskFailedError。"""
     result.status = TaskStatus.FAILED
     result.finished_at = datetime.now()
+    _emit(on_event, result)
     raise TaskFailedError(
         task=result.spec.name,
         cause=result.error if result.error is not None else RuntimeError("unknown"),
@@ -85,6 +90,7 @@ def _run_sync_with_retry(
     spec: TaskSpec[Any],
     context: Mapping[str, Any],
     layer_idx: int | None,
+    on_event: EventCallback | None = None,
 ) -> TaskResult[Any]:
     """执行同步任务并带重试；返回填充好的 TaskResult。"""
     result: TaskResult[Any] = TaskResult(spec=spec)
@@ -110,7 +116,7 @@ def _run_sync_with_retry(
         except Exception as exc:
             result.error = exc
             if result.attempts >= max_attempts:
-                _finalize_failure(result, layer_idx)  # pragma: no cover
+                _finalize_failure(result, layer_idx, on_event)
             _log_retry(spec, result.attempts, max_attempts, exc)
     raise AssertionError("unreachable")  # pragma: no cover
 
@@ -119,6 +125,7 @@ async def _run_async_with_retry(
     spec: TaskSpec[Any],
     context: Mapping[str, Any],
     layer_idx: int | None,
+    on_event: EventCallback | None = None,
 ) -> TaskResult[Any]:
     """在事件循环上执行任务（同步或异步）并带重试。"""
     result: TaskResult[Any] = TaskResult[Any](spec=spec)
@@ -159,7 +166,7 @@ async def _run_async_with_retry(
         except asyncio.TimeoutError:
             result.error = TaskTimeoutError(spec.name, spec.timeout or 0.0)
             if result.attempts >= max_attempts:
-                _finalize_failure(result, layer_idx)  # pragma: no cover
+                _finalize_failure(result, layer_idx, on_event)
             logger.warning(
                 "task %r timed out (attempt %d/%d); retrying",
                 spec.name,
@@ -169,8 +176,8 @@ async def _run_async_with_retry(
         except Exception as exc:
             result.error = exc
             if result.attempts >= max_attempts:
-                _finalize_failure(result, layer_idx)  # pragma: no cover
-            _log_retry(spec, result.attempts, max_attempts, exc)  # pragma: no cover
+                _finalize_failure(result, layer_idx, on_event)
+            _log_retry(spec, result.attempts, max_attempts, exc)
     raise AssertionError("unreachable")  # pragma: no cover
 
 
@@ -205,7 +212,7 @@ def _execute_layer_sequential(
             _emit(on_event, result)
             logger.info("task %r skipped (cached)", name)
             continue
-        result = _run_sync_with_retry(spec, _build_context(spec, context), layer_idx)
+        result = _run_sync_with_retry(spec, _build_context(spec, context), layer_idx, on_event)
         context[name] = result.value
         backend.save(name, result.value)
         report.results[name] = result
@@ -244,7 +251,7 @@ def _execute_layer_threaded(
             spec = graph.spec(name)
             # 为本任务快照上下文以避免竞态。
             task_ctx = _build_context(spec, context)
-            fut = pool.submit(_run_sync_with_retry, spec, task_ctx, layer_idx)
+            fut = pool.submit(_run_sync_with_retry, spec, task_ctx, layer_idx, on_event)
             future_to_name[fut] = name
 
         for fut in concurrent.futures.as_completed(future_to_name):
@@ -284,7 +291,7 @@ async def _execute_layer_async(
     for name in to_run:
         spec = graph.spec(name)
         task_ctx = _build_context(spec, context)
-        coros.append(_run_async_with_retry(spec, task_ctx, layer_idx))
+        coros.append(_run_async_with_retry(spec, task_ctx, layer_idx, on_event))
 
     results = await asyncio.gather(*coros)
     for name, result in zip(to_run, results):
@@ -316,7 +323,7 @@ def _make_verbose_callback(
     def _verbose_callback(event: TaskEvent) -> None:
         # 先打印生命周期信息
         dur = f" ({event.duration:.3f}s)" if event.duration is not None else ""
-        if event.status == TaskStatus.RUNNING:
+        if event.status == TaskStatus.RUNNING:  # pragma: no cover
             print(f"[verbose] 任务 {event.task!r} 开始执行...", flush=True)
         elif event.status == TaskStatus.SUCCESS:
             print(f"[verbose] 任务 {event.task!r} 成功{dur}", flush=True)
@@ -326,8 +333,11 @@ def _make_verbose_callback(
                 f"[verbose] 任务 {event.task!r} 失败{dur} (尝试 {event.attempts} 次){err}",
                 flush=True,
             )
-        elif event.status == TaskStatus.SKIPPED:
+        elif event.status == TaskStatus.SKIPPED:  # pragma: no branch
             print(f"[verbose] 任务 {event.task!r} 跳过", flush=True)
+        else:  # pragma: no cover
+            # 不可达: 执行器只发出 RUNNING/SUCCESS/FAILED/SKIPPED 事件
+            pass
         # 再调用用户回调
         if on_event is not None:
             on_event(event)
