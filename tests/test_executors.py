@@ -26,10 +26,12 @@ def test_sequential_basic() -> None:
     def double(extract: list[int]) -> list[int]:
         return [x * 2 for x in extract]
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("extract", extract),
-        px.TaskSpec("double", double, depends_on=("extract",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("extract", extract),
+            px.TaskSpec("double", double, depends_on=("extract",)),
+        ]
+    )
     report = px.run(graph, strategy="sequential")
     assert report.success
     assert report["extract"] == [1, 2, 3]
@@ -46,12 +48,14 @@ def test_sequential_diamond() -> None:
 
         return fn
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", make("a")),
-        px.TaskSpec("b", make("b"), depends_on=("a",)),
-        px.TaskSpec("c", make("c"), depends_on=("a",)),
-        px.TaskSpec("d", make("d"), depends_on=("b", "c")),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", make("a")),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
+            px.TaskSpec("c", make("c"), depends_on=("a",)),
+            px.TaskSpec("d", make("d"), depends_on=("b", "c")),
+        ]
+    )
     report = px.run(graph, strategy="sequential")
     assert report.success
     assert report["d"] == "d"
@@ -65,10 +69,12 @@ def test_failure_propagates() -> None:
     def downstream(_boom: None) -> int:
         return 1
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("boom", boom),
-        px.TaskSpec("downstream", downstream, depends_on=("boom",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("boom", boom),
+            px.TaskSpec("downstream", downstream, depends_on=("boom",)),
+        ]
+    )
     with pytest.raises(TaskFailedError) as exc_info:
         _ = px.run(graph, strategy="sequential")
     assert exc_info.value.task == "boom"
@@ -110,11 +116,13 @@ def test_threaded_parallelism() -> None:
         time.sleep(0.3)
         return "done"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", slow),
-        px.TaskSpec("b", slow),
-        px.TaskSpec("c", slow),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", slow),
+            px.TaskSpec("b", slow),
+            px.TaskSpec("c", slow),
+        ]
+    )
     start = time.time()
     report = px.run(graph, strategy="thread", max_workers=3)
     elapsed = time.time() - start
@@ -137,11 +145,13 @@ def test_threaded_layer_barrier() -> None:
 
         return fn
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", make("a")),
-        px.TaskSpec("b", make("b")),
-        px.TaskSpec("c", make("c"), depends_on=("a", "b")),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", make("a")),
+            px.TaskSpec("b", make("b")),
+            px.TaskSpec("c", make("c"), depends_on=("a", "b")),
+        ]
+    )
     report = px.run(graph, strategy="thread", max_workers=2)
     assert report.success
     # c must finish after both a and b.
@@ -160,10 +170,12 @@ def test_async_basic() -> None:
     async def transform(fetch: int) -> int:
         return fetch * 2
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("fetch", fetch),
-        px.TaskSpec("transform", transform, depends_on=("fetch",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("fetch", fetch),
+            px.TaskSpec("transform", transform, depends_on=("fetch",)),
+        ]
+    )
     report = px.run(graph, strategy="async")
     assert report.success
     assert report["transform"] == 84
@@ -175,11 +187,13 @@ def test_async_parallelism() -> None:
         await asyncio.sleep(0.3)
         return "done"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", slow),
-        px.TaskSpec("b", slow),
-        px.TaskSpec("c", slow),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", slow),
+            px.TaskSpec("b", slow),
+            px.TaskSpec("c", slow),
+        ]
+    )
     start = time.time()
     report = px.run(graph, strategy="async")
     elapsed = time.time() - start
@@ -195,10 +209,12 @@ def test_async_mixed_sync_and_async() -> None:
         await asyncio.sleep(0.01)
         return sync_task + 5
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("sync_task", sync_task),
-        px.TaskSpec("async_task", async_task, depends_on=("sync_task",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("sync_task", sync_task),
+            px.TaskSpec("async_task", async_task, depends_on=("sync_task",)),
+        ]
+    )
     report = px.run(graph, strategy="async")
     assert report.success
     assert report["async_task"] == 15
@@ -246,10 +262,12 @@ def test_memory_backend_resume() -> None:
 
         return fn
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", make("a")),
-        px.TaskSpec("b", make("b"), depends_on=("a",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", make("a")),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
+        ]
+    )
     backend = MemoryBackend()
     _ = px.run(graph, strategy="sequential", state=backend)
     assert runs == ["a", "b"]
@@ -375,10 +393,12 @@ def test_threaded_skips_cached_tasks() -> None:
 
         return fn
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", make("a")),
-        px.TaskSpec("b", make("b"), depends_on=("a",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", make("a")),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
+        ]
+    )
     backend = px.MemoryBackend()
     # 第一次运行填充缓存
     _ = px.run(graph, strategy="thread", max_workers=2, state=backend)
@@ -418,10 +438,12 @@ def test_async_skips_cached_tasks() -> None:
         runs.append("b")
         return a + "b"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("a", a),
-        px.TaskSpec("b", b, depends_on=("a",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("a", a),
+            px.TaskSpec("b", b, depends_on=("a",)),
+        ]
+    )
     backend = px.MemoryBackend()
     _ = px.run(graph, strategy="async", state=backend)
     assert runs == ["a", "b"]
@@ -497,10 +519,12 @@ def test_downstream_skipped_when_upstream_skipped_sequential() -> None:
     def downstream(upstream: str) -> str:
         return upstream + "_processed"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("upstream", cmd=["echo", "hello"], conditions=(never_true,)),
-        px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("upstream", cmd=["echo", "hello"], conditions=(never_true,)),
+            px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
+        ]
+    )
     report = px.run(graph, strategy="sequential")
     assert report.success
     assert report.result_of("upstream").status == px.TaskStatus.SKIPPED
@@ -514,10 +538,12 @@ def test_downstream_skipped_when_upstream_skipped_thread() -> None:
     def downstream(upstream: str) -> str:
         return upstream + "_processed"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("upstream", cmd=["echo", "hello"], conditions=(never_true,)),
-        px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("upstream", cmd=["echo", "hello"], conditions=(never_true,)),
+            px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
+        ]
+    )
     report = px.run(graph, strategy="thread", max_workers=2)
     assert report.success
     assert report.result_of("upstream").status == px.TaskStatus.SKIPPED
@@ -535,10 +561,12 @@ def test_downstream_skipped_when_upstream_skipped_async() -> None:
 
     never_true = lambda: False  # noqa: E731
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("upstream", upstream, conditions=(never_true,)),
-        px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("upstream", upstream, conditions=(never_true,)),
+            px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
+        ]
+    )
     report = px.run(graph, strategy="async")
     assert report.success
     assert report.result_of("upstream").status == px.TaskStatus.SKIPPED
@@ -555,10 +583,12 @@ def test_downstream_executes_when_upstream_succeeds() -> None:
     def downstream(upstream: str) -> str:
         return upstream + "_processed"
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec("upstream", upstream, conditions=(always_true,)),
-        px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec("upstream", upstream, conditions=(always_true,)),
+            px.TaskSpec("downstream", downstream, depends_on=("upstream",)),
+        ]
+    )
     report = px.run(graph, strategy="sequential")
     assert report.success
     assert report.result_of("upstream").status == px.TaskStatus.SUCCESS

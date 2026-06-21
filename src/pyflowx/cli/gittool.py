@@ -31,16 +31,20 @@ def init_sub_dirs() -> None:
     sub_dirs = [subdir for subdir in Path.cwd().iterdir() if subdir.is_dir()]
     for subdir in sub_dirs:
         px.run(
-            px.Graph.from_specs([
-                px.TaskSpec(
-                    "init",
-                    cmd=["git", "init"],
-                    conditions=[not_has_git_repo],
-                    cwd=str(subdir),
-                ),
-                px.TaskSpec("add", cmd=["git", "add", "."], depends_on=["init"], cwd=str(subdir)),
-                px.TaskSpec("commit", cmd=["git", "commit", "-m", "init commit"], depends_on=["add"], cwd=str(subdir)),
-            ]),
+            px.Graph.from_specs(
+                [
+                    px.TaskSpec(
+                        "init",
+                        cmd=["git", "init"],
+                        conditions=[not_has_git_repo],
+                        cwd=str(subdir),
+                    ),
+                    px.TaskSpec("add", cmd=["git", "add", "."], depends_on=["init"], cwd=str(subdir)),
+                    px.TaskSpec(
+                        "commit", cmd=["git", "commit", "-m", "init commit"], depends_on=["add"], cwd=str(subdir)
+                    ),
+                ]
+            ),
         )
 
 
@@ -67,23 +71,29 @@ def main() -> None:
         description="Gittool - Git 执行工具.",
         graphs={
             # 添加并提交
-            "a": px.Graph.from_specs([
-                px.TaskSpec("add", cmd=["git", "add", "."], conditions=[has_files]),
-                px.TaskSpec("commit", cmd=["git", "commit", "-m", "chore: update"], depends_on=["add"]),
-            ]),
+            "a": px.Graph.from_specs(
+                [
+                    px.TaskSpec("add", cmd=["git", "add", "."], conditions=[has_files]),
+                    px.TaskSpec("commit", cmd=["git", "commit", "-m", "chore: update"], depends_on=["add"]),
+                ]
+            ),
             # 清理
-            "c": px.Graph.from_specs([
-                px.TaskSpec("clean", cmd=["git", "clean", "-xfd", *EXCLUDE_CMDS]),
-                px.TaskSpec("status", cmd=["git", "status", "--porcelain"], depends_on=["clean"]),
-            ]),
+            "c": px.Graph.from_specs(
+                [
+                    px.TaskSpec("clean", cmd=["git", "clean", "-xfd", *EXCLUDE_CMDS]),
+                    px.TaskSpec("status", cmd=["git", "status", "--porcelain"], depends_on=["clean"]),
+                ]
+            ),
             # 初始化、添加并提交
-            "i": px.Graph.from_specs([
-                px.TaskSpec("init", cmd=["git", "init"], conditions=[not_has_git_repo]),
-                px.TaskSpec("add", cmd=["git", "add", "."], depends_on=["init"], conditions=[has_files]),
-                px.TaskSpec(
-                    "commit", cmd=["git", "commit", "-m", "init commit"], depends_on=["add"], conditions=[has_files]
-                ),
-            ]),
+            "i": px.Graph.from_specs(
+                [
+                    px.TaskSpec("init", cmd=["git", "init"], conditions=[not_has_git_repo]),
+                    px.TaskSpec("add", cmd=["git", "add", "."], depends_on=["init"], conditions=[has_files]),
+                    px.TaskSpec(
+                        "commit", cmd=["git", "commit", "-m", "init commit"], depends_on=["add"], conditions=[has_files]
+                    ),
+                ]
+            ),
             # 初始化子目录
             "isub": px.Graph.from_specs([isub]),
             # 推送

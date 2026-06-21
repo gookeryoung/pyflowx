@@ -87,6 +87,56 @@ def _finalize_failure(
     )
 
 
+def _check_upstream_skipped(
+    spec: TaskSpec[Any],
+    report: RunReport | None,
+) -> tuple[bool, str | None]:
+    """检查上游任务是否被 SKIPPED。
+
+    Returns
+    -------
+    tuple[bool, str | None]
+        (是否应该跳过, 跳过原因)
+    """
+    if report is None:
+        return False, None
+
+    for dep in spec.depends_on:
+        if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
+            return True, f"上游任务 '{dep}' 被跳过"
+    return False, None
+
+
+def _check_conditions_for_skip(
+    spec: TaskSpec[Any],
+) -> str | None:
+    """检查任务条件是否满足，返回跳过原因（如果不满足）。
+
+    Returns
+    -------
+    str | None
+        跳过原因，如果条件满足则返回 None
+    """
+    if spec.should_execute():
+        return None
+
+    # 检查是哪个条件不满足
+    failed_conditions = []
+    for condition in spec.conditions:
+        try:
+            if not condition():
+                failed_conditions.append(condition.__name__ or "匿名条件")
+        except Exception:
+            failed_conditions.append(condition.__name__ or "匿名条件(执行错误)")
+
+    if failed_conditions:
+        return f"条件不满足: {', '.join(failed_conditions)}"
+    elif spec.skip_if_missing and not spec._is_cmd_available():
+        return f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
+    else:
+        return "条件不满足"
+
+
 def _run_sync_with_retry(
     spec: TaskSpec[Any],
     context: Mapping[str, Any],
@@ -98,33 +148,20 @@ def _run_sync_with_retry(
     result: TaskResult[Any] = TaskResult(spec=spec)
 
     # 检查上游任务是否被 SKIPPED
-    if report is not None:
-        for dep in spec.depends_on:
-            if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
-                result.status = TaskStatus.SKIPPED
-                result.finished_at = datetime.now()
-                result.reason = f"上游任务 '{dep}' 被跳过"
-                logger.info("task %r skipped (上游任务 %r 被跳过)", spec.name, dep)
-                return result
-
-    # 检查条件是否满足
-    if not spec.should_execute():
+    should_skip, skip_reason = _check_upstream_skipped(spec, report)
+    if should_skip:
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
-        # 检查是哪个条件不满足
-        failed_conditions = []
-        for condition in spec.conditions:
-            try:
-                if not condition():
-                    failed_conditions.append(condition.__name__ or "匿名条件")
-            except Exception:
-                failed_conditions.append(condition.__name__ or "匿名条件(执行错误)")
-        if failed_conditions:
-            result.reason = f"条件不满足: {', '.join(failed_conditions)}"
-        elif spec.skip_if_missing and not spec._is_cmd_available():
-            result.reason = f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
-        else:
-            result.reason = "条件不满足"
+        result.reason = skip_reason
+        logger.info("task %r skipped (上游任务被跳过)", spec.name)
+        return result
+
+    # 检查条件是否满足
+    skip_reason = _check_conditions_for_skip(spec)
+    if skip_reason is not None:
+        result.status = TaskStatus.SKIPPED
+        result.finished_at = datetime.now()
+        result.reason = skip_reason
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
@@ -147,6 +184,36 @@ def _run_sync_with_retry(
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+async def _execute_async_task(
+    spec: TaskSpec[Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    loop: asyncio.AbstractEventLoop,
+) -> Any:
+    """执行异步或同步任务（带超时处理）。
+
+    Returns
+    -------
+    Any
+        任务返回值
+    """
+    if _is_async_fn(spec):
+        coro = cast(Awaitable[Any], spec.effective_fn(*args, **kwargs))
+        if spec.timeout is not None:
+            return await asyncio.wait_for(coro, timeout=spec.timeout)
+        else:
+            return await coro
+    else:
+        # 将同步工作卸载到线程，保持事件循环存活。
+        def fn_call() -> Any:
+            return spec.effective_fn(*args, **kwargs)
+
+        if spec.timeout is not None:
+            return await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
+        else:
+            return await loop.run_in_executor(None, fn_call)
+
+
 async def _run_async_with_retry(
     spec: TaskSpec[Any],
     context: Mapping[str, Any],
@@ -158,33 +225,20 @@ async def _run_async_with_retry(
     result: TaskResult[Any] = TaskResult[Any](spec=spec)
 
     # 检查上游任务是否被 SKIPPED
-    if report is not None:
-        for dep in spec.depends_on:
-            if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
-                result.status = TaskStatus.SKIPPED
-                result.finished_at = datetime.now()
-                result.reason = f"上游任务 '{dep}' 被跳过"
-                logger.info("task %r skipped (上游任务 %r 被跳过)", spec.name, dep)
-                return result
-
-    # 检查条件是否满足
-    if not spec.should_execute():
+    should_skip, skip_reason = _check_upstream_skipped(spec, report)
+    if should_skip:
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
-        # 检查是哪个条件不满足
-        failed_conditions = []
-        for condition in spec.conditions:
-            try:
-                if not condition():
-                    failed_conditions.append(condition.__name__ or "匿名条件")
-            except Exception:
-                failed_conditions.append(condition.__name__ or "匿名条件(执行错误)")
-        if failed_conditions:
-            result.reason = f"条件不满足: {', '.join(failed_conditions)}"
-        elif spec.skip_if_missing and not spec._is_cmd_available():
-            result.reason = f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
-        else:
-            result.reason = "条件不满足"
+        result.reason = skip_reason
+        logger.info("task %r skipped (上游任务被跳过)", spec.name)
+        return result
+
+    # 检查条件是否满足
+    skip_reason = _check_conditions_for_skip(spec)
+    if skip_reason is not None:
+        result.status = TaskStatus.SKIPPED
+        result.finished_at = datetime.now()
+        result.reason = skip_reason
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
@@ -196,21 +250,7 @@ async def _run_async_with_retry(
     while True:
         result.attempts += 1
         try:
-            if _is_async_fn(spec):
-                coro = cast(Awaitable[Any], spec.effective_fn(*args, **kwargs))
-                if spec.timeout is not None:
-                    result.value = await asyncio.wait_for(coro, timeout=spec.timeout)
-                else:
-                    result.value = await coro
-            else:
-                # 将同步工作卸载到线程，保持事件循环存活。
-                def fn_call() -> Any:
-                    return spec.effective_fn(*args, **kwargs)
-
-                if spec.timeout is not None:
-                    result.value = await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
-                else:
-                    result.value = await loop.run_in_executor(None, fn_call)
+            result.value = await _execute_async_task(spec, args, kwargs, loop)
             result.status = TaskStatus.SUCCESS
             result.finished_at = datetime.now()
             return result
