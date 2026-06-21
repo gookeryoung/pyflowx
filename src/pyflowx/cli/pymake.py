@@ -102,8 +102,8 @@ def main():
       pymake type        # 类型检查
     """
     runner = px.CliRunner(
-        strategy="sequential",
-        description="PyMake - Python 构建工具 (替代 Makefile)",
+        strategy="thread",
+        description="PyMake - Python 构建工具",
         graphs={
             # 构建命令
             "b": px.Graph.from_specs([uv_build]),
@@ -114,13 +114,13 @@ def main():
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
-            "t": px.Graph.from_specs([test]),
-            "tc": px.Graph.from_specs([test, test_coverage]),
-            "tf": px.Graph.from_specs([test_fast]),
-            "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
-            "type": px.Graph.from_specs([mypy_check, ty_check]),
+            "cov": px.Graph.from_specs([test_coverage]),
             "doc": px.Graph.from_specs([doc]),
+            "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
+            "t": px.Graph.from_specs([test]),
+            "tf": px.Graph.from_specs([test_fast]),
+            "tc": px.Graph.from_specs([mypy_check, ty_check]),
             "tox": px.Graph.from_specs([tox]),
         },
     )
