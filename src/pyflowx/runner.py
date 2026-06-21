@@ -26,7 +26,7 @@ import sys
 from typing import Sequence
 
 from .errors import PyFlowXError
-from .executors import Strategy, _normalize_strategy, run
+from .executors import Strategy, normalize_strategy, run
 from .graph import Graph
 
 __all__ = ["CliExitCode", "CliRunner"]
@@ -132,7 +132,7 @@ class CliRunner:
                     f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}"
                 )
         self._graphs: dict[str, Graph] = dict(graphs)
-        self._strategy: Strategy = _normalize_strategy(strategy)
+        self._strategy: Strategy = normalize_strategy(strategy)
         self._description: str = description
         self._verbose: bool = verbose
 

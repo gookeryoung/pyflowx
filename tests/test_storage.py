@@ -5,12 +5,34 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from pyflowx.errors import StorageError
 from pyflowx.storage import JSONBackend, MemoryBackend, StateBackend, resolve_backend
+
+
+@pytest.fixture
+def mock_tmp_json(tmp_path: Path) -> Path:
+    """模拟临时 JSON 文件。"""
+    path = tmp_path / "state.json"
+    path.touch()
+    return path
+
+
+class TestStateBackend:
+    """测试状态后端。"""
+
+    def test_json_backend_save_and_load(self, mock_tmp_json: Path) -> None:
+        """测试 JSON 后端保存和加载。"""
+        b = JSONBackend(str(mock_tmp_json))
+        assert not b.has("a")
+        b.save("a", 1)
+        assert b.has("a")
+        assert b.get("a") == 1
+        assert dict(b.load()) == {"a": 1}
 
 
 # ---------------------------------------------------------------------- #
@@ -59,7 +81,7 @@ def test_json_backend_clear() -> None:
         b.clear()
         assert not b.has("a")
         # 文件应被写入空 dict
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             assert json.load(fh) == {}
 
 
@@ -123,7 +145,7 @@ def test_json_backend_flush_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "replace", original_replace)
 
 
-def test_json_backend_corrupt_file_raises() -> None:
+def test_json_backend_corrupt_file_raises(tmp_path: Path) -> None:
     """损坏的 JSON 文件应抛 StorageError。"""
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "state.json")
@@ -133,14 +155,12 @@ def test_json_backend_corrupt_file_raises() -> None:
             JSONBackend(path)
 
 
-def test_json_backend_non_dict_content_ignored() -> None:
+def test_json_backend_non_dict_content_ignored(tmp_path: Path) -> None:
     """文件内容是合法 JSON 但非 dict 时应被忽略（保持空）。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump([1, 2, 3], fh)  # list 而非 dict
-        b = JSONBackend(path)
-        assert dict(b.load()) == {}
+    path = tmp_path / "state.json"
+    _ = path.write_text(json.dumps([1, 2, 3]))  # list 而非 dict
+    b = JSONBackend(str(path))
+    assert dict(b.load()) == {}
 
 
 # ---------------------------------------------------------------------- #

@@ -53,7 +53,7 @@ class Strategy(enum.Enum):
     ASYNC = "async"
 
 
-def _normalize_strategy(strategy: str | Strategy) -> Strategy:
+def normalize_strategy(strategy: str | Strategy) -> Strategy:
     """将字符串或 Strategy 归一化为 Strategy 枚举.
 
     Parameters
@@ -436,7 +436,7 @@ def run(
         任何任务耗尽重试后仍失败时。运行在失败层中止；后续层的任务
         不会被执行。
     """
-    normalized = _normalize_strategy(strategy)
+    normalized = normalize_strategy(strategy)
 
     graph.validate()
     layers = graph.layers()
