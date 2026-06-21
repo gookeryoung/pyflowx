@@ -21,6 +21,7 @@ version = "0.1.6"
 
 [project.scripts]
 pymake = "pyflowx.cli.pymake:main"
+gitt = "pyflowx.cli.gittool:main"
 
 [project.optional-dependencies]
 dev = [
