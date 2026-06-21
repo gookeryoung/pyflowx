@@ -183,10 +183,7 @@ class CliRunner:
 
     def _format_commands_help(self) -> str:
         """格式化命令帮助文本."""
-        lines = ["可用命令:"]
-        for cmd in self.graphs:
-            lines.append(f"  {cmd}")
-        return "\n".join(lines)
+        return "可用命令:\n" + " | ".join(self.graphs.keys())
 
     # ------------------------------------------------------------------ #
     # 执行
