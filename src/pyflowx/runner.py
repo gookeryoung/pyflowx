@@ -15,7 +15,7 @@ import argparse
 import enum
 import sys
 from dataclasses import dataclass, field, replace
-from typing import Sequence
+from typing import Sequence, get_args
 
 from .errors import PyFlowXError
 from .executors import Strategy, run
@@ -60,7 +60,7 @@ def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
     return Graph.from_specs(new_specs)
 
 
-@dataclass
+@dataclass(frozen=True)
 class CliRunner:
     """命令行运行器: 根据用户输入执行对应的任务流图.
 
@@ -162,7 +162,7 @@ class CliRunner:
         )
         _ = parser.add_argument(
             "--strategy",
-            choices=list(Strategy.__args__),
+            choices=list(get_args(Strategy)),
             default="sequential",
             help="执行策略 (默认: %(default)s)",
         )

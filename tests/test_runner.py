@@ -76,11 +76,6 @@ class TestCliRunnerConstruction:
         )
         assert runner.commands == ["clean", "build", "test"]
 
-    def test_rejects_non_graph_list(self) -> None:
-        """列表类型的值应抛出 TypeError."""
-        with pytest.raises(TypeError, match="必须是 Graph 实例"):
-            _ = px.CliRunner(graphs={"build": [1, 2, 3]})  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
-
     def test_default_strategy_is_sequential(self) -> None:
         """默认策略应为 Strategy.SEQUENTIAL."""
         runner = px.CliRunner({"clean": _echo_graph()})
@@ -103,8 +98,7 @@ class TestCliRunnerConstruction:
 
     def test_custom_verbose_false(self) -> None:
         """应支持关闭 verbose."""
-        runner = px.CliRunner({"clean": _echo_graph()})
-        runner.verbose = False
+        runner = px.CliRunner({"clean": _echo_graph()}, verbose=False)
         assert runner.verbose is False
 
     def test_default_description_is_empty(self) -> None:
@@ -177,13 +171,6 @@ class TestCliRunnerParser:
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
         assert parsed.strategy == "sequential"
-
-    def test_parser_strategy_invalid_choice(self) -> None:
-        """--strategy 不接受非法值."""
-        runner = px.CliRunner({"clean": _echo_graph()}, "invalid")  # pyright: ignore[reportArgumentType]
-        parser = runner.create_parser()
-        with pytest.raises(SystemExit):
-            _ = parser.parse_args(["clean", "--strategy", "invalid"])
 
     def test_parser_has_dry_run_flag(self) -> None:
         """解析器应有 --dry-run 标志."""

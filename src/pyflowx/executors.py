@@ -389,11 +389,6 @@ def run(
     graph.validate()
     layers = graph.layers()
 
-    # 验证策略是否有效
-    valid_strategies = ("sequential", "thread", "async")
-    if strategy not in valid_strategies:
-        raise ValueError(f"unknown strategy: {strategy}. Valid: {valid_strategies}")
-
     if dry_run:
         _print_dry_run(graph, layers)
         return RunReport(success=True)

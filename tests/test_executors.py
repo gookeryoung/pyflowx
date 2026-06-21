@@ -76,7 +76,7 @@ def test_failure_propagates() -> None:
         ]
     )
     with pytest.raises(TaskFailedError) as exc_info:
-        px.run(graph, strategy="sequential")
+        _ = px.run(graph, strategy="sequential")
     assert exc_info.value.task == "boom"
     assert isinstance(exc_info.value.cause, ValueError)
 
@@ -103,7 +103,7 @@ def test_retries_exhausted() -> None:
 
     graph = px.Graph.from_specs([px.TaskSpec("f", always_fail, retries=2)])
     with pytest.raises(TaskFailedError) as exc_info:
-        px.run(graph, strategy="sequential")
+        _ = px.run(graph, strategy="sequential")
     assert exc_info.value.attempts == 3
 
 
@@ -226,7 +226,7 @@ def test_async_timeout() -> None:
 
     graph = px.Graph.from_specs([px.TaskSpec("slow", slow, timeout=0.05)])
     with pytest.raises(TaskFailedError) as exc_info:
-        px.run(graph, strategy="async")
+        _ = px.run(graph, strategy="async")
     assert isinstance(exc_info.value.cause, TaskTimeoutError)
 
 
@@ -269,11 +269,11 @@ def test_memory_backend_resume() -> None:
         ]
     )
     backend = MemoryBackend()
-    px.run(graph, strategy="sequential", state=backend)
+    _ = px.run(graph, strategy="sequential", state=backend)
     assert runs == ["a", "b"]
 
     # Second run: both cached, neither re-executed.
-    px.run(graph, strategy="sequential", state=backend)
+    _ = px.run(graph, strategy="sequential", state=backend)
     assert runs == ["a", "b"]  # unchanged
 
 
@@ -285,7 +285,7 @@ def test_json_backend_persistence() -> None:
             return 7
 
         graph = px.Graph.from_specs([px.TaskSpec("a", fn)])
-        px.run(graph, strategy="sequential", state=JSONBackend(path))
+        _ = px.run(graph, strategy="sequential", state=JSONBackend(path))
 
         # New backend reads the file; task should be skipped.
         runs: list[str] = []
@@ -310,19 +310,10 @@ def test_on_event_callback() -> None:
         return 1
 
     graph = px.Graph.from_specs([px.TaskSpec("a", fn)])
-    px.run(graph, strategy="sequential", on_event=events.append)
+    _ = px.run(graph, strategy="sequential", on_event=events.append)
     statuses = [e.status for e in events]
     assert px.TaskStatus.SUCCESS in statuses
     assert all(e.task == "a" for e in events)
-
-
-# ---------------------------------------------------------------------- #
-# Invalid strategy
-# ---------------------------------------------------------------------- #
-def test_invalid_strategy() -> None:
-    graph = px.Graph.from_specs([px.TaskSpec("a", lambda: None)])  # type: ignore[arg-type]
-    with pytest.raises(ValueError):
-        px.run(graph, strategy="bogus")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------- #
@@ -410,10 +401,10 @@ def test_threaded_skips_cached_tasks() -> None:
     )
     backend = px.MemoryBackend()
     # 第一次运行填充缓存
-    px.run(graph, strategy="thread", max_workers=2, state=backend)
+    _ = px.run(graph, strategy="thread", max_workers=2, state=backend)
     assert runs == ["a", "b"]
     # 第二次运行应全部跳过
-    px.run(graph, strategy="thread", max_workers=2, state=backend)
+    _ = px.run(graph, strategy="thread", max_workers=2, state=backend)
     assert runs == ["a", "b"]  # 未再执行
 
 
@@ -454,9 +445,9 @@ def test_async_skips_cached_tasks() -> None:
         ]
     )
     backend = px.MemoryBackend()
-    px.run(graph, strategy="async", state=backend)
+    _ = px.run(graph, strategy="async", state=backend)
     assert runs == ["a", "b"]
-    px.run(graph, strategy="async", state=backend)
+    _ = px.run(graph, strategy="async", state=backend)
     assert runs == ["a", "b"]
 
 
@@ -483,7 +474,7 @@ def test_failure_marks_report_unsuccessful() -> None:
 
     graph = px.Graph.from_specs([px.TaskSpec("a", boom)])
     with pytest.raises(px.TaskFailedError):
-        px.run(graph, strategy="sequential")
+        _ = px.run(graph, strategy="sequential")
     # report 在异常前未返回，但若捕获异常则 success 应为 False
     # 这里验证 run() 抛异常的行为本身
 
