@@ -47,7 +47,7 @@ def _is_context_annotation(annotation: Any) -> bool:
 
 
 def build_call_args(
-    spec: TaskSpec[object],
+    spec: TaskSpec[Any],
     context: Mapping[str, Any],
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """解析用于调用 ``spec.fn`` 的 ``(args, kwargs)``。
@@ -92,7 +92,7 @@ def build_call_args(
         raise InjectionError(
             spec.name,
             f"static kwargs {sorted(collisions)} collide with dependency names; "
-            "rename the static kwarg or the dependency.",
+            + "rename the static kwarg or the dependency.",
         )
 
     injected_kwargs: dict[str, Any] = {}
@@ -155,7 +155,7 @@ def build_call_args(
     return tuple(spec.args), injected_kwargs
 
 
-def describe_injection(spec: TaskSpec[object]) -> str:
+def describe_injection(spec: TaskSpec[Any]) -> str:
     """生成任务参数注入方式的人类可读描述。
 
     供 ``dry_run`` 使用，在不执行的情况下展示执行计划。

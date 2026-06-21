@@ -33,7 +33,7 @@ def main() -> None:
         [
             px.TaskSpec("fetch_a", fetch_a),
             px.TaskSpec("fetch_b", fetch_b),
-            px.TaskSpec("merge", merge, ("fetch_a", "fetch_b")),
+            px.TaskSpec("merge", merge, depends_on=("fetch_a", "fetch_b")),
         ]
     )
 

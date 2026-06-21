@@ -22,19 +22,6 @@ def mock_tmp_json(tmp_path: Path) -> Path:
     return path
 
 
-class TestStateBackend:
-    """测试状态后端。"""
-
-    def test_json_backend_save_and_load(self, mock_tmp_json: Path) -> None:
-        """测试 JSON 后端保存和加载。"""
-        b = JSONBackend(str(mock_tmp_json))
-        assert not b.has("a")
-        b.save("a", 1)
-        assert b.has("a")
-        assert b.get("a") == 1
-        assert dict(b.load()) == {"a": 1}
-
-
 # ---------------------------------------------------------------------- #
 # MemoryBackend
 # ---------------------------------------------------------------------- #
@@ -61,7 +48,7 @@ def test_memory_backend_get_missing_raises() -> None:
 # ---------------------------------------------------------------------- #
 def test_json_backend_save_and_load() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
         b.save("a", {"x": 1})
         b.save("b", [1, 2, 3])
@@ -75,7 +62,7 @@ def test_json_backend_save_and_load() -> None:
 
 def test_json_backend_clear() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
         b.save("a", 1)
         b.clear()
@@ -88,7 +75,7 @@ def test_json_backend_clear() -> None:
 def test_json_backend_nonexistent_file_starts_empty() -> None:
     """文件不存在时应正常初始化为空。"""
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "absent.json")
+        path = str(Path(tmp) / "absent.json")
         b = JSONBackend(path)
         assert dict(b.load()) == {}
         assert not b.has("anything")
@@ -97,7 +84,7 @@ def test_json_backend_nonexistent_file_starts_empty() -> None:
 def test_json_backend_non_serialisable_raises() -> None:
     """不可 JSON 序列化的值应抛 StorageError，且不污染内存状态。"""
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
         with pytest.raises(StorageError):
             b.save("a", object())  # object() 不可序列化
@@ -113,12 +100,12 @@ def test_json_backend_flush_type_error(monkeypatch: pytest.MonkeyPatch) -> None:
     import json as _json
 
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
 
         original_dump = _json.dump
 
-        def flaky_dump(*args: Any, **kwargs: Any) -> None:
+        def flaky_dump(*_args: Any, **_kwargs: Any) -> None:
             raise TypeError("simulated flush failure")
 
         monkeypatch.setattr(_json, "dump", flaky_dump)
@@ -131,28 +118,28 @@ def test_json_backend_flush_type_error(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_json_backend_flush_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """_flush 时 OSError 应转为 StorageError。"""
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
 
         original_replace = os.replace
 
-        def fail_replace(*args: Any, **kwargs: Any) -> None:
+        def fail_replace(*_args: Any, **_kwargs: Any) -> None:
             raise OSError("simulated os.replace failure")
 
-        monkeypatch.setattr(os, "replace", fail_replace)
+        monkeypatch.setattr(Path, "replace", fail_replace)
         with pytest.raises(StorageError, match="cannot write"):
             b.save("a", 1)
         monkeypatch.setattr(os, "replace", original_replace)
 
 
-def test_json_backend_corrupt_file_raises(tmp_path: Path) -> None:
+def test_json_backend_corrupt_file_raises() -> None:
     """损坏的 JSON 文件应抛 StorageError。"""
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write("{not valid json")
+            _ = fh.write("{not valid json")
         with pytest.raises(StorageError):
-            JSONBackend(path)
+            _ = JSONBackend(path)
 
 
 def test_json_backend_non_dict_content_ignored(tmp_path: Path) -> None:

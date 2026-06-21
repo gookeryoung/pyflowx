@@ -28,6 +28,7 @@ from typing import Sequence
 from .errors import PyFlowXError
 from .executors import Strategy, normalize_strategy, run
 from .graph import Graph
+from .task import TaskSpec
 
 __all__ = ["CliExitCode", "CliRunner"]
 
@@ -58,7 +59,7 @@ def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
     Graph
         所有 spec 的 verbose 字段已更新的新图.
     """
-    new_specs = []
+    new_specs: list[TaskSpec[object]] = []
     for spec in graph.all_specs().values():
         if spec.verbose == verbose:
             new_specs.append(spec)
@@ -191,28 +192,28 @@ class CliRunner:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=self._format_commands_help(),
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "command",
             nargs="?",
             help="要执行的命令",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--strategy",
             choices=[s.value for s in Strategy],
             default=self._strategy.value,
             help="执行策略 (默认: %(default)s)",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--dry-run",
             action="store_true",
             help="只打印执行计划, 不实际运行",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--list",
             action="store_true",
             help="列出所有可用命令",
         )
-        parser.add_argument(
+        _ = parser.add_argument(
             "--quiet",
             action="store_true",
             help="静默模式, 不显示执行过程 (覆盖默认 verbose)",

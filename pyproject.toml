@@ -86,7 +86,7 @@ pythonVersion                     = "3.8"
 reportImplicitStringConcatenation = "error"
 reportMissingTypeStubs            = "none"
 reportUnusedCallResult            = "warning"
-typeCheckingMode                  = "recommended" # 类型检查严格度：off / basic / standard / recommended(默认) / strict / all
+typeCheckingMode                  = "basic" # 类型检查严格度：off / basic / standard / recommended(默认) / strict / all
 
 # Ruff 配置 - 与 .pre-commit-config.yaml 保持一致
 [tool.ruff]

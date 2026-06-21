@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, List
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -77,12 +77,12 @@ class TestCliRunnerConstruction:
     def test_rejects_non_graph_value(self) -> None:
         """非 Graph 值应抛出 TypeError."""
         with pytest.raises(TypeError, match="必须是 Graph 实例"):
-            px.CliRunner(clean="not a graph")  # type: ignore[arg-type]
+            _ = px.CliRunner(clean="not a graph")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
     def test_rejects_non_graph_list(self) -> None:
         """列表类型的值应抛出 TypeError."""
         with pytest.raises(TypeError, match="必须是 Graph 实例"):
-            px.CliRunner(build=[1, 2, 3])  # type: ignore[arg-type]
+            _ = px.CliRunner(build=[1, 2, 3])  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
     def test_default_strategy_is_sequential(self) -> None:
         """默认策略应为 Strategy.SEQUENTIAL."""
@@ -257,19 +257,15 @@ class TestCliRunnerParser:
 class TestCliRunnerRunSuccess:
     """测试 CliRunner.run 的成功执行路径."""
 
-    def test_run_valid_command_returns_zero(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_valid_command_returns_zero(self) -> None:
         """有效命令执行成功应返回 0."""
         runner = px.CliRunner(echo=_echo_graph())
         exit_code = runner.run(["echo"])
         assert exit_code == CliExitCode.SUCCESS.value
 
-    def test_run_executes_correct_graph(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_executes_correct_graph(self) -> None:
         """应执行用户指定的命令对应的图."""
-        executed: List[str] = []
+        executed: list[str] = []
 
         def track_a() -> None:
             executed.append("a")
@@ -418,9 +414,7 @@ class TestCliRunnerRunFailure:
         captured = capsys.readouterr()
         assert "可用命令" in captured.out or "可用命令" in captured.err
 
-    def test_run_failing_task_returns_failure(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_failing_task_returns_failure(self) -> None:
         """任务失败时应返回 1."""
         runner = px.CliRunner(fail=_failing_graph())
         exit_code = runner.run(["fail"])
@@ -443,7 +437,7 @@ class TestCliRunnerRunFailure:
 class TestCliRunnerList:
     """测试 --list 选项."""
 
-    def test_list_returns_success(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_list_returns_success(self) -> None:
         """--list 应返回 0."""
         runner = px.CliRunner(clean=_echo_graph(), build=_echo_graph())
         exit_code = runner.run(["--list"])
@@ -462,11 +456,9 @@ class TestCliRunnerList:
         assert "build" in captured.out
         assert "test" in captured.out
 
-    def test_list_does_not_execute_any_graph(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_list_does_not_execute_any_graph(self) -> None:
         """--list 不应执行任何图."""
-        executed: List[str] = []
+        executed: list[str] = []
 
         def track() -> None:
             executed.append("ran")
@@ -488,7 +480,7 @@ class TestCliRunnerErrorHandling:
         """KeyboardInterrupt 应返回 130."""
         runner = px.CliRunner(echo=_echo_graph())
 
-        def raise_interrupt(*args: Any, **kwargs: Any) -> None:
+        def raise_interrupt(*_args: Any, **_kwargs: Any) -> None:
             raise KeyboardInterrupt
 
         with patch("pyflowx.runner.run", side_effect=raise_interrupt):
@@ -503,7 +495,7 @@ class TestCliRunnerErrorHandling:
         """PyFlowXError 应返回 1."""
         runner = px.CliRunner(echo=_echo_graph())
 
-        def raise_error(*args: Any, **kwargs: Any) -> None:
+        def raise_error(*_args: Any, **_kwargs: Any) -> None:
             raise TaskFailedError("echo", RuntimeError("boom"), 1)
 
         with patch("pyflowx.runner.run", side_effect=raise_error):
@@ -520,12 +512,13 @@ class TestCliRunnerErrorHandling:
 
         runner = px.CliRunner(echo=_echo_graph())
 
-        def raise_custom(*args: Any, **kwargs: Any) -> None:
+        def raise_custom(*_args: Any, **_kwargs: Any) -> None:
             raise CustomError("unexpected")
 
-        with patch("pyflowx.runner.run", side_effect=raise_custom):
-            with pytest.raises(CustomError):
-                runner.run(["echo"])
+        with patch("pyflowx.runner.run", side_effect=raise_custom), pytest.raises(
+            CustomError
+        ):
+            runner.run(["echo"])
 
 
 # ---------------------------------------------------------------------- #
@@ -617,7 +610,7 @@ class TestCliRunnerIntegration:
 
     def test_diamond_dependency_graph(self) -> None:
         """菱形依赖图应正确执行."""
-        order: List[str] = []
+        order: list[str] = []
 
         def make(name: str) -> Any:
             def fn() -> str:

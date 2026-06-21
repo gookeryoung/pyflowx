@@ -150,6 +150,7 @@ class TaskSpec(Generic[T]):
             return self._wrap_cmd()
         if self.fn is not None:
             return self.fn
+
         raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")
 
     def _wrap_cmd(self) -> TaskFn[Any]:

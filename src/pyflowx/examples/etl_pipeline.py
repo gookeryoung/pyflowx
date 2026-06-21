@@ -55,10 +55,12 @@ def main() -> None:
             px.TaskSpec(
                 "transform",
                 transform,
-                ("extract_customers", "extract_orders"),
+                depends_on=("extract_customers", "extract_orders"),
                 tags=("transform",),
             ),
-            px.TaskSpec("load", load, ("transform",), retries=1, tags=("load",)),
+            px.TaskSpec(
+                "load", load, depends_on=("transform",), retries=1, tags=("load",)
+            ),
         ]
     )
 

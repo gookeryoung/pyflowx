@@ -35,7 +35,7 @@ def main() -> None:
             # Static positional args parameterise the same function twice.
             px.TaskSpec("fetch_user", fetch_user, args=(1,)),
             px.TaskSpec("fetch_posts", fetch_posts, args=(1,)),
-            px.TaskSpec("aggregate", aggregate, ("fetch_user", "fetch_posts")),
+            px.TaskSpec("aggregate", aggregate, depends_on=("fetch_user", "fetch_posts")),
         ]
     )
 

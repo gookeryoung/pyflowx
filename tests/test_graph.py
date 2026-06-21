@@ -39,7 +39,7 @@ def test_from_specs_allows_forward_references() -> None:
 
 def test_duplicate_task_raises() -> None:
     with pytest.raises(DuplicateTaskError):
-        px.Graph.from_specs(
+        _ = px.Graph.from_specs(
             [
                 px.TaskSpec("a", _fn),
                 px.TaskSpec("a", _fn),
@@ -49,14 +49,15 @@ def test_duplicate_task_raises() -> None:
 
 def test_missing_dependency_raises() -> None:
     with pytest.raises(MissingDependencyError) as exc_info:
-        px.Graph.from_specs([px.TaskSpec("b", _fn, depends_on=("a",))])
+        _ = px.Graph.from_specs([px.TaskSpec("b", _fn, depends_on=("a",))])
+
     assert exc_info.value.task == "b"
     assert exc_info.value.dependency == "a"
 
 
 def test_cycle_detection() -> None:
     with pytest.raises(CycleError):
-        px.Graph.from_specs(
+        _ = px.Graph.from_specs(
             [
                 px.TaskSpec("a", _fn, depends_on=("c",)),
                 px.TaskSpec("b", _fn, depends_on=("a",)),
@@ -80,7 +81,7 @@ def test_layers_grouping() -> None:
 
 def test_self_dependency_rejected() -> None:
     with pytest.raises(ValueError):
-        px.TaskSpec("a", _fn, depends_on=("a",))
+        _ = px.TaskSpec("a", _fn, depends_on=("a",))
 
 
 def test_to_mermaid() -> None:
@@ -99,7 +100,7 @@ def test_to_mermaid() -> None:
 def test_to_mermaid_invalid_orientation() -> None:
     graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
     with pytest.raises(ValueError):
-        graph.to_mermaid("XX")
+        _ = graph.to_mermaid("XX")
 
 
 def test_subgraph_by_tags() -> None:
@@ -134,7 +135,7 @@ def test_subgraph_by_names() -> None:
 def test_subgraph_by_names_unknown() -> None:
     graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
     with pytest.raises(KeyError):
-        graph.subgraph_by_names(["nope"])
+        _ = graph.subgraph_by_names(["nope"])
 
 
 def test_describe() -> None:
@@ -160,14 +161,14 @@ def test_add_chains_and_validates() -> None:
     assert "a" in graph
     # 缺失依赖应即时报错
     with pytest.raises(MissingDependencyError):
-        graph.add(px.TaskSpec("b", _fn, depends_on=("missing",)))
+        _ = graph.add(px.TaskSpec("b", _fn, depends_on=("missing",)))
 
 
 def test_add_duplicate_raises() -> None:
     graph = px.Graph()
-    graph.add(px.TaskSpec("a", _fn))
+    _ = graph.add(px.TaskSpec("a", _fn))
     with pytest.raises(DuplicateTaskError):
-        graph.add(px.TaskSpec("a", _fn))
+        _ = graph.add(px.TaskSpec("a", _fn))
 
 
 def test_all_specs_returns_view() -> None:
@@ -182,7 +183,7 @@ def test_spec_accessor() -> None:
     graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
     assert graph.spec("a").name == "a"
     with pytest.raises(KeyError):
-        graph.spec("missing")
+        _ = graph.spec("missing")
 
 
 def test_dependencies_accessor() -> None:
@@ -213,7 +214,7 @@ def test_subgraph_preserves_metadata() -> None:
     graph = px.Graph.from_specs(
         [
             px.TaskSpec("a", _fn, tags=("x",), retries=3, timeout=5.0),
-            px.TaskSpec("b", _fn, ("a",), tags=("y",)),
+            px.TaskSpec("b", _fn, depends_on=("a",), tags=("y",)),
         ]
     )
     sub = graph.subgraph(["x"])

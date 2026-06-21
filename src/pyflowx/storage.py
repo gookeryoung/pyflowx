@@ -99,7 +99,8 @@ class JSONBackend(StateBackend):
         try:
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(self._store, fh, ensure_ascii=False, indent=2)
-            Path(tmp).replace(Path(self._path))
+
+            _ = Path(tmp).replace(Path(self._path))
         except (OSError, TypeError) as exc:
             raise StorageError(f"cannot write state file {self._path!r}", exc) from exc
 
@@ -109,13 +110,13 @@ class JSONBackend(StateBackend):
     def save(self, name: str, value: Any) -> None:
         # 在修改内存状态前先校验可序列化性。
         try:
-            json.dumps(value)
+            _ = json.dumps(value)
         except (TypeError, ValueError) as exc:
             raise StorageError(
                 f"result of task {name!r} is not JSON-serialisable", exc
             ) from exc
         self._store[name] = value
-        _ = self._flush()
+        self._flush()
 
     def has(self, name: str) -> bool:
         return name in self._store
@@ -125,7 +126,7 @@ class JSONBackend(StateBackend):
 
     def clear(self) -> None:
         self._store.clear()
-        _ = self._flush()
+        self._flush()
 
 
 def resolve_backend(backend: StateBackend | None) -> StateBackend:

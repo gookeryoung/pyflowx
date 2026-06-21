@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 import threading
 import time
-from typing import Any, List
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -39,7 +39,7 @@ def test_sequential_basic() -> None:
 
 
 def test_sequential_diamond() -> None:
-    order: List[str] = []
+    order: list[str] = []
 
     def make(name: str) -> Any:
         def fn() -> str:
@@ -66,7 +66,7 @@ def test_failure_propagates() -> None:
     def boom() -> None:
         raise ValueError("kaboom")
 
-    def downstream(boom: None) -> int:
+    def downstream(_boom: None) -> int:
         return 1
 
     graph = px.Graph.from_specs(
@@ -131,7 +131,7 @@ def test_threaded_parallelism() -> None:
 
 
 def test_threaded_layer_barrier() -> None:
-    finished: List[str] = []
+    finished: list[str] = []
     lock = threading.Lock()
 
     def make(name: str) -> Any:
@@ -231,7 +231,7 @@ def test_async_timeout() -> None:
 # Dry run
 # ---------------------------------------------------------------------- #
 def test_dry_run_does_not_execute(capsys: pytest.CaptureFixture[str]) -> None:
-    called: List[str] = []
+    called: list[str] = []
 
     def fn() -> str:
         called.append("x")
@@ -250,7 +250,7 @@ def test_dry_run_does_not_execute(capsys: pytest.CaptureFixture[str]) -> None:
 # State / resume
 # ---------------------------------------------------------------------- #
 def test_memory_backend_resume() -> None:
-    runs: List[str] = []
+    runs: list[str] = []
 
     def make(name: str) -> Any:
         def fn() -> str:
@@ -276,7 +276,7 @@ def test_memory_backend_resume() -> None:
 
 def test_json_backend_persistence() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "state.json")
+        path = str(Path(tmp) / "state.json")
 
         def fn() -> int:
             return 7
@@ -285,7 +285,7 @@ def test_json_backend_persistence() -> None:
         px.run(graph, strategy="sequential", state=JSONBackend(path))
 
         # New backend reads the file; task should be skipped.
-        runs: List[str] = []
+        runs: list[str] = []
 
         def fn2() -> int:
             runs.append("ran")
@@ -301,7 +301,7 @@ def test_json_backend_persistence() -> None:
 # Events
 # ---------------------------------------------------------------------- #
 def test_on_event_callback() -> None:
-    events: List[px.TaskEvent] = []
+    events: list[px.TaskEvent] = []
 
     def fn() -> int:
         return 1
@@ -390,7 +390,7 @@ def test_async_failure_retry_branch(caplog: pytest.LogCaptureFixture) -> None:
 # ---------------------------------------------------------------------- #
 def test_threaded_skips_cached_tasks() -> None:
     """threaded 策略下命中缓存的任务应被跳过（覆盖 line 224-230）。"""
-    runs: List[str] = []
+    runs: list[str] = []
 
     def make(name: str) -> Any:
         def fn() -> str:
@@ -426,7 +426,7 @@ def test_threaded_all_cached_layer() -> None:
 
 def test_async_skips_cached_tasks() -> None:
     """async 策略下命中缓存的任务应被跳过（覆盖 line 268-274）。"""
-    runs: List[str] = []
+    runs: list[str] = []
 
     async def make(name: str) -> Any:
         async def fn() -> str:

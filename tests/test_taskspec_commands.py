@@ -356,7 +356,7 @@ class TestTaskSpecVerbose:
 
     def test_verbose_default_is_false(self) -> None:
         """verbose 默认应为 False."""
-        spec = px.TaskSpec("a", cmd=[*ECHO_CMD, "hi"])
+        spec: px.TaskSpec[object] = px.TaskSpec("a", cmd=[*ECHO_CMD, "hi"])
         assert spec.verbose is False
 
     def test_verbose_true_prints_command(
