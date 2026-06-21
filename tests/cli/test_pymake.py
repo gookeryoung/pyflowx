@@ -1,6 +1,6 @@
 """Tests for pymake CLI."""
 
-from pyflowx.cli.pymake import _get_maturin_build_command, build_graphs, conf
+from pyflowx.cli.pymake import build_graphs, conf, get_maturin_build_command
 
 
 def test_pymake_config_attributes():
@@ -23,8 +23,8 @@ def test_pymake_config_values():
 
 
 def test_get_maturin_build_command_basic():
-    """Test _get_maturin_build_command returns base command."""
-    cmd = _get_maturin_build_command()
+    """Test get_maturin_build_command returns base command."""
+    cmd = get_maturin_build_command()
     assert "maturin" in cmd
     assert "build" in cmd
     assert "-r" in cmd
@@ -97,7 +97,7 @@ def test_maturin_build_command_graph_structure():
     specs = graph.all_specs()
     assert len(specs) == 1
     spec = graph.spec("maturin_build")
-    assert spec.cmd == _get_maturin_build_command()
+    assert spec.cmd == get_maturin_build_command()
 
 
 def test_install_all_command_graph_structure():

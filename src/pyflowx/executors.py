@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import enum
 import inspect
 import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Mapping, cast
+from typing import Any, Awaitable, Callable, Literal, Mapping, cast
 
 from .context import build_call_args, describe_injection
 from .errors import TaskFailedError, TaskTimeoutError
@@ -33,56 +32,7 @@ logger = logging.getLogger("pyflowx")
 
 # 观察者回调类型。
 EventCallback = Callable[[TaskEvent], None]
-
-
-class Strategy(enum.Enum):
-    """任务图执行策略.
-
-    Members
-    -------
-    SEQUENTIAL
-        顺序执行: 逐个运行任务, 确定性最高, 适合调试.
-    THREAD
-        线程池执行: 层内任务通过线程池并发, 适合 I/O 密集型同步任务.
-    ASYNC
-        异步执行: 通过 ``asyncio.gather`` 实现层内并发, 适合 I/O 密集型异步任务.
-    """
-
-    SEQUENTIAL = "sequential"
-    THREAD = "thread"
-    ASYNC = "async"
-
-
-def normalize_strategy(strategy: str | Strategy) -> Strategy:
-    """将字符串或 Strategy 归一化为 Strategy 枚举.
-
-    Parameters
-    ----------
-    strategy : str | Strategy
-        策略值, 接受字符串 (``"sequential"`` / ``"thread"`` / ``"async"``)
-        或 :class:`Strategy` 枚举成员.
-
-    Returns
-    -------
-    Strategy
-        归一化后的枚举成员.
-
-    Raises
-    ------
-    ValueError
-        策略不被识别时.
-    """
-    if isinstance(strategy, Strategy):
-        return strategy
-    if isinstance(strategy, str):
-        try:
-            return Strategy(strategy)
-        except ValueError:
-            valid = ", ".join(repr(s.value) for s in Strategy)
-            raise ValueError(
-                f"unknown strategy {strategy!r}; expected one of {valid}."
-            ) from None
-    raise TypeError(f"strategy must be str or Strategy, got {type(strategy).__name__}")
+Strategy = Literal["sequential", "thread", "async"]
 
 
 def _is_async_fn(spec: TaskSpec[object]) -> bool:
@@ -397,7 +347,7 @@ def _make_verbose_callback(
 
 def run(
     graph: Graph,
-    strategy: str | Strategy = Strategy.SEQUENTIAL,
+    strategy: Strategy = "sequential",
     *,
     max_workers: int | None = None,
     dry_run: bool = False,
@@ -436,10 +386,13 @@ def run(
         任何任务耗尽重试后仍失败时。运行在失败层中止；后续层的任务
         不会被执行。
     """
-    normalized = normalize_strategy(strategy)
-
     graph.validate()
     layers = graph.layers()
+
+    # 验证策略是否有效
+    valid_strategies = ("sequential", "thread", "async")
+    if strategy not in valid_strategies:
+        raise ValueError(f"unknown strategy: {strategy}. Valid: {valid_strategies}")
 
     if dry_run:
         _print_dry_run(graph, layers)
@@ -455,11 +408,11 @@ def run(
     context: dict[str, Any] = {}
 
     try:
-        if normalized == Strategy.SEQUENTIAL:
+        if strategy == "sequential":
             _drive_sequential(
                 graph, layers, context, report, backend, effective_callback
             )
-        elif normalized == Strategy.THREAD:
+        elif strategy == "thread":
             _drive_threaded(
                 graph, layers, context, report, backend, effective_callback, max_workers
             )

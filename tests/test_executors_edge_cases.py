@@ -28,6 +28,7 @@ def test_execute_sync_with_timeout():
     assert report.success
 
 
+@pytest.mark.slow
 def test_execute_async_with_timeout():
     """Test execute async task with timeout correctly."""
 

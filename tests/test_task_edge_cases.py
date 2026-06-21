@@ -70,7 +70,7 @@ def test_taskspec_wrap_cmd_error():
     wrapped_fn = spec.effective_fn
 
     with pytest.raises(RuntimeError, match="命令执行失败"):
-        wrapped_fn()
+        _ = wrapped_fn()
 
 
 def test_taskspec_wrap_cmd_file_not_found():
@@ -79,7 +79,7 @@ def test_taskspec_wrap_cmd_file_not_found():
     wrapped_fn = spec.effective_fn
 
     with pytest.raises(RuntimeError, match="命令未找到"):
-        wrapped_fn()
+        _ = wrapped_fn()
 
 
 def test_taskspec_wrap_cmd_shell_file_not_found():
@@ -90,13 +90,13 @@ def test_taskspec_wrap_cmd_shell_file_not_found():
     # Shell commands don't raise FileNotFoundError
     # They just return non-zero exit code
     with pytest.raises(RuntimeError):
-        wrapped_fn()
+        _ = wrapped_fn()
 
 
 def test_taskspec_no_fn_no_cmd():
     """Test TaskSpec raises error when no fn or cmd."""
     with pytest.raises(ValueError, match="必须提供 fn 或 cmd 参数"):
-        TaskSpec("test")
+        _ = TaskSpec("test")
 
 
 def test_taskspec_cmd_overrides_fn():

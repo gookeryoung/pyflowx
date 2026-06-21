@@ -110,6 +110,7 @@ def test_retries_exhausted() -> None:
 # ---------------------------------------------------------------------- #
 # Threaded
 # ---------------------------------------------------------------------- #
+@pytest.mark.slow
 def test_threaded_parallelism() -> None:
     def slow() -> str:
         time.sleep(0.3)
@@ -130,6 +131,7 @@ def test_threaded_parallelism() -> None:
     assert elapsed < 0.8
 
 
+@pytest.mark.slow
 def test_threaded_layer_barrier() -> None:
     finished: list[str] = []
     lock = threading.Lock()
@@ -179,6 +181,7 @@ def test_async_basic() -> None:
     assert report["transform"] == 84
 
 
+@pytest.mark.slow
 def test_async_parallelism() -> None:
     async def slow() -> str:
         await asyncio.sleep(0.3)

@@ -1,13 +1,5 @@
 """命令行运行器：根据用户输入执行对应的任务流图.
 
-参考 bitool_skill 的 MapSkill 设计, 将命令名映射到 Graph 实例,
-通过 argparse 解析用户输入的命令并执行对应的图.
-
-与 bitool_skill.MapSkill 的区别:
-- MapSkill 通过继承 + create_scheduler_map 构建命令映射
-- CliRunner 通过关键字参数直接注入命令到图的映射, 更声明式
-- CliRunner 复用 pyflowx 的 DAG 调度能力 (run/Graph/TaskSpec)
-
 verbose 模式
 ------------
 ``CliRunner`` 默认 ``verbose=True``, 会:
@@ -20,13 +12,13 @@ verbose 模式
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import enum
 import sys
+from dataclasses import dataclass, field, replace
 from typing import Sequence
 
 from .errors import PyFlowXError
-from .executors import Strategy, normalize_strategy, run
+from .executors import Strategy, run
 from .graph import Graph
 from .task import TaskSpec
 
@@ -64,14 +56,15 @@ def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
         if spec.verbose == verbose:
             new_specs.append(spec)
         else:
-            new_specs.append(dataclasses.replace(spec, verbose=verbose))
+            new_specs.append(replace(spec, verbose=verbose))
     return Graph.from_specs(new_specs)
 
 
+@dataclass
 class CliRunner:
     """命令行运行器: 根据用户输入执行对应的任务流图.
 
-    参考 bitool_skill 的 MapSkill 设计, 将命令名映射到 Graph 实例.
+    将命令名映射到 Graph 实例.
     通过 ``sys.argv`` 解析用户输入的命令, 执行对应的图.
 
     Parameters
@@ -79,8 +72,6 @@ class CliRunner:
     strategy : str | Strategy
         默认执行策略 (``Strategy.SEQUENTIAL`` / ``Strategy.THREAD`` /
         ``Strategy.ASYNC`` 或对应字符串). 可被命令行 ``--strategy`` 覆盖.
-    description : str
-        CLI 描述文本, 显示在 ``--help`` 中.
     verbose : bool
         是否显示详细执行过程. ``True`` 时打印任务生命周期和 subprocess 输出.
         默认 ``True``. 可被命令行 ``--quiet`` 关闭.
@@ -110,32 +101,24 @@ class CliRunner:
 
         runner = px.CliRunner(
             strategy=px.Strategy.THREAD,
-            description="My build tool",
-            test=px.Graph.from_specs([...]),
         )
         runner.run(["test", "--strategy", "sequential"])
     """
 
-    def __init__(
-        self,
-        *,
-        strategy: str | Strategy = Strategy.SEQUENTIAL,
-        description: str = "",
-        verbose: bool = True,
-        **graphs: Graph,
-    ) -> None:
-        if not graphs:
+    graphs: dict[str, Graph] = field(default_factory=dict)
+    strategy: Strategy = field(default="sequential")
+    description: str = field(default_factory=str)
+    verbose: bool = field(default_factory=lambda: True)
+
+    def __post_init__(self) -> None:
+        if not self.graphs:
             raise ValueError("CliRunner 至少需要一个命令 (通过关键字参数提供)")
-        # 校验所有值都是 Graph
-        for name, graph in graphs.items():
+
+        for name, graph in self.graphs.items():
             if not isinstance(graph, Graph):
                 raise TypeError(
                     f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}"
                 )
-        self._graphs: dict[str, Graph] = dict(graphs)
-        self._strategy: Strategy = normalize_strategy(strategy)
-        self._description: str = description
-        self._verbose: bool = verbose
 
     # ------------------------------------------------------------------ #
     # 内省
@@ -143,27 +126,7 @@ class CliRunner:
     @property
     def commands(self) -> list[str]:
         """可用的命令列表 (按插入顺序)."""
-        return list(self._graphs.keys())
-
-    @property
-    def graphs(self) -> dict[str, Graph]:
-        """命令名到图的映射 (只读副本)."""
-        return dict(self._graphs)
-
-    @property
-    def strategy(self) -> Strategy:
-        """默认执行策略."""
-        return self._strategy
-
-    @property
-    def description(self) -> str:
-        """CLI 描述文本."""
-        return self._description
-
-    @property
-    def verbose(self) -> bool:
-        """是否显示详细执行过程."""
-        return self._verbose
+        return list(self.graphs.keys())
 
     # ------------------------------------------------------------------ #
     # 参数解析
@@ -188,7 +151,7 @@ class CliRunner:
         """
         parser = argparse.ArgumentParser(
             prog=self._prog_name(),
-            description=self._description or "PyFlowX CLI Runner",
+            description=self.description or "PyFlowX CLI Runner",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=self._format_commands_help(),
         )
@@ -199,8 +162,8 @@ class CliRunner:
         )
         _ = parser.add_argument(
             "--strategy",
-            choices=[s.value for s in Strategy],
-            default=self._strategy.value,
+            choices=list(Strategy.__args__),
+            default="sequential",
             help="执行策略 (默认: %(default)s)",
         )
         _ = parser.add_argument(
@@ -223,7 +186,7 @@ class CliRunner:
     def _format_commands_help(self) -> str:
         """格式化命令帮助文本."""
         lines = ["可用命令:"]
-        for cmd in self._graphs:
+        for cmd in self.graphs:
             lines.append(f"  {cmd}")
         return "\n".join(lines)
 
@@ -262,8 +225,8 @@ class CliRunner:
             return CliExitCode.FAILURE.value
 
         # 验证命令
-        if parsed.command not in self._graphs:
-            available = ", ".join(self._graphs.keys())
+        if parsed.command not in self.graphs:
+            available = ", ".join(self.graphs.keys())
             print(
                 f"错误: 未知命令 {parsed.command!r} (可用命令: {available})",
                 file=sys.stderr,
@@ -271,10 +234,10 @@ class CliRunner:
             return CliExitCode.FAILURE.value
 
         # 确定是否 verbose: --quiet 覆盖默认值
-        verbose = self._verbose and not parsed.quiet
+        verbose = self.verbose and not parsed.quiet
 
         # 对图应用 verbose 设置 (重建带 verbose 标记的 spec)
-        graph = self._graphs[parsed.command]
+        graph = self.graphs[parsed.command]
         if verbose:
             graph = _apply_verbose_to_graph(graph, verbose=True)
 

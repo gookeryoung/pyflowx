@@ -238,6 +238,7 @@ def test_taskspec_with_cwd():
     assert report.results["list_current"].status == px.TaskStatus.SUCCESS
 
 
+@pytest.mark.slow
 def test_taskspec_with_timeout():
     """测试超时设置."""
     graph = px.Graph.from_specs(
@@ -486,9 +487,10 @@ class TestTaskSpecCmdErrors:
             [px.TaskSpec("fail", cmd='python -c "import sys; sys.exit(1)"')]
         )
         with pytest.raises(TaskFailedError) as exc_info:
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         assert "Shell 命令执行失败" in str(exc_info.value.cause)
 
+    @pytest.mark.slow
     def test_cmd_timeout_raises(self) -> None:
         """命令超时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
@@ -503,9 +505,10 @@ class TestTaskSpecCmdErrors:
             ]
         )
         with pytest.raises(TaskFailedError) as exc_info:
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         assert "超时" in str(exc_info.value.cause)
 
+    @pytest.mark.slow
     def test_cmd_string_timeout_raises(self) -> None:
         """shell 命令超时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
@@ -518,7 +521,7 @@ class TestTaskSpecCmdErrors:
             ]
         )
         with pytest.raises(TaskFailedError) as exc_info:
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         assert "超时" in str(exc_info.value.cause)
 
     def test_unsupported_cmd_type_raises(self) -> None:
@@ -529,7 +532,7 @@ class TestTaskSpecCmdErrors:
             [px.TaskSpec("bad", cmd=123)]  # type: ignore[arg-type]
         )
         with pytest.raises((TypeError, TaskFailedError)):
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
 
     def test_no_fn_no_cmd_raises(self) -> None:
         """没有 fn 和 cmd 时应抛出 ValueError."""

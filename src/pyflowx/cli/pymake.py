@@ -49,7 +49,7 @@ class PymakeConfig:
 conf = PymakeConfig()
 
 
-def _get_maturin_build_command() -> list[str]:
+def get_maturin_build_command() -> list[str]:
     """获取 maturin 构建命令（根据平台自动添加参数）.
 
     Returns
@@ -64,13 +64,13 @@ def _get_maturin_build_command() -> list[str]:
 
 
 # 命令条件判断
-_MATURIN_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.MATURIN_TOOL)
-_PYTEST_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("pytest")
-_UV_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.BUILD_TOOL)
-_HATCH_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("hatch")
-_RUFF_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("ruff")
-_GIT_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("git")
-_TOX_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("tox")
+MATURIN_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.MATURIN_TOOL)
+PYTEST_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("pytest")
+UV_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.BUILD_TOOL)
+HATCH_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("hatch")
+RUFF_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("ruff")
+GIT_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("git")
+TOX_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("tox")
 
 
 def build_graphs() -> dict[str, px.Graph]:
@@ -87,7 +87,7 @@ def build_graphs() -> dict[str, px.Graph]:
                 px.TaskSpec(
                     "uv_build",
                     cmd=conf.BUILD_COMMAND,
-                    conditions=(_UV_CONDITION,),
+                    conditions=(UV_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -97,9 +97,9 @@ def build_graphs() -> dict[str, px.Graph]:
             [
                 px.TaskSpec(
                     "maturin_build",
-                    cmd=_get_maturin_build_command(),
+                    cmd=get_maturin_build_command(),
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -109,15 +109,15 @@ def build_graphs() -> dict[str, px.Graph]:
             [
                 px.TaskSpec(
                     "maturin_build",
-                    cmd=_get_maturin_build_command(),
+                    cmd=get_maturin_build_command(),
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
                 px.TaskSpec(
                     "uv_build",
                     cmd=conf.BUILD_COMMAND,
-                    conditions=(_UV_CONDITION,),
+                    conditions=(UV_CONDITION,),
                     timeout=conf.TIMEOUT,
                     depends_on=("maturin_build",),
                 ),
@@ -131,7 +131,7 @@ def build_graphs() -> dict[str, px.Graph]:
                     "maturin_dev",
                     cmd=conf.MATURIN_DEV_COMMAND,
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                 ),
             ]
         ),
@@ -141,7 +141,7 @@ def build_graphs() -> dict[str, px.Graph]:
                 px.TaskSpec(
                     "uv_install",
                     cmd=["uv", "pip", "install", "-e", "."],
-                    conditions=(_UV_CONDITION,),
+                    conditions=(UV_CONDITION,),
                 ),
             ]
         ),
@@ -152,12 +152,12 @@ def build_graphs() -> dict[str, px.Graph]:
                     "maturin_dev",
                     cmd=conf.MATURIN_DEV_COMMAND,
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                 ),
                 px.TaskSpec(
                     "uv_install",
                     cmd=["uv", "pip", "install", "-e", "."],
-                    conditions=(_UV_CONDITION,),
+                    conditions=(UV_CONDITION,),
                     depends_on=("maturin_dev",),
                 ),
             ]
@@ -169,7 +169,7 @@ def build_graphs() -> dict[str, px.Graph]:
                 px.TaskSpec(
                     "git_clean_python",
                     cmd=["git", "clean", "-xfd", "-e", *conf.DIRS_TO_IGNORE],
-                    conditions=(_GIT_CONDITION,),
+                    conditions=(GIT_CONDITION,),
                 ),
             ]
         ),
@@ -180,7 +180,7 @@ def build_graphs() -> dict[str, px.Graph]:
                     "cargo_clean",
                     cmd=["cargo", "clean"],
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                 ),
             ]
         ),
@@ -191,12 +191,12 @@ def build_graphs() -> dict[str, px.Graph]:
                     "cargo_clean",
                     cmd=["cargo", "clean"],
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                 ),
                 px.TaskSpec(
                     "git_clean",
                     cmd=["git", "clean", "-xfd", "-e", *conf.DIRS_TO_IGNORE],
-                    conditions=(_GIT_CONDITION,),
+                    conditions=(GIT_CONDITION,),
                 ),
             ]
         ),
@@ -217,7 +217,7 @@ def build_graphs() -> dict[str, px.Graph]:
                         "--color=yes",
                         "--durations=10",
                     ],
-                    conditions=(_PYTEST_CONDITION,),
+                    conditions=(PYTEST_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -236,7 +236,7 @@ def build_graphs() -> dict[str, px.Graph]:
                         "--color=yes",
                         "--durations=10",
                     ],
-                    conditions=(_PYTEST_CONDITION,),
+                    conditions=(PYTEST_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -248,8 +248,6 @@ def build_graphs() -> dict[str, px.Graph]:
                     "pytest_cov",
                     cmd=[
                         "pytest",
-                        "-m",
-                        "not slow",
                         "--cov",
                         "-n",
                         "auto",
@@ -260,7 +258,7 @@ def build_graphs() -> dict[str, px.Graph]:
                         "--color=yes",
                         "--durations=10",
                     ],
-                    conditions=(_PYTEST_CONDITION,),
+                    conditions=(PYTEST_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -276,7 +274,7 @@ def build_graphs() -> dict[str, px.Graph]:
                         "--fix",
                         "--unsafe-fixes",
                     ],
-                    conditions=(_RUFF_CONDITION,),
+                    conditions=(RUFF_CONDITION,),
                     timeout=conf.TIMEOUT,
                     cwd=Path(conf.PROJECT_ROOT),
                 ),
@@ -312,7 +310,7 @@ def build_graphs() -> dict[str, px.Graph]:
                     "publish_python",
                     cmd=["hatch", "publish"],
                     cwd=Path(conf.PROJECT_ROOT),
-                    conditions=(_HATCH_CONDITION,),
+                    conditions=(HATCH_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -329,14 +327,14 @@ def build_graphs() -> dict[str, px.Graph]:
                         conf.CORE_PATTERN,
                     ],
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
                 px.TaskSpec(
                     "publish_python",
                     cmd=["hatch", "publish"],
                     cwd=Path(conf.PROJECT_ROOT),
-                    conditions=(_HATCH_CONDITION,),
+                    conditions=(HATCH_CONDITION,),
                     timeout=conf.TIMEOUT,
                     depends_on=("publish_rust",),
                 ),
@@ -349,7 +347,7 @@ def build_graphs() -> dict[str, px.Graph]:
                     "publish_rust",
                     cmd=["maturin", "publish"],
                     cwd=Path(conf.CORE_DIR),
-                    conditions=(_MATURIN_CONDITION,),
+                    conditions=(MATURIN_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
@@ -361,13 +359,13 @@ def build_graphs() -> dict[str, px.Graph]:
                 px.TaskSpec(
                     "tox_run",
                     cmd=["tox", "-p", "auto"],
-                    conditions=(_TOX_CONDITION,),
+                    conditions=(TOX_CONDITION,),
                     timeout=conf.TIMEOUT,
                 ),
             ]
         ),
         # 安装多版本 Python (仅安装不测试)
-        "tox-install": px.Graph.from_specs(
+        "tox_install": px.Graph.from_specs(
             [
                 px.TaskSpec(
                     "uv_python_install",
@@ -383,7 +381,7 @@ def build_graphs() -> dict[str, px.Graph]:
                         "3.13",
                         "3.14",
                     ],
-                    conditions=(_UV_CONDITION,),
+                    conditions=(UV_CONDITION,),
                     timeout=600,
                 ),
             ]
@@ -421,7 +419,7 @@ def main():
 
     🔬 多版本测试:
       pymake tox           - 多版本 Python 测试 (3.8-3.14)
-      pymake tox-install   - 安装所有 Python 版本 (仅安装不测试)
+      pymake tox_install   - 安装所有 Python 版本 (仅安装不测试)
 
     📦 发布命令:
       pymake pb   - 发布到 PyPI (hatch publish)
@@ -445,8 +443,8 @@ def main():
       pymake ca          # 清理所有构建产物
     """
     runner = px.CliRunner(
-        strategy=px.Strategy.SEQUENTIAL,
+        strategy="sequential",
         description="PyMake - Python 构建工具 (替代 Makefile)",
-        **build_graphs(),
+        graphs=build_graphs(),  # type: ignore[reportArgumentType]
     )
     runner.run_cli()
