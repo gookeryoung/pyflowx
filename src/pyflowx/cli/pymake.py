@@ -48,8 +48,8 @@ test_coverage: px.TaskSpec = px.TaskSpec(
 )
 ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
 ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "."], depends_on=("lint",))
-mypy_check: px.TaskSpec = px.TaskSpec("typecheck", cmd=["mypy", "."])
-ty_check: px.TaskSpec = px.TaskSpec("ty_check", cmd=["ty", "check", "."])
+typecheck: px.TaskSpec = px.TaskSpec("pyrefly_check", cmd=["pyrefly", "check", "."])
+bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion", "-t"])
 doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
 git_push: px.TaskSpec = px.TaskSpec("git_push", cmd=["gitt", "push"])
 git_push_tags: px.TaskSpec = px.TaskSpec("git_push_tags", cmd=["gitt", "push", "--tags"])
@@ -59,10 +59,7 @@ tox: px.TaskSpec = px.TaskSpec("tox", cmd=["tox", "-p", "auto"])
 
 
 def main():
-    """
-    ╔══════════════════════════════════════════════════════════╗
-    ║                   PyMake 构建工具                    ║
-    ╚══════════════════════════════════════════════════════════╝
+    """pymake 构建工具.
 
     🔨 构建命令:
       pymake b    - 构建 Python 主包 (uv build)
@@ -116,13 +113,14 @@ def main():
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
+            "bump": px.Graph.from_specs([git_clean, bump]),
             "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
             "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
             "t": px.Graph.from_specs([test]),
             "tf": px.Graph.from_specs([test_fast]),
-            "tc": px.Graph.from_specs([mypy_check, ty_check, ruff_lint, ruff_format]),
+            "tc": px.Graph.from_specs([typecheck, ruff_lint, ruff_format]),
             "tox": px.Graph.from_specs([tox]),
             # 发布命令
             "p": px.Graph.from_specs([git_clean, git_push, git_push_tags]),

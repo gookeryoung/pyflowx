@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from typing import Callable
@@ -216,10 +217,7 @@ class BuiltinConditions:
 
 
 # 导出常用条件
-IS_WINDOWS = BuiltinConditions.IS_WINDOWS
-IS_LINUX = BuiltinConditions.IS_LINUX
-IS_MACOS = BuiltinConditions.IS_MACOS
-IS_POSIX = BuiltinConditions.IS_POSIX
-
-# 导入 os 用于环境变量检查
-import os  # noqa: E402
+IS_WINDOWS: Callable[[], bool] = BuiltinConditions.IS_WINDOWS
+IS_LINUX: Callable[[], bool] = BuiltinConditions.IS_LINUX
+IS_MACOS: Callable[[], bool] = BuiltinConditions.IS_MACOS
+IS_POSIX: Callable[[], bool] = BuiltinConditions.IS_POSIX

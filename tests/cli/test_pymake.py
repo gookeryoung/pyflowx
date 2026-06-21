@@ -130,18 +130,6 @@ class TestTaskSpecDefinitions:
         assert "check" in pymake.ruff_lint.cmd
         assert pymake.ruff_lint.skip_if_missing is True
 
-    def test_mypy_check_spec(self) -> None:
-        """mypy_check spec should be properly defined."""
-        assert pymake.mypy_check.name == "typecheck"
-        assert pymake.mypy_check.cmd == ["mypy", "."]
-        assert pymake.mypy_check.skip_if_missing is True
-
-    def test_ty_check_spec(self) -> None:
-        """ty_check spec should be properly defined."""
-        assert pymake.ty_check.name == "ty_check"
-        assert pymake.ty_check.cmd == ["ty", "check", "."]
-        assert pymake.ty_check.skip_if_missing is True
-
     def test_doc_spec(self) -> None:
         """doc spec should be properly defined."""
         assert pymake.doc.name == "doc"

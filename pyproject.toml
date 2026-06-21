@@ -17,18 +17,17 @@ license = { text = "MIT" }
 name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.5"
+version = "0.1.6"
 
 [project.scripts]
 pymake = "pyflowx.cli.pymake:main"
 
 [project.optional-dependencies]
 dev = [
-    "basedpyright>=1.39.8",
     "hatch>=1.14.2",
     "httpx>=0.28.0",
-    "mypy>=1.14.1",
     "prek>=0.4.5",
+    "pyrefly>=1.1.1",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "pytest-html>=4.1.1",
@@ -42,11 +41,11 @@ dev = [
 
 [build-system]
 build-backend = "hatchling.build"
-requires      = ["hatchling"]
+requires = ["hatchling"]
 
 [[tool.uv.index]]
 default = true
-url     = "https://mirrors.aliyun.com/pypi/simple/"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyflowx"]
@@ -61,10 +60,10 @@ pyflowx = { workspace = true }
 dev = ["pyflowx[dev]"]
 
 [tool.coverage.run]
-branch      = true
+branch = true
 concurrency = ["thread"]
-omit        = ["src/pyflowx/examples/*", "tests/*"]
-source      = ["pyflowx"]
+omit = ["src/pyflowx/examples/*", "tests/*"]
+source = ["pyflowx"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -80,46 +79,54 @@ show_missing = true
 asyncio_default_fixture_loop_scope = "function"
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 
-[tool.basedpyright]
-exclude                           = ["**/.git", "**/.venv", "**/__pycache__", "**/build", "**/dist"]
-include                           = ["src"]
-pythonVersion                     = "3.8"
-reportImplicitStringConcatenation = "error"
-reportMissingTypeStubs            = "none"
-reportUnusedCallResult            = "warning"
-typeCheckingMode                  = "basic" # 类型检查严格度：off / basic / standard / recommended(默认) / strict / all
-
 # Ruff 配置 - 与 .pre-commit-config.yaml 保持一致
 [tool.ruff]
 target-version = "py38"
 line-length = 120
 
+[tool.ruff.format]
+# 使用双引号
+quote-style = "double"
+# 缩进使用空格
+indent-style = "space"
+# 保留尾随逗号
+skip-magic-trailing-comma = false
+# 行长度由 [tool.ruff] 中的 line-length 控制
+
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # Pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "UP",     # pyupgrade
-    "ARG",    # flake8-unused-arguments
-    "SIM",    # flake8-simplify
-    "PTH",    # flake8-use-pathlib
-    "PL",     # Pylint
-    "RUF",    # Ruff-specific rules
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # Pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+    "PTH", # flake8-use-pathlib
+    "PL", # Pylint
+    "RUF", # Ruff-specific rules
 ]
 ignore = [
-    "E501",    # line too long (handled by formatter)
+    "E501", # line too long (handled by formatter)
     "PLR0913", # too many arguments
     "PLR2004", # magic value comparison
-    "PTH123",  # pathlib open() replacement
-    "SIM108",  # use ternary operator
-    "RUF001",  # ambiguous unicode characters in string
-    "RUF002",  # ambiguous unicode characters in docstring
-    "RUF003",  # ambiguous unicode characters in comment
-    "RUF012",  # mutable class attributes (intentional for config)
+    "PTH123", # pathlib open() replacement
+    "SIM108", # use ternary operator
+    "RUF001", # ambiguous unicode characters in string
+    "RUF002", # ambiguous unicode characters in docstring
+    "RUF003", # ambiguous unicode characters in comment
+    "RUF012", # mutable class attributes (intentional for config)
     "PLC0415", # import should be at top-level (intentional for lazy imports)
     "PLR0915", # too many statements (intentional for complex methods)
-    "PTH119",  # os.path.basename (intentional for sys.argv)
+    "PTH119", # os.path.basename (intentional for sys.argv)
 ]
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+preset = "basic"
+python-version = "3.8"
