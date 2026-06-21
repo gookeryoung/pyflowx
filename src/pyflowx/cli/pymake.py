@@ -73,7 +73,7 @@ _GIT_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("git")
 _TOX_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("tox")
 
 
-def _build_graphs() -> dict[str, px.Graph]:
+def build_graphs() -> dict[str, px.Graph]:
     """构建所有命令对应的任务流图.
 
     将原本的 CommandScheduler/RunCommand 模式转换为 Graph/TaskSpec 模式,
@@ -447,6 +447,6 @@ def main():
     runner = px.CliRunner(
         strategy=px.Strategy.SEQUENTIAL,
         description="PyMake - Python 构建工具 (替代 Makefile)",
-        **_build_graphs(),
+        **build_graphs(),
     )
     runner.run_cli()

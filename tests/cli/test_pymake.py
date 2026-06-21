@@ -1,6 +1,6 @@
 """Tests for pymake CLI."""
 
-from pyflowx.cli.pymake import _build_graphs, _get_maturin_build_command, conf
+from pyflowx.cli.pymake import _get_maturin_build_command, build_graphs, conf
 
 
 def test_pymake_config_attributes():
@@ -30,16 +30,16 @@ def test_get_maturin_build_command_basic():
     assert "-r" in cmd
 
 
-def test_build_graphs_returns_dict():
-    """Test _build_graphs returns a dictionary."""
-    graphs = _build_graphs()
+def testbuild_graphs_returns_dict():
+    """Test build_graphs returns a dictionary."""
+    graphs = build_graphs()
     assert isinstance(graphs, dict)
     assert len(graphs) > 0
 
 
-def test_build_graphs_has_expected_commands():
-    """Test _build_graphs has expected command keys."""
-    graphs = _build_graphs()
+def testbuild_graphs_has_expected_commands():
+    """Test build_graphs has expected command keys."""
+    graphs = build_graphs()
     expected_commands = [
         "b",
         "bc",
@@ -57,11 +57,11 @@ def test_build_graphs_has_expected_commands():
         assert cmd in graphs, f"Expected command '{cmd}' not found in graphs"
 
 
-def test_build_graphs_values_are_graphs():
-    """Test _build_graphs values are Graph instances."""
+def testbuild_graphs_values_are_graphs():
+    """Test build_graphs values are Graph instances."""
     import pyflowx as px
 
-    graphs = _build_graphs()
+    graphs = build_graphs()
     for name, graph in graphs.items():
         assert isinstance(graph, px.Graph), (
             f"Graph for command '{name}' is not a Graph instance"
@@ -71,7 +71,7 @@ def test_build_graphs_values_are_graphs():
 def test_build_command_graph_structure():
     """Test 'b' command graph has correct structure."""
 
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["b"]
     assert len(graph.all_specs()) == 1
     spec = graph.spec("uv_build")
@@ -81,7 +81,7 @@ def test_build_command_graph_structure():
 def test_build_all_command_graph_structure():
     """Test 'ba' command graph has correct dependencies."""
 
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["ba"]
     specs = graph.all_specs()
     assert len(specs) == 2
@@ -92,7 +92,7 @@ def test_build_all_command_graph_structure():
 
 def test_maturin_build_command_graph_structure():
     """Test 'bc' command graph has correct structure."""
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["bc"]
     specs = graph.all_specs()
     assert len(specs) == 1
@@ -102,7 +102,7 @@ def test_maturin_build_command_graph_structure():
 
 def test_install_all_command_graph_structure():
     """Test 'ia' command graph has correct dependencies."""
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["ia"]
     specs = graph.all_specs()
     assert len(specs) == 2
@@ -112,7 +112,7 @@ def test_install_all_command_graph_structure():
 
 def test_clean_all_command_graph_structure():
     """Test 'ca' command graph has correct structure."""
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["ca"]
     specs = graph.all_specs()
     assert len(specs) == 2
@@ -120,7 +120,7 @@ def test_clean_all_command_graph_structure():
 
 def test_test_command_graph_structure():
     """Test 't' command graph has correct structure."""
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["t"]
     specs = graph.all_specs()
     assert len(specs) == 1
@@ -130,7 +130,7 @@ def test_test_command_graph_structure():
 
 def test_lint_command_graph_structure():
     """Test 'lint' command graph has correct structure."""
-    graphs = _build_graphs()
+    graphs = build_graphs()
     graph = graphs["lint"]
     specs = graph.all_specs()
     assert len(specs) == 1

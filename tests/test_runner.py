@@ -58,7 +58,7 @@ class TestCliRunnerConstruction:
     def test_requires_at_least_one_command(self) -> None:
         """没有命令时应抛出 ValueError."""
         with pytest.raises(ValueError, match="至少需要一个命令"):
-            px.CliRunner()
+            _ = px.CliRunner()
 
     def test_accepts_single_graph(self) -> None:
         """单个命令应正常构造."""
@@ -102,12 +102,12 @@ class TestCliRunnerConstruction:
     def test_invalid_strategy_raises(self) -> None:
         """非法策略字符串应抛出 ValueError."""
         with pytest.raises(ValueError, match="unknown strategy"):
-            px.CliRunner(strategy="invalid", clean=_echo_graph())
+            _ = px.CliRunner(strategy="invalid", clean=_echo_graph())
 
     def test_invalid_strategy_type_raises(self) -> None:
         """非法策略类型应抛出 TypeError."""
         with pytest.raises(TypeError, match="strategy must be"):
-            px.CliRunner(strategy=123, clean=_echo_graph())  # type: ignore[arg-type]
+            _ = px.CliRunner(strategy=123, clean=_echo_graph())  # type: ignore[arg-type]
 
     def test_default_verbose_is_true(self) -> None:
         """默认 verbose 应为 True."""
@@ -202,7 +202,7 @@ class TestCliRunnerParser:
         runner = px.CliRunner(clean=_echo_graph())
         parser = runner.create_parser()
         with pytest.raises(SystemExit):
-            parser.parse_args(["clean", "--strategy", "invalid"])
+            _ = parser.parse_args(["clean", "--strategy", "invalid"])
 
     def test_parser_has_dry_run_flag(self) -> None:
         """解析器应有 --dry-run 标志."""
@@ -277,7 +277,7 @@ class TestCliRunnerRunSuccess:
             a=px.Graph.from_specs([px.TaskSpec("a", track_a)]),
             b=px.Graph.from_specs([px.TaskSpec("b", track_b)]),
         )
-        runner.run(["b"])
+        _ = runner.run(["b"])
         assert executed == ["b"]
 
     def test_run_multi_task_graph(self) -> None:
@@ -312,7 +312,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """默认 verbose=True 应打印任务生命周期."""
         runner = px.CliRunner(echo=_echo_graph())
-        runner.run(["echo"])
+        _ = runner.run(["echo"])
         captured = capsys.readouterr()
         # verbose 模式下应打印任务生命周期
         assert "[verbose]" in captured.out
@@ -322,7 +322,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """--quiet 应关闭 verbose 输出."""
         runner = px.CliRunner(echo=_echo_graph())
-        runner.run(["echo", "--quiet"])
+        _ = runner.run(["echo", "--quiet"])
         captured = capsys.readouterr()
         # quiet 模式下不应有 [verbose] 前缀的输出
         assert "[verbose]" not in captured.out
@@ -332,7 +332,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """构造时 verbose=False 应关闭 verbose 输出."""
         runner = px.CliRunner(verbose=False, echo=_echo_graph())
-        runner.run(["echo"])
+        _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "[verbose]" not in captured.out
 
@@ -341,7 +341,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """verbose 模式下 cmd 任务应打印执行的命令."""
         runner = px.CliRunner(echo=_echo_graph(msg="verbose-test"))
-        runner.run(["echo"])
+        _ = runner.run(["echo"])
         captured = capsys.readouterr()
         # 应打印执行的命令
         assert "执行命令" in captured.out or "执行 Shell" in captured.out
@@ -353,7 +353,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """verbose 模式下成功任务应打印成功信息."""
         runner = px.CliRunner(echo=_echo_graph())
-        runner.run(["echo"])
+        _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "成功" in captured.out
 
@@ -371,7 +371,7 @@ class TestCliRunnerVerbose:
             ]
         )
         runner = px.CliRunner(skip=graph)
-        runner.run(["skip"])
+        _ = runner.run(["skip"])
         captured = capsys.readouterr()
         assert "跳过" in captured.out
 
@@ -380,7 +380,7 @@ class TestCliRunnerVerbose:
     ) -> None:
         """verbose 模式下失败任务应打印失败信息."""
         runner = px.CliRunner(fail=_failing_graph())
-        runner.run(["fail"])
+        _ = runner.run(["fail"])
         captured = capsys.readouterr()
         # 失败信息可能出现在 stdout (verbose) 或 stderr (PyFlowXError)
         combined = captured.out + captured.err
@@ -425,7 +425,7 @@ class TestCliRunnerRunFailure:
     ) -> None:
         """任务失败时应打印错误信息."""
         runner = px.CliRunner(fail=_failing_graph())
-        runner.run(["fail"])
+        _ = runner.run(["fail"])
         captured = capsys.readouterr()
         # PyFlowXError 信息应输出到 stderr
         assert "错误" in captured.err or "失败" in captured.err
@@ -450,7 +450,7 @@ class TestCliRunnerList:
             build=_echo_graph("b", "build"),
             test=_echo_graph("t", "test"),
         )
-        runner.run(["--list"])
+        _ = runner.run(["--list"])
         captured = capsys.readouterr()
         assert "clean" in captured.out
         assert "build" in captured.out
@@ -464,7 +464,7 @@ class TestCliRunnerList:
             executed.append("ran")
 
         runner = px.CliRunner(a=px.Graph.from_specs([px.TaskSpec("a", track)]))
-        runner.run(["--list"])
+        _ = runner.run(["--list"])
         assert executed == []
 
 
@@ -518,7 +518,7 @@ class TestCliRunnerErrorHandling:
         with patch("pyflowx.runner.run", side_effect=raise_custom), pytest.raises(
             CustomError
         ):
-            runner.run(["echo"])
+            _ = runner.run(["echo"])
 
 
 # ---------------------------------------------------------------------- #
@@ -701,7 +701,3 @@ class TestCliRunnerExport:
         assert Strategy.THREAD.value == "thread"
         assert Strategy.ASYNC.value == "async"
         assert len(list(Strategy)) == 3
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
