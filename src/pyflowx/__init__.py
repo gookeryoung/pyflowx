@@ -45,6 +45,12 @@
             cmd=["git", "--version"],
             conditions=(BuiltinConditions.HAS_INSTALLED("git"),)
         ),
+        # 命令不存在时自动跳过（而非失败）
+        px.TaskSpec(
+            "optional_build",
+            cmd=["maturin", "build"],
+            skip_if_missing=True
+        ),
     ])
     report = px.run(graph)
 """

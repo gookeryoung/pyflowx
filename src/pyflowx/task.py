@@ -112,6 +112,12 @@ class TaskSpec(Generic[T]):
         是否在命令执行时显示详细输出。``True`` 时会打印执行的命令
         及其标准输出/标准错误。仅在使用 ``cmd`` 参数时有效。
         ``False`` 时静默捕获输出（失败时仍会包含在错误信息中）。
+    skip_if_missing:
+        仅对 ``cmd`` 为 ``list[str]`` 的任务有效。``True`` 时自动检查
+        命令是否存在（通过 :func:`shutil.which`），不存在则跳过任务
+        （标记为 SKIPPED）而非失败。适用于构建工具场景，避免因未安装
+        某些工具（如 maturin、tox）而导致整个图执行失败。
+        对于 ``str`` (shell) 和 ``Callable`` 类型的 ``cmd``，此参数无效。
     """
 
     name: str
@@ -126,6 +132,7 @@ class TaskSpec(Generic[T]):
     conditions: Tuple[Condition, ...] = ()
     cwd: Optional[Path] = None
     verbose: bool = False
+    skip_if_missing: bool = True
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -257,10 +264,31 @@ class TaskSpec(Generic[T]):
         Returns
         -------
         bool
-            若所有条件都返回 ``True``，则返回 ``True``；
-            否则返回 ``False``。
+            若所有条件都返回 ``True``，且 ``skip_if_missing`` 检查通过，
+            则返回 ``True``；否则返回 ``False``。
         """
-        return all(condition() for condition in self.conditions)
+        if not all(condition() for condition in self.conditions):
+            return False
+
+        return not (self.skip_if_missing and not self._is_cmd_available())
+
+    def _is_cmd_available(self) -> bool:
+        """检查 ``cmd`` 是否可用.
+
+        仅对 ``list[str]`` 类型的 ``cmd`` 进行检查（通过 :func:`shutil.which`）。
+        对于 ``str`` (shell) 和 ``Callable`` 类型，始终返回 ``True``。
+
+        Returns
+        -------
+        bool
+            命令可用返回 ``True``，否则返回 ``False``。
+        """
+        import shutil
+
+        cmd = self.cmd
+        if isinstance(cmd, list) and cmd:
+            return shutil.which(cmd[0]) is not None
+        return True
 
 
 @dataclass

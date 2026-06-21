@@ -112,9 +112,7 @@ class JSONBackend(StateBackend):
         try:
             _ = json.dumps(value)
         except (TypeError, ValueError) as exc:
-            raise StorageError(
-                f"result of task {name!r} is not JSON-serialisable", exc
-            ) from exc
+            raise StorageError(f"result of task {name!r} is not JSON-serialisable", exc) from exc
         self._store[name] = value
         self._flush()
 

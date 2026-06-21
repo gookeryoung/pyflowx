@@ -428,7 +428,9 @@ class TestTaskSpecCmdErrors:
         """命令不存在时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs([px.TaskSpec("missing", cmd=["this-command-does-not-exist-xyz"])])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("missing", cmd=["this-command-does-not-exist-xyz"], skip_if_missing=False)],
+        )
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         # 错误信息应包含命令未找到

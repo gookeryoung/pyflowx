@@ -211,3 +211,99 @@ def test_taskspec_shell_cmd_os_error_mocked():
         RuntimeError, match="Shell 命令执行异常"
     ):
         _ = wrapped_fn()
+
+
+# ---------------------------------------------------------------------- #
+# skip_if_missing
+# ---------------------------------------------------------------------- #
+def test_skip_if_missing_with_available_command():
+    """skip_if_missing=True 时，命令存在应返回 True."""
+    # python 命令在测试环境中一定存在
+    spec = TaskSpec("test", cmd=["python", "--version"], skip_if_missing=True)
+    assert spec.should_execute() is True
+
+
+def test_skip_if_missing_with_missing_command():
+    """skip_if_missing=True 时，命令不存在应返回 False."""
+    spec = TaskSpec("test", cmd=["definitely_not_installed_app_xyz"], skip_if_missing=True)
+    assert spec.should_execute() is False
+
+
+def test_skip_if_missing_false_with_missing_command():
+    """skip_if_missing=False 时，命令不存在也应返回 True（不检查）."""
+    spec = TaskSpec("test", cmd=["definitely_not_installed_app_xyz"], skip_if_missing=False)
+    assert spec.should_execute() is True
+
+
+def test_skip_if_missing_with_shell_cmd_not_checked():
+    """skip_if_missing=True 时，shell 命令（str）不检查，应返回 True."""
+    spec = TaskSpec("test", cmd="definitely_not_installed_app_xyz", skip_if_missing=True)
+    assert spec.should_execute() is True
+
+
+def test_skip_if_missing_with_callable_cmd_not_checked():
+    """skip_if_missing=True 时，Callable 命令不检查，应返回 True."""
+
+    def custom_cmd() -> int:
+        return 0
+
+    spec = TaskSpec("test", cmd=custom_cmd, skip_if_missing=True)
+    assert spec.should_execute() is True
+
+
+def test_skip_if_missing_with_fn_not_checked():
+    """skip_if_missing=True 时，fn 任务不检查命令，应返回 True."""
+
+    def my_fn() -> int:
+        return 0
+
+    spec = TaskSpec("test", fn=my_fn, skip_if_missing=True)
+    assert spec.should_execute() is True
+
+
+def test_skip_if_missing_with_empty_cmd_list():
+    """skip_if_missing=True 时，空命令列表应返回 True（不检查）."""
+    spec = TaskSpec("test", cmd=[""], skip_if_missing=True)
+    # 空字符串命令，shutil.which 返回 None
+    # 但 cmd[0] 是空字符串，shutil.which("") 返回 None
+    assert spec.should_execute() is False
+
+
+def test_skip_if_missing_combined_with_conditions():
+    """skip_if_missing=True 与 conditions 组合使用."""
+    # conditions 返回 False，应跳过
+    spec = TaskSpec(
+        "test",
+        cmd=["python", "--version"],
+        skip_if_missing=True,
+        conditions=(lambda: False,),
+    )
+    assert spec.should_execute() is False
+
+    # conditions 返回 True，命令存在，应执行
+    spec = TaskSpec(
+        "test",
+        cmd=["python", "--version"],
+        skip_if_missing=True,
+        conditions=(lambda: True,),
+    )
+    assert spec.should_execute() is True
+
+    # conditions 返回 True，命令不存在，应跳过
+    spec = TaskSpec(
+        "test",
+        cmd=["definitely_not_installed_app_xyz"],
+        skip_if_missing=True,
+        conditions=(lambda: True,),
+    )
+    assert spec.should_execute() is False
+
+
+def test_skip_if_missing_skips_task_in_run():
+    """skip_if_missing=True 时，命令不存在的任务在 run 中应被跳过."""
+    spec = TaskSpec("missing_cmd", cmd=["definitely_not_installed_app_xyz"], skip_if_missing=True)
+    graph = px.Graph.from_specs([spec])
+    report = px.run(graph, strategy="sequential")
+    assert report.success is True
+    result = report.result_of("missing_cmd")
+    assert result.status == px.TaskStatus.SKIPPED

@@ -96,7 +96,7 @@ def _run_sync_with_retry(
     result: TaskResult[Any] = TaskResult(spec=spec)
 
     # 检查条件是否满足
-    if spec.conditions and not spec.should_execute():
+    if not spec.should_execute():
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         logger.info("task %r skipped (条件不满足)", spec.name)
@@ -131,7 +131,7 @@ async def _run_async_with_retry(
     result: TaskResult[Any] = TaskResult[Any](spec=spec)
 
     # 检查条件是否满足
-    if spec.conditions and not spec.should_execute():
+    if not spec.should_execute():
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         logger.info("task %r skipped (条件不满足)", spec.name)

@@ -80,6 +80,7 @@ px.TaskSpec(
     conditions=(is_prod,),       # 条件函数列表（全部为 True 才执行）
     cwd=Path("/tmp"),            # 命令工作目录（仅 cmd 模式）
     verbose=True,                # 打印命令输出（仅 cmd 模式）
+    skip_if_missing=True,        # 命令不存在时自动跳过（仅 list[str] cmd）
 )
 ```
 
@@ -87,6 +88,8 @@ px.TaskSpec(
 
 - **函数任务**（`fn`）：普通 Python 函数，参数名驱动自动注入
 - **命令任务**（`cmd`）：执行外部命令，支持 `list[str]`、`str`（shell）、`Callable` 三种形态
+
+`skip_if_missing=True` 时，`list[str]` 类型的 `cmd` 会通过 `shutil.which` 检查命令是否存在，不存在则跳过任务（标记为 `SKIPPED`）而非失败。适用于构建工具场景，避免因未安装某些工具而导致整个图执行失败。
 
 ### Graph —— DAG 构建
 
@@ -176,10 +179,14 @@ graph = px.Graph.from_specs([
     px.TaskSpec("check_git", cmd="git status | head"),
     # 带工作目录与超时
     px.TaskSpec("build", cmd=["make", "all"], cwd=Path("/project"), timeout=300),
+    # 命令不存在时自动跳过（而非失败）
+    px.TaskSpec("optional_tool", cmd=["maturin", "build"], skip_if_missing=True),
 ])
 ```
 
 `verbose=True` 时打印执行的命令、工作目录、返回码与输出；`verbose=False` 时静默执行（失败信息仍包含 stderr）。
+
+`skip_if_missing=True` 时，`list[str]` 类型的 `cmd` 会通过 `shutil.which` 检查命令是否存在，不存在则跳过任务（标记为 `SKIPPED`）而非失败。适用于构建工具场景，避免因未安装某些工具而导致整个图执行失败。对于 `str`（shell）和 `Callable` 类型的 `cmd`，此参数无效。
 
 ## 条件执行
 
