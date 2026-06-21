@@ -295,13 +295,11 @@ def main() -> None:
             # 清理构建目录
             "clean": px.Graph.from_specs([clean_build]),
             # 完整打包流程
-            "all": px.Graph.from_specs(
-                [
-                    pack_source_default,
-                    pack_deps_default,
-                    pack_wheel_default,
-                ]
-            ),
+            "all": px.Graph.from_specs([
+                pack_source_default,
+                pack_deps_default,
+                pack_wheel_default,
+            ]),
         },
     )
     runner.run_cli()
