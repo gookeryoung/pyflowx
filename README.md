@@ -5,8 +5,8 @@
 [![CI](https://github.com/gookeryoung/pyflowx/actions/workflows/ci.yml/badge.svg)](https://github.com/gookeryoung/pyflowx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyflowx.svg)](https://pypi.org/project/pyflowx/)
 [![Python](https://img.shields.io/pypi/pyversions/pyflowx.svg)](https://pypi.org/project/pyflowx/)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/pyflowx/pyflowx)
-[![License](https://img.shields.io/pypi/l/pyflowx.svg)](https://github.com/pyflowx/pyflowx/blob/main/LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/gookeryoung/pyflowx)
+[![License](https://img.shields.io/pypi/l/pyflowx.svg)](https://github.com/gookeryoung/pyflowx/blob/main/LICENSE)
 
 PyFlowX 把"任务依赖"这件事做到极致简单：**参数名就是依赖声明**。无需装饰器、
 无需样板包装器，写一个普通函数，框架按参数名自动注入上游结果。
@@ -44,12 +44,15 @@ uv add pyflowx
 ```python
 import pyflowx as px
 
+
 def extract() -> list[int]:
     return [1, 2, 3]
+
 
 # 参数名 extract 自动匹配上游任务名 → 自动注入
 def double(extract: list[int]) -> list[int]:
     return [x * 2 for x in extract]
+
 
 graph = px.Graph.from_specs([
     px.TaskSpec("extract", extract),
@@ -68,19 +71,19 @@ print(report["double"])  # [2, 4, 6]
 
 ```python
 px.TaskSpec(
-    name="fetch_user",           # 唯一标识
-    fn=fetch_user,               # 同步或异步函数
-    cmd=["curl", "..."],         # 或: 执行命令（覆盖 fn）
-    depends_on=("auth",),        # 依赖的任务名
-    args=(uid,),                 # 静态位置参数（追加在注入参数后）
-    kwargs={"timeout": 30},      # 静态关键字参数
-    retries=3,                   # 失败重试次数（0 = 仅一次）
-    timeout=30.0,                # 超时秒数（None = 不限制）
-    tags=("api", "user"),        # 自由标签，用于子图过滤
-    conditions=(is_prod,),       # 条件函数列表（全部为 True 才执行）
-    cwd=Path("/tmp"),            # 命令工作目录（仅 cmd 模式）
-    verbose=True,                # 打印命令输出（仅 cmd 模式）
-    skip_if_missing=True,        # 命令不存在时自动跳过（仅 list[str] cmd）
+    name="fetch_user",  # 唯一标识
+    fn=fetch_user,  # 同步或异步函数
+    cmd=["curl", "..."],  # 或: 执行命令（覆盖 fn）
+    depends_on=("auth",),  # 依赖的任务名
+    args=(uid,),  # 静态位置参数（追加在注入参数后）
+    kwargs={"timeout": 30},  # 静态关键字参数
+    retries=3,  # 失败重试次数（0 = 仅一次）
+    timeout=30.0,  # 超时秒数（None = 不限制）
+    tags=("api", "user"),  # 自由标签，用于子图过滤
+    conditions=(is_prod,),  # 条件函数列表（全部为 True 才执行）
+    cwd=Path("/tmp"),  # 命令工作目录（仅 cmd 模式）
+    verbose=True,  # 打印命令输出（仅 cmd 模式）
+    skip_if_missing=True,  # 命令不存在时自动跳过（仅 list[str] cmd）
 )
 ```
 
@@ -94,17 +97,17 @@ px.TaskSpec(
 ### Graph —— DAG 构建
 
 ```python
-graph = px.Graph.from_specs([...])   # 整批校验（推荐）
+graph = px.Graph.from_specs([...])  # 整批校验（推荐）
 # 或增量构建
 graph = px.Graph()
 graph.add(px.TaskSpec("a", fn_a))
 graph.add(px.TaskSpec("b", fn_b, ("a",)))
 
-graph.validate()              # 显式校验（环检测）
-graph.layers()                # 拓扑分层
-graph.to_mermaid()            # Mermaid 可视化
-graph.describe()              # 人类可读摘要
-graph.subgraph(("api",))      # 按标签切片
+graph.validate()  # 显式校验（环检测）
+graph.layers()  # 拓扑分层
+graph.to_mermaid()  # Mermaid 可视化
+graph.describe()  # 人类可读摘要
+graph.subgraph(("api",))  # 按标签切片
 graph.subgraph_by_names(("a", "b"))  # 按名称切片
 ```
 
@@ -113,11 +116,11 @@ graph.subgraph_by_names(("a", "b"))  # 按名称切片
 ```python
 report = px.run(
     graph,
-    strategy="async",          # sequential | thread | async
-    max_workers=8,             # thread 策略的线程池大小
-    dry_run=False,             # True = 仅打印计划
-    verbose=False,             # True = 打印任务生命周期日志
-    on_event=callback,         # 状态转换回调
+    strategy="async",  # sequential | thread | async
+    max_workers=8,  # thread 策略的线程池大小
+    dry_run=False,  # True = 仅打印计划
+    verbose=False,  # True = 打印任务生命周期日志
+    on_event=callback,  # 状态转换回调
     state=px.JSONBackend("state.json"),  # 断点续跑后端
 )
 ```
@@ -125,12 +128,12 @@ report = px.run(
 ### RunReport —— 结果
 
 ```python
-report["task_name"]            # 任务返回值
+report["task_name"]  # 任务返回值
 report.result_of("task_name")  # 完整 TaskResult
-report.success                 # 整体是否成功
-report.summary()               # 统计字典
-report.failed_tasks()          # 失败任务名列表
-report.describe()              # 人类可读报告
+report.success  # 整体是否成功
+report.summary()  # 统计字典
+report.failed_tasks()  # 失败任务名列表
+report.describe()  # 人类可读报告
 ```
 
 ## 上下文注入规则
@@ -145,13 +148,16 @@ report.describe()              # 人类可读报告
 ```python
 from typing import Any, Dict
 
+
 def aggregate(ctx: px.Context) -> Dict[str, Any]:
     """ctx 包含所有 depends_on 任务的返回值。"""
     return dict(ctx)
 
+
 def merge(fetch_a: str, fetch_b: str) -> str:
     """fetch_a / fetch_b 自动注入。"""
     return fetch_a + fetch_b
+
 
 def fetch_user(uid: int) -> dict:  # uid 来自 TaskSpec.args
     ...
