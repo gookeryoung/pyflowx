@@ -10,10 +10,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-dependencies = [
-    "graphlib_backport >= 1.0.0; python_version < '3.9'",
-    "typing-extensions>=4.13.2",
-]
+dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
 description = "Lightweight, type-safe DAG task scheduler with multi-strategy execution."
 keywords = ["async", "dag", "scheduler", "task", "workflow"]
 license = { text = "MIT" }
@@ -30,6 +27,7 @@ dev = [
     "basedpyright>=1.39.8",
     "hatch>=1.14.2",
     "httpx>=0.28.0",
+    "mypy>=1.14.1",
     "prek>=0.4.5",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",

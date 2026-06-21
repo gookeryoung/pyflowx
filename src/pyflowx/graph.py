@@ -10,8 +10,6 @@ from __future__ import annotations
 import sys
 from typing import Iterable, Mapping, Sequence
 
-from typing_extensions import override
-
 from .errors import CycleError, DuplicateTaskError, MissingDependencyError
 from .task import TaskSpec
 
@@ -240,7 +238,6 @@ class Graph:
             out.append(f"  Layer {layer_idx}: {layer}")
         return "\n".join(out)
 
-    @override
     def __repr__(self) -> str:
         return f"Graph(tasks={len(self._specs)})"
 
