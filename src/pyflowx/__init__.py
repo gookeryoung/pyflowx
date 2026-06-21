@@ -78,7 +78,7 @@ from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
 from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 __all__ = [
     "IS_LINUX",
