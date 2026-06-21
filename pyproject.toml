@@ -123,11 +123,3 @@ ignore = [
     "PLR0915", # too many statements (intentional for complex methods)
     "PTH119",  # os.path.basename (intentional for sys.argv)
 ]
-
-[tool.ruff.lint.isort]
-known-first-party = ["pyflowx"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true

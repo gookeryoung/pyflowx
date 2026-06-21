@@ -167,7 +167,7 @@ class BuiltinConditions:
         def _check() -> bool:
             return not condition()
 
-        _check.__name__ = f"NOT({condition.__name__})"
+        _check.__name__ = f"NOT({getattr(condition, '__name__', repr(condition))})"
         return _check
 
     @staticmethod
@@ -188,7 +188,7 @@ class BuiltinConditions:
         def _check() -> bool:
             return all(c() for c in conditions)
 
-        names = [c.__name__ for c in conditions]
+        names = [getattr(c, "__name__", repr(c)) for c in conditions]
         _check.__name__ = f"AND({', '.join(names)})"
         return _check
 
@@ -210,7 +210,7 @@ class BuiltinConditions:
         def _check() -> bool:
             return any(c() for c in conditions)
 
-        names = [c.__name__ for c in conditions]
+        names = [getattr(c, "__name__", repr(c)) for c in conditions]
         _check.__name__ = f"OR({', '.join(names)})"
         return _check
 

@@ -604,23 +604,6 @@ class TestCliRunnerIntegration:
 
 
 # ---------------------------------------------------------------------- #
-# 构造校验 (补充覆盖)
-# ---------------------------------------------------------------------- #
-class TestCliRunnerConstructionValidation:
-    """测试 CliRunner 的构造校验 (补充覆盖)."""
-
-    def test_non_graph_value_raises_type_error(self) -> None:
-        """非 Graph 值应抛出 TypeError (覆盖 runner.py line 119)."""
-        with pytest.raises(TypeError, match="必须是 Graph 实例"):
-            _ = px.CliRunner(graphs={"bad": "not a graph"})  # type: ignore[dict-item]
-
-    def test_non_graph_value_dict_raises_type_error(self) -> None:
-        """dict 中包含非 Graph 值应抛出 TypeError."""
-        with pytest.raises(TypeError, match="必须是 Graph 实例"):
-            _ = px.CliRunner(graphs={"good": _echo_graph(), "bad": 123})  # type: ignore[dict-item]
-
-
-# ---------------------------------------------------------------------- #
 # _apply_verbose_to_graph (补充覆盖)
 # ---------------------------------------------------------------------- #
 class TestApplyVerboseToGraph:

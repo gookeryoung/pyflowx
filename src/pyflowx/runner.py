@@ -114,10 +114,6 @@ class CliRunner:
         if not self.graphs:
             raise ValueError("CliRunner 至少需要一个命令 (通过关键字参数提供)")
 
-        for name, graph in self.graphs.items():
-            if not isinstance(graph, Graph):
-                raise TypeError(f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}")
-
     # ------------------------------------------------------------------ #
     # 内省
     # ------------------------------------------------------------------ #

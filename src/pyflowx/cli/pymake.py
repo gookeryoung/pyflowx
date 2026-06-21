@@ -47,7 +47,7 @@ test_coverage: px.TaskSpec = px.TaskSpec(
     cmd=["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
 )
 ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
-ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "--check", "."], depends_on=("lint",))
+ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "."], depends_on=("lint",))
 mypy_check: px.TaskSpec = px.TaskSpec("typecheck", cmd=["mypy", "."])
 ty_check: px.TaskSpec = px.TaskSpec("ty_check", cmd=["ty", "check", "."])
 doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
@@ -122,7 +122,7 @@ def main():
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
             "t": px.Graph.from_specs([test]),
             "tf": px.Graph.from_specs([test_fast]),
-            "tc": px.Graph.from_specs([mypy_check, ty_check]),
+            "tc": px.Graph.from_specs([mypy_check, ty_check, ruff_lint, ruff_format]),
             "tox": px.Graph.from_specs([tox]),
             # 发布命令
             "p": px.Graph.from_specs([git_clean, git_push, git_push_tags]),
