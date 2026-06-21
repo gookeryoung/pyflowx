@@ -308,6 +308,7 @@ class TaskResult(Generic[T]):
     attempts: int = 0
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    reason: Optional[str] = None  # 跳过原因
 
     @property
     def duration(self) -> Optional[float]:
@@ -330,3 +331,4 @@ class TaskEvent:
     attempts: int = 0
     error: Optional[str] = None
     duration: Optional[float] = None
+    reason: Optional[str] = None  # 跳过原因，如 "条件不满足"、"上游任务被跳过"、"缓存"

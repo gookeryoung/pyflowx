@@ -54,6 +54,7 @@ def _emit(
             attempts=result.attempts,
             error=repr(result.error) if result.error else None,
             duration=result.duration,
+            reason=result.reason,
         )
     )
 
@@ -91,14 +92,39 @@ def _run_sync_with_retry(
     context: Mapping[str, Any],
     layer_idx: int | None,
     on_event: EventCallback | None = None,
+    report: RunReport | None = None,
 ) -> TaskResult[Any]:
     """执行同步任务并带重试；返回填充好的 TaskResult。"""
     result: TaskResult[Any] = TaskResult(spec=spec)
+
+    # 检查上游任务是否被 SKIPPED
+    if report is not None:
+        for dep in spec.depends_on:
+            if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
+                result.status = TaskStatus.SKIPPED
+                result.finished_at = datetime.now()
+                result.reason = f"上游任务 '{dep}' 被跳过"
+                logger.info("task %r skipped (上游任务 %r 被跳过)", spec.name, dep)
+                return result
 
     # 检查条件是否满足
     if not spec.should_execute():
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
+        # 检查是哪个条件不满足
+        failed_conditions = []
+        for condition in spec.conditions:
+            try:
+                if not condition():
+                    failed_conditions.append(condition.__name__ or "匿名条件")
+            except Exception:
+                failed_conditions.append(condition.__name__ or "匿名条件(执行错误)")
+        if failed_conditions:
+            result.reason = f"条件不满足: {', '.join(failed_conditions)}"
+        elif spec.skip_if_missing and not spec._is_cmd_available():
+            result.reason = f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
+        else:
+            result.reason = "条件不满足"
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
@@ -126,14 +152,39 @@ async def _run_async_with_retry(
     context: Mapping[str, Any],
     layer_idx: int | None,
     on_event: EventCallback | None = None,
+    report: RunReport | None = None,
 ) -> TaskResult[Any]:
     """在事件循环上执行任务（同步或异步）并带重试。"""
     result: TaskResult[Any] = TaskResult[Any](spec=spec)
+
+    # 检查上游任务是否被 SKIPPED
+    if report is not None:
+        for dep in spec.depends_on:
+            if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
+                result.status = TaskStatus.SKIPPED
+                result.finished_at = datetime.now()
+                result.reason = f"上游任务 '{dep}' 被跳过"
+                logger.info("task %r skipped (上游任务 %r 被跳过)", spec.name, dep)
+                return result
 
     # 检查条件是否满足
     if not spec.should_execute():
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
+        # 检查是哪个条件不满足
+        failed_conditions = []
+        for condition in spec.conditions:
+            try:
+                if not condition():
+                    failed_conditions.append(condition.__name__ or "匿名条件")
+            except Exception:
+                failed_conditions.append(condition.__name__ or "匿名条件(执行错误)")
+        if failed_conditions:
+            result.reason = f"条件不满足: {', '.join(failed_conditions)}"
+        elif spec.skip_if_missing and not spec._is_cmd_available():
+            result.reason = f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
+        else:
+            result.reason = "条件不满足"
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
@@ -207,12 +258,12 @@ def _execute_layer_sequential(
         if backend.has(name):
             cached = backend.get(name)
             context[name] = cached
-            result = TaskResult(spec=spec, status=TaskStatus.SKIPPED, value=cached)
+            result = TaskResult(spec=spec, status=TaskStatus.SKIPPED, value=cached, reason="缓存命中")
             report.results[name] = result
             _emit(on_event, result)
             logger.info("task %r skipped (cached)", name)
             continue
-        result = _run_sync_with_retry(spec, _build_context(spec, context), layer_idx, on_event)
+        result = _run_sync_with_retry(spec, _build_context(spec, context), layer_idx, on_event, report)
         context[name] = result.value
         backend.save(name, result.value)
         report.results[name] = result
@@ -236,7 +287,7 @@ def _execute_layer_threaded(
         if backend.has(name):
             cached = backend.get(name)
             context[name] = cached
-            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached)
+            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached, reason="缓存命中")
             report.results[name] = result
             _emit(on_event, result)
         else:
@@ -251,7 +302,7 @@ def _execute_layer_threaded(
             spec = graph.spec(name)
             # 为本任务快照上下文以避免竞态。
             task_ctx = _build_context(spec, context)
-            fut = pool.submit(_run_sync_with_retry, spec, task_ctx, layer_idx, on_event)
+            fut = pool.submit(_run_sync_with_retry, spec, task_ctx, layer_idx, on_event, report)
             future_to_name[fut] = name
 
         for fut in concurrent.futures.as_completed(future_to_name):
@@ -278,7 +329,7 @@ async def _execute_layer_async(
         if backend.has(name):
             cached = backend.get(name)
             context[name] = cached
-            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached)
+            result = TaskResult(spec=graph.spec(name), status=TaskStatus.SKIPPED, value=cached, reason="缓存命中")
             report.results[name] = result
             _emit(on_event, result)
         else:
@@ -291,7 +342,7 @@ async def _execute_layer_async(
     for name in to_run:
         spec = graph.spec(name)
         task_ctx = _build_context(spec, context)
-        coros.append(_run_async_with_retry(spec, task_ctx, layer_idx, on_event))
+        coros.append(_run_async_with_retry(spec, task_ctx, layer_idx, on_event, report))
 
     results = await asyncio.gather(*coros)
     for name, result in zip(to_run, results):
@@ -334,7 +385,8 @@ def _make_verbose_callback(
                 flush=True,
             )
         elif event.status == TaskStatus.SKIPPED:  # pragma: no branch
-            print(f"[verbose] 任务 {event.task!r} 跳过", flush=True)
+            reason = f" ({event.reason})" if event.reason else ""
+            print(f"[verbose] 任务 {event.task!r} 跳过{reason}", flush=True)
         else:  # pragma: no cover
             # 不可达: 执行器只发出 RUNNING/SUCCESS/FAILED/SKIPPED 事件
             pass
@@ -351,7 +403,7 @@ def run(
     *,
     max_workers: int | None = None,
     dry_run: bool = False,
-    verbose: bool = False,
+    verbose: bool = True,
     on_event: EventCallback | None = None,
     state: StateBackend | None = None,
 ) -> RunReport:
