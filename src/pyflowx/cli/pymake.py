@@ -51,6 +51,8 @@ ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "--check
 mypy_check: px.TaskSpec = px.TaskSpec("typecheck", cmd=["mypy", "."])
 ty_check: px.TaskSpec = px.TaskSpec("ty_check", cmd=["ty", "check", "."])
 doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
+git_push: px.TaskSpec = px.TaskSpec("git_push", cmd=["gitt", "push"])
+git_push_tags: px.TaskSpec = px.TaskSpec("git_push_tags", cmd=["gitt", "push", "--tags"])
 hatch_publish: px.TaskSpec = px.TaskSpec("publish_python", cmd=["hatch", "publish"])
 twine_publish: px.TaskSpec = px.TaskSpec("twine_publish", cmd=["twine", "upload", "--disable-progress-bar"])
 tox: px.TaskSpec = px.TaskSpec("tox", cmd=["tox", "-p", "auto"])
@@ -114,7 +116,7 @@ def main():
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
-            "cov": px.Graph.from_specs([test_coverage]),
+            "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
             "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
@@ -122,6 +124,8 @@ def main():
             "tf": px.Graph.from_specs([test_fast]),
             "tc": px.Graph.from_specs([mypy_check, ty_check]),
             "tox": px.Graph.from_specs([tox]),
+            # 发布命令
+            "p": px.Graph.from_specs([git_clean, git_push, git_push_tags]),
         },
     )
     runner.run_cli()
