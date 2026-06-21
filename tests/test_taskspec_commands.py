@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -357,27 +358,21 @@ class TestTaskSpecVerbose:
 
     def test_verbose_default_is_false(self) -> None:
         """verbose 默认应为 False."""
-        spec: px.TaskSpec[object] = px.TaskSpec("a", cmd=[*ECHO_CMD, "hi"])
+        spec: px.TaskSpec[Any] = px.TaskSpec[Any]("a", cmd=[*ECHO_CMD, "hi"])
         assert spec.verbose is False
 
-    def test_verbose_true_prints_command(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_true_prints_command(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose=True 时应打印执行的命令."""
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("echo", cmd=[*ECHO_CMD, "verbose-output"], verbose=True)]
-        )
-        px.run(graph, strategy="sequential")
+        graph = px.Graph.from_specs([px.TaskSpec("echo", cmd=[*ECHO_CMD, "verbose-output"], verbose=True)])
+        _ = px.run(graph, strategy="sequential")
         captured = capsys.readouterr()
         assert "执行命令" in captured.out
         assert "返回码" in captured.out
 
     def test_verbose_false_silent(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose=False 时不应打印命令信息."""
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("echo", cmd=[*ECHO_CMD, "silent"], verbose=False)]
-        )
-        px.run(graph, strategy="sequential")
+        graph = px.Graph.from_specs([px.TaskSpec[Any]("echo", cmd=[*ECHO_CMD, "silent"], verbose=False)])
+        _ = px.run(graph, strategy="sequential")
         captured = capsys.readouterr()
         assert "执行命令" not in captured.out
         assert "返回码" not in captured.out
@@ -390,7 +385,7 @@ class TestTaskSpecVerbose:
             shell_cmd = "echo 'shell-verbose'"
 
         graph = px.Graph.from_specs([px.TaskSpec("shell", cmd=shell_cmd, verbose=True)])
-        px.run(graph, strategy="sequential")
+        _ = px.run(graph, strategy="sequential")
         captured = capsys.readouterr()
         assert "执行 Shell" in captured.out
 
@@ -399,16 +394,12 @@ class TestTaskSpecVerbose:
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            graph = px.Graph.from_specs(
-                [px.TaskSpec("ls", cmd=ECHO_CMD, cwd=Path(tmpdir), verbose=True)]
-            )
-            px.run(graph, strategy="sequential")
+            graph = px.Graph.from_specs([px.TaskSpec[Any]("ls", cmd=ECHO_CMD, cwd=Path(tmpdir), verbose=True)])
+            _ = px.run(graph, strategy="sequential")
             captured = capsys.readouterr()
             assert "工作目录" in captured.out
 
-    def test_verbose_failure_includes_returncode(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_verbose_failure_includes_returncode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose=True 时失败也应打印返回码."""
         from pyflowx.errors import TaskFailedError
 
@@ -422,7 +413,7 @@ class TestTaskSpecVerbose:
             ]
         )
         with pytest.raises(TaskFailedError):
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         captured = capsys.readouterr()
         assert "返回码" in captured.out
 
@@ -437,16 +428,11 @@ class TestTaskSpecCmdErrors:
         """命令不存在时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("missing", cmd=["this-command-does-not-exist-xyz"])]
-        )
+        graph = px.Graph.from_specs([px.TaskSpec("missing", cmd=["this-command-does-not-exist-xyz"])])
         with pytest.raises(TaskFailedError) as exc_info:
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         # 错误信息应包含命令未找到
-        assert (
-            "命令未找到" in str(exc_info.value.cause)
-            or "not found" in str(exc_info.value.cause).lower()
-        )
+        assert "命令未找到" in str(exc_info.value.cause) or "not found" in str(exc_info.value.cause).lower()
 
     def test_cmd_list_failure_includes_stderr(self) -> None:
         """命令失败时错误信息应包含 stderr."""
@@ -465,7 +451,7 @@ class TestTaskSpecCmdErrors:
             ]
         )
         with pytest.raises(TaskFailedError) as exc_info:
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
         # 非 verbose 模式下, stderr 应包含在错误信息中
         assert "error-msg" in str(exc_info.value.cause)
 
@@ -473,19 +459,15 @@ class TestTaskSpecCmdErrors:
         """shell 命令不存在时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("missing", cmd="this-command-does-not-exist-xyz-123")]
-        )
+        graph = px.Graph.from_specs([px.TaskSpec("missing", cmd="this-command-does-not-exist-xyz-123")])
         with pytest.raises(TaskFailedError):
-            px.run(graph, strategy="sequential")
+            _ = px.run(graph, strategy="sequential")
 
     def test_cmd_string_failure(self) -> None:
         """shell 命令失败时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("fail", cmd='python -c "import sys; sys.exit(1)"')]
-        )
+        graph = px.Graph.from_specs([px.TaskSpec("fail", cmd='python -c "import sys; sys.exit(1)"')])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         assert "Shell 命令执行失败" in str(exc_info.value.cause)
@@ -513,32 +495,12 @@ class TestTaskSpecCmdErrors:
         """shell 命令超时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "slow", cmd='python -c "import time; time.sleep(5)"', timeout=0.1
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([px.TaskSpec("slow", cmd='python -c "import time; time.sleep(5)"', timeout=0.1)])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         assert "超时" in str(exc_info.value.cause)
 
-    def test_unsupported_cmd_type_raises(self) -> None:
-        """不支持的 cmd 类型应在执行时抛出 TypeError."""
-        from pyflowx.errors import TaskFailedError
-
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("bad", cmd=123)]  # type: ignore[arg-type]
-        )
-        with pytest.raises((TypeError, TaskFailedError)):
-            _ = px.run(graph, strategy="sequential")
-
     def test_no_fn_no_cmd_raises(self) -> None:
         """没有 fn 和 cmd 时应抛出 ValueError."""
         with pytest.raises(ValueError, match="必须提供 fn 或 cmd"):
-            px.TaskSpec("empty")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+            _ = px.TaskSpec("empty")

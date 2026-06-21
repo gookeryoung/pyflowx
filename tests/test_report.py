@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any
 
 import pyflowx as px
 from pyflowx.task import TaskResult, TaskSpec, TaskStatus
@@ -15,17 +16,17 @@ def _fn() -> int:
 def _make_result(
     name: str = "a",
     status: TaskStatus = TaskStatus.SUCCESS,
-    value: object = 42,
+    value: Any = 42,
     error: BaseException | None = None,
     duration: float = 0.5,
     attempts: int = 1,
-) -> TaskResult[object]:
+) -> TaskResult[Any]:
     """构造测试用 TaskResult 实例."""
-    spec: TaskSpec[object] = TaskSpec[object](name, _fn)
+    spec: TaskSpec[Any] = TaskSpec[Any](name, _fn)
     start = datetime(2024, 1, 1, 0, 0, 0)
     # 用 timedelta 精确表达秒数，避免 int() 截断小数
     end = start + timedelta(seconds=duration) if duration else None
-    return TaskResult[object](
+    return TaskResult[Any](
         spec=spec,
         status=status,
         value=value,
@@ -85,7 +86,7 @@ class TestRunReportSummary:
     def test_summary_with_none_duration(self) -> None:
         """未开始/未结束的任务 duration 为 None，不应计入总时长."""
         report = px.RunReport()
-        spec: TaskSpec[object] = TaskSpec("a", _fn)  # type: ignore[arg-type]
+        spec: TaskSpec[Any] = TaskSpec[Any]("a", _fn)  # type: ignore[arg-type]
         report.results["a"] = TaskResult(spec=spec, status=TaskStatus.FAILED)
         s = report.summary()
         assert s["total_duration_seconds"] == 0.0
@@ -94,9 +95,7 @@ class TestRunReportSummary:
         """failed_tasks 应返回所有失败任务名."""
         report = px.RunReport()
         report.results["a"] = _make_result("a", status=TaskStatus.SUCCESS)
-        report.results["b"] = _make_result(
-            "b", status=TaskStatus.FAILED, error=ValueError("x")
-        )
+        report.results["b"] = _make_result("b", status=TaskStatus.FAILED, error=ValueError("x"))
         assert report.failed_tasks() == ["b"]
 
 
@@ -115,9 +114,7 @@ class TestRunReportDescribe:
     def test_describe_with_error(self) -> None:
         """应正确描述失败状态和错误信息."""
         report = px.RunReport(success=False)
-        report.results["a"] = _make_result(
-            "a", status=TaskStatus.FAILED, error=ValueError("boom"), duration=0.1
-        )
+        report.results["a"] = _make_result("a", status=TaskStatus.FAILED, error=ValueError("boom"), duration=0.1)
         desc = report.describe()
         assert "success=False" in desc
         assert "error=ValueError" in desc
@@ -125,7 +122,7 @@ class TestRunReportDescribe:
     def test_describe_no_duration(self) -> None:
         """无耗时的任务应显示为 '-'."""
         report = px.RunReport()
-        spec: TaskSpec[object] = TaskSpec("a", _fn)  # type: ignore[arg-type]
-        report.results["a"] = TaskResult(spec=spec, status=TaskStatus.PENDING)
+        spec: TaskSpec[Any] = TaskSpec[Any]("a", _fn)  # type: ignore[arg-type]
+        report.results["a"] = TaskResult[Any](spec=spec, status=TaskStatus.PENDING)
         desc = report.describe()
         assert "-" in desc  # duration 显示为 "-"

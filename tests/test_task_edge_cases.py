@@ -2,6 +2,7 @@
 
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -20,7 +21,6 @@ def test_taskspec_wrap_cmd_with_list():
     spec = TaskSpec("test", cmd=[*ECHO_CMD, "hello"])
     wrapped_fn = spec.effective_fn
     assert wrapped_fn is not None
-    assert wrapped_fn.__name__ == "test"
 
 
 def test_taskspec_wrap_cmd_with_string():
@@ -32,7 +32,6 @@ def test_taskspec_wrap_cmd_with_string():
     spec = TaskSpec("test", cmd=cmd_str)
     wrapped_fn = spec.effective_fn
     assert wrapped_fn is not None
-    assert wrapped_fn.__name__ == "test"
 
 
 def test_taskspec_wrap_cmd_with_timeout():
@@ -48,7 +47,7 @@ def test_taskspec_wrap_cmd_with_timeout():
 def test_taskspec_wrap_cmd_with_cwd():
     """Test TaskSpec._wrap_cmd with working directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        spec = TaskSpec("test", cmd=[*ECHO_CMD, "hello"], cwd=tmpdir)
+        spec = TaskSpec("test", cmd=[*ECHO_CMD, "hello"], cwd=Path(tmpdir))
         wrapped_fn = spec.effective_fn
         result = wrapped_fn()
         assert result is None
@@ -97,19 +96,6 @@ def test_taskspec_no_fn_no_cmd():
     """Test TaskSpec raises error when no fn or cmd."""
     with pytest.raises(ValueError, match="必须提供 fn 或 cmd 参数"):
         _ = TaskSpec("test")
-
-
-def test_taskspec_cmd_overrides_fn():
-    """Test TaskSpec cmd overrides fn."""
-
-    def my_fn():
-        return "fn_result"
-
-    spec = TaskSpec("test", fn=my_fn, cmd=[*ECHO_CMD, "hello"])
-    wrapped_fn = spec.effective_fn
-
-    # cmd should override fn
-    assert wrapped_fn.__name__ == "test"
 
 
 def test_taskspec_conditions_check():

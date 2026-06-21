@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from .errors import CycleError, DuplicateTaskError, MissingDependencyError
 from .task import TaskSpec
@@ -36,13 +36,13 @@ class Graph:
     这使图可安全重复运行并在线程间共享。
     """
 
-    specs: dict[str, TaskSpec[object]] = field(default_factory=dict)
+    specs: dict[str, TaskSpec[Any]] = field(default_factory=dict)
     deps: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ #
     # 构建
     # ------------------------------------------------------------------ #
-    def add(self, spec: TaskSpec[object]) -> Graph:
+    def add(self, spec: TaskSpec[Any]) -> Graph:
         """注册一个任务 spec，并即时校验。
 
         返回 ``self`` 以支持链式调用，但推荐入口是 :meth:`from_specs`，
@@ -57,7 +57,7 @@ class Graph:
         return self
 
     @classmethod
-    def from_specs(cls, specs: Iterable[TaskSpec[object]]) -> Graph:
+    def from_specs(cls, specs: Iterable[TaskSpec[Any]]) -> Graph:
         """从可迭代的 task spec 构建图。
 
         先收集所有 spec，再统一校验。这意味着任务可以引用*后出现*的
@@ -108,7 +108,7 @@ class Graph:
         """所有已注册任务名（按插入顺序）。"""
         return list(self.specs.keys())
 
-    def spec(self, name: str) -> TaskSpec[object]:
+    def spec(self, name: str) -> TaskSpec[Any]:
         """返回 ``name`` 的 spec；不存在则 ``KeyError``。"""
         return self.specs[name]
 
@@ -116,7 +116,7 @@ class Graph:
         """``name`` 的直接前驱。"""
         return self.deps[name]
 
-    def all_specs(self) -> Mapping[str, TaskSpec[object]]:
+    def all_specs(self) -> Mapping[str, TaskSpec[Any]]:
         """name -> spec 的只读视图。"""
         return self.specs
 
@@ -152,16 +152,14 @@ class Graph:
         DAG 的切片。
         """
         wanted: set[str] = set(tags)
-        kept: list[TaskSpec[object]] = []
+        kept: list[TaskSpec[Any]] = []
         for spec in self.specs.values():
             if wanted & set(spec.tags):
                 pruned_deps = tuple(
-                    d
-                    for d in spec.depends_on
-                    if d in self.specs and (wanted & set(self.specs[d].tags))
+                    d for d in spec.depends_on if d in self.specs and (wanted & set(self.specs[d].tags))
                 )
                 kept.append(
-                    TaskSpec(
+                    TaskSpec[Any](
                         name=spec.name,
                         fn=spec.fn,
                         cmd=spec.cmd,
@@ -183,12 +181,12 @@ class Graph:
         for n in wanted:
             if n not in self.specs:
                 raise KeyError(f"Unknown task name: {n!r}")
-        kept: list[TaskSpec[object]] = []
+        kept: list[TaskSpec[Any]] = []
         for spec in self.specs.values():
             if spec.name in wanted:
                 pruned_deps = tuple(d for d in spec.depends_on if d in wanted)
                 kept.append(
-                    TaskSpec[object](
+                    TaskSpec[Any](
                         name=spec.name,
                         fn=spec.fn,
                         cmd=spec.cmd,
@@ -216,9 +214,7 @@ class Graph:
         valid = {"TD", "TB", "BT", "LR", "RL"}
         orientation = orientation.upper()
         if orientation not in valid:
-            raise ValueError(
-                f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}."
-            )
+            raise ValueError(f"Invalid orientation {orientation!r}; expected one of {sorted(valid)}.")
         lines: list[str] = [f"graph {orientation}"]
         for name in self.specs:
             lines.append(f'    {name}["{name}"]')
@@ -243,5 +239,5 @@ class Graph:
     def __len__(self) -> int:
         return len(self.specs)
 
-    def __contains__(self, name: object) -> bool:
+    def __contains__(self, name: Any) -> bool:
         return name in self.specs

@@ -6,50 +6,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pyflowx as px
 from pyflowx.conditions import BuiltinConditions, Constants
 
 
-class PymakeConfig:
-    """PyMake 配置类."""
-
-    # 项目根目录
-    PROJECT_ROOT: str = str(Path(__file__).parent.parent.parent.parent)
-    CORE_DIR: str = f"{PROJECT_ROOT}/bitool-core"
-    CORE_PATTERN: str = f"{CORE_DIR}/target/bitool_core-*-cp*.whl"
-    TIMEOUT: int = 600
-
-    # Python 构建
-    BUILD_TOOL: str = "uv"
-    BUILD_COMMAND: list[str] = [BUILD_TOOL, "build"]
-
-    # Rust 构建 (maturin)
-    MATURIN_TOOL: str = "maturin"
-    MATURIN_BUILD_COMMAND: list[str] = ["maturin", "build", "-r"]
-    MATURIN_DEV_COMMAND: list[str] = ["maturin", "develop"]
-    MATURIN_BUILD_OPTIONS_WIN7: list[str] = [
-        "--target",
-        "x86_64-win7-windows-msvc",
-        "-Zbuild-std",
-        "-i",
-        "python3.8",
-    ]
-
-    # 文档
-    DOC_BUILD_TOOL: str = "sphinx-build"
-    DOC_BUILD_COMMAND: list[str] = ["sphinx-build", "-b", "html", "docs", "docs/_build"]
-
-    # 清理
-    DIRS_TO_IGNORE: list[str] = [".venv", ".git", ".tox"]
-    PYTHON_BUILD_DIRS: list[str] = ["dist", "build", "*.egg-info", "src/*.egg-info"]
-
-
-conf = PymakeConfig()
-
-
-def get_maturin_build_command() -> list[str]:
+def maturin_build_cmd() -> list[str]:
     """获取 maturin 构建命令（根据平台自动添加参数）.
 
     Returns
@@ -57,336 +18,105 @@ def get_maturin_build_command() -> list[str]:
     list[str]
         完整的 maturin 构建命令列表.
     """
-    base_cmd = conf.MATURIN_BUILD_COMMAND.copy()
+    base_cmd = ["maturin", "build", "-r"].copy()
     if Constants.IS_WINDOWS:
-        base_cmd.extend(conf.MATURIN_BUILD_OPTIONS_WIN7)
+        base_cmd.extend(
+            [
+                "--target",
+                "x86_64-win7-windows-msvc",
+                "-Zbuild-std",
+                "-i",
+                "python3.8",
+            ]
+        )
     return base_cmd
 
 
-# 命令条件判断
-MATURIN_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.MATURIN_TOOL)
-PYTEST_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("pytest")
-UV_CONDITION = BuiltinConditions.HAS_APP_INSTALLED(conf.BUILD_TOOL)
-HATCH_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("hatch")
-RUFF_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("ruff")
-GIT_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("git")
-TOX_CONDITION = BuiltinConditions.HAS_APP_INSTALLED("tox")
+def check(name: str) -> px.Condition:
+    """检查指定工具是否已安装.
 
-
-def build_graphs() -> dict[str, px.Graph]:
-    """构建所有命令对应的任务流图.
-
-    将原本的 CommandScheduler/RunCommand 模式转换为 Graph/TaskSpec 模式,
-    每个 Graph 是一个独立的任务流, 由 CliRunner 根据用户输入选择执行.
+    Returns
+    -------
+    bool
+        如果已安装则返回 True,否则返回 False.
     """
-    return {
-        # === 构建命令 ===
-        # 构建 Python 包
-        "b": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "uv_build",
-                    cmd=conf.BUILD_COMMAND,
-                    conditions=(UV_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 构建 Rust 核心模块
-        "bc": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "maturin_build",
-                    cmd=get_maturin_build_command(),
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 构建双包（先 Rust 后 Python）
-        "ba": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "maturin_build",
-                    cmd=get_maturin_build_command(),
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-                px.TaskSpec(
-                    "uv_build",
-                    cmd=conf.BUILD_COMMAND,
-                    conditions=(UV_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                    depends_on=("maturin_build",),
-                ),
-            ]
-        ),
-        # === 安装命令（开发模式） ===
-        # 安装 Rust 核心模块
-        "ic": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "maturin_dev",
-                    cmd=conf.MATURIN_DEV_COMMAND,
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                ),
-            ]
-        ),
-        # 安装 Python 主包
-        "ip": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "uv_install",
-                    cmd=["uv", "pip", "install", "-e", "."],
-                    conditions=(UV_CONDITION,),
-                ),
-            ]
-        ),
-        # 安装双包（开发模式）
-        "ia": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "maturin_dev",
-                    cmd=conf.MATURIN_DEV_COMMAND,
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                ),
-                px.TaskSpec(
-                    "uv_install",
-                    cmd=["uv", "pip", "install", "-e", "."],
-                    conditions=(UV_CONDITION,),
-                    depends_on=("maturin_dev",),
-                ),
-            ]
-        ),
-        # === 清理命令 ===
-        # 清理 Python 构建产物
-        "cp": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "git_clean_python",
-                    cmd=["git", "clean", "-xfd", "-e", *conf.DIRS_TO_IGNORE],
-                    conditions=(GIT_CONDITION,),
-                ),
-            ]
-        ),
-        # 清理 Rust 构建产物
-        "cc": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "cargo_clean",
-                    cmd=["cargo", "clean"],
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                ),
-            ]
-        ),
-        # 清理所有构建产物
-        "ca": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "cargo_clean",
-                    cmd=["cargo", "clean"],
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                ),
-                px.TaskSpec(
-                    "git_clean",
-                    cmd=["git", "clean", "-xfd", "-e", *conf.DIRS_TO_IGNORE],
-                    conditions=(GIT_CONDITION,),
-                ),
-            ]
-        ),
-        # === 开发工具 ===
-        # 运行测试, 跳过 slow, 并行模式
-        "t": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "pytest",
-                    cmd=[
-                        "pytest",
-                        "-m",
-                        "not slow",
-                        "-n",
-                        "8",
-                        "--dist",
-                        "loadfile",
-                        "--color=yes",
-                        "--durations=10",
-                    ],
-                    conditions=(PYTEST_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 运行测试, 非并行模式
-        "tf": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "pytest",
-                    cmd=[
-                        "pytest",
-                        "-m",
-                        "not slow",
-                        "--dist",
-                        "loadfile",
-                        "--color=yes",
-                        "--durations=10",
-                    ],
-                    conditions=(PYTEST_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 运行测试并生成覆盖率报告, 跳过 slow, 并行模式
-        "tc": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "pytest_cov",
-                    cmd=[
-                        "pytest",
-                        "--cov",
-                        "-n",
-                        "auto",
-                        "--dist",
-                        "loadfile",
-                        "--tb=short",
-                        "-v",
-                        "--color=yes",
-                        "--durations=10",
-                    ],
-                    conditions=(PYTEST_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 代码格式化与检查
-        "lint": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "ruff_check",
-                    cmd=[
-                        "ruff",
-                        "check",
-                        "--fix",
-                        "--unsafe-fixes",
-                    ],
-                    conditions=(RUFF_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                    cwd=Path(conf.PROJECT_ROOT),
-                ),
-            ]
-        ),
-        # 类型检查
-        "typecheck": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "ty_check",
-                    cmd=["ty", "check", "src/bitool"],
-                    conditions=(BuiltinConditions.HAS_APP_INSTALLED("ty"),),
-                ),
-            ]
-        ),
-        # 构建文档
-        "doc": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "sphinx_build",
-                    cmd=conf.DOC_BUILD_COMMAND,
-                    conditions=(
-                        BuiltinConditions.HAS_APP_INSTALLED(conf.DOC_BUILD_TOOL),
-                    ),
-                ),
-            ]
-        ),
-        # === 发布命令 ===
-        # 发布 Python 主包到 PyPI
-        "pb": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "publish_python",
-                    cmd=["hatch", "publish"],
-                    cwd=Path(conf.PROJECT_ROOT),
-                    conditions=(HATCH_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 发布所有包（先 Rust 后 Python）
-        "pba": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "publish_rust",
-                    cmd=[
-                        "twine",
-                        "upload",
-                        "--disable-progress-bar",
-                        conf.CORE_PATTERN,
-                    ],
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-                px.TaskSpec(
-                    "publish_python",
-                    cmd=["hatch", "publish"],
-                    cwd=Path(conf.PROJECT_ROOT),
-                    conditions=(HATCH_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                    depends_on=("publish_rust",),
-                ),
-            ]
-        ),
-        # 发布 Rust 核心模块 (maturin publish)
-        "pbc": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "publish_rust",
-                    cmd=["maturin", "publish"],
-                    cwd=Path(conf.CORE_DIR),
-                    conditions=(MATURIN_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # === 多版本测试命令 ===
-        # 运行多版本 Python 测试 (tox)
-        "tox": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "tox_run",
-                    cmd=["tox", "-p", "auto"],
-                    conditions=(TOX_CONDITION,),
-                    timeout=conf.TIMEOUT,
-                ),
-            ]
-        ),
-        # 安装多版本 Python (仅安装不测试)
-        "tox_install": px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "uv_python_install",
-                    cmd=[
-                        "uv",
-                        "python",
-                        "install",
-                        "3.8",
-                        "3.9",
-                        "3.10",
-                        "3.11",
-                        "3.12",
-                        "3.13",
-                        "3.14",
-                    ],
-                    conditions=(UV_CONDITION,),
-                    timeout=600,
-                ),
-            ]
-        ),
-    }
+    return BuiltinConditions.HAS_APP_INSTALLED(name)
+
+
+uv_build: px.TaskSpec = px.TaskSpec("uv_build", cmd=["uv", "build"], conditions=(check("uv"),))
+maturin_build: px.TaskSpec = px.TaskSpec("maturin_build", cmd=maturin_build_cmd(), conditions=(check("maturin"),))
+uv_sync: px.TaskSpec = px.TaskSpec("uv_sync", cmd=["uv", "sync"], conditions=(check("uv"),))
+git_clean: px.TaskSpec = px.TaskSpec("git_clean", cmd=["gitt", "c"], conditions=(check("gitt"),))
+test: px.TaskSpec = px.TaskSpec(
+    "test",
+    cmd=[
+        "pytest",
+        "-m",
+        "not slow",
+        "-n",
+        "8",
+        "--dist",
+        "loadfile",
+        "--color=yes",
+        "--durations=10",
+    ],
+    conditions=(check("pytest"),),
+)
+test_fast: px.TaskSpec = px.TaskSpec(
+    "test_fast",
+    cmd=[
+        "pytest",
+        "-m",
+        "not slow",
+        "--dist",
+        "loadfile",
+        "--color=yes",
+        "--durations=10",
+    ],
+    conditions=(check("pytest"),),
+)
+test_coverage: px.TaskSpec = px.TaskSpec(
+    "test_coverage",
+    cmd=[
+        "pytest",
+        "--cov",
+        "-n",
+        "8",
+        "--dist",
+        "loadfile",
+        "--tb=short",
+        "-v",
+        "--color=yes",
+        "--durations=10",
+    ],
+    conditions=(check("pytest"),),
+)
+ruff_lint: px.TaskSpec = px.TaskSpec(
+    "lint",
+    cmd=[
+        "ruff",
+        "check",
+        "--fix",
+        "--unsafe-fixes",
+    ],
+    conditions=(check("ruff"),),
+)
+mypy_check: px.TaskSpec = px.TaskSpec("typecheck", cmd=["mypy", "."], conditions=(check("mypy"),))
+ty_check: px.TaskSpec = px.TaskSpec("ty_check", cmd=["ty", "check", "."], conditions=(check("ty"),))
+doc: px.TaskSpec = px.TaskSpec(
+    "doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"], conditions=(check("sphinx-build"),)
+)
+hatch_publish: px.TaskSpec = px.TaskSpec("publish_python", cmd=["hatch", "publish"], conditions=(check("hatch"),))
+twine_publish: px.TaskSpec = px.TaskSpec(
+    "twine_publish",
+    cmd=[
+        "twine",
+        "upload",
+        "--disable-progress-bar",
+    ],
+    conditions=(check("twine"),),
+)
+tox: px.TaskSpec = px.TaskSpec("tox", cmd=["tox", "-p", "auto"], conditions=(check("tox"),))
 
 
 def main():
@@ -401,20 +131,17 @@ def main():
       pymake ba   - 构建所有包 (先 Rust 后 Python)
 
     📦 安装命令 (开发模式):
-      pymake ic   - 安装 Rust 核心模块 (maturin develop)
-      pymake ip   - 安装 Python 主包 (uv pip install -e .)
-      pymake ia   - 安装所有包 (开发模式，推荐)
+      pymake sync   - 安装依赖包 (uv sync)
 
     🧹 清理命令:
-      pymake cp   - 清理 Python 构建产物
-      pymake cc   - 清理 Rust 构建产物 (cargo clean)
-      pymake ca   - 清理所有构建产物
+      pymake c   - 清理所有构建产物
 
     🛠️  开发工具:
       pymake t      - 运行测试 (pytest)
       pymake tc     - 运行测试并生成覆盖率报告
+      pymake tf     - 运行快速测试 (pytest -m not slow)
       pymake lint   - 代码格式化与检查 (ruff)
-      pymake typecheck - 类型检查 (ty)
+      pymake type   - 类型检查 (mypy, ty)
       pymake doc    - 构建文档 (sphinx)
 
     🔬 多版本测试:
@@ -445,6 +172,24 @@ def main():
     runner = px.CliRunner(
         strategy="sequential",
         description="PyMake - Python 构建工具 (替代 Makefile)",
-        graphs=build_graphs(),  # type: ignore[reportArgumentType]
+        graphs={
+            # 构建命令
+            "b": px.Graph.from_specs([uv_build]),
+            "bc": px.Graph.from_specs([maturin_build]),
+            "ba": px.Graph.from_specs([uv_build, maturin_build]),
+            # 安装命令
+            "sync": px.Graph.from_specs([uv_sync]),
+            # 清理命令
+            "c": px.Graph.from_specs([git_clean]),
+            # 开发工具
+            "t": px.Graph.from_specs([test]),
+            "tc": px.Graph.from_specs([test, test_coverage]),
+            "tf": px.Graph.from_specs([test_fast]),
+            "lint": px.Graph.from_specs([ruff_lint]),
+            "type": px.Graph.from_specs([mypy_check, ty_check]),
+            "doc": px.Graph.from_specs([doc]),
+            "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
+            "tox": px.Graph.from_specs([tox]),
+        },
     )
     runner.run_cli()

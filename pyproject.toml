@@ -92,7 +92,7 @@ typeCheckingMode                  = "basic" # 类型检查严格度：off / basi
 # Ruff 配置 - 与 .pre-commit-config.yaml 保持一致
 [tool.ruff]
 target-version = "py38"
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 select = [

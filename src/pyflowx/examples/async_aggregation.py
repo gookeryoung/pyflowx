@@ -10,11 +10,12 @@ Shows:
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pyflowx as px
 
 
-async def fetch_user(uid: int) -> dict[str, object]:
+async def fetch_user(uid: int) -> dict[str, Any]:
     await asyncio.sleep(0.2)
     return {"id": uid, "name": f"User{uid}"}
 
@@ -25,7 +26,7 @@ async def fetch_posts(uid: int) -> list[int]:
 
 
 # Context annotation → receives the full mapping of upstream results.
-def aggregate(ctx: px.Context) -> dict[str, object]:
+def aggregate(ctx: px.Context) -> dict[str, Any]:
     return dict(ctx)
 
 

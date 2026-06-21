@@ -188,9 +188,7 @@ class TaskSpec(Generic[T]):
                 except FileNotFoundError:
                     raise RuntimeError(f"命令未找到: {cmd_str}") from None
                 except subprocess.TimeoutExpired:
-                    raise RuntimeError(
-                        f"命令执行超时: {cmd_str} ({timeout}s)"
-                    ) from None
+                    raise RuntimeError(f"命令执行超时: {cmd_str} ({timeout}s)") from None
                 except OSError as e:
                     raise RuntimeError(f"命令执行异常: {cmd_str}: {e}") from e
 
@@ -230,9 +228,7 @@ class TaskSpec(Generic[T]):
                 except FileNotFoundError:
                     raise RuntimeError(f"Shell 命令未找到: {cmd}") from None
                 except subprocess.TimeoutExpired:
-                    raise RuntimeError(
-                        f"Shell 命令执行超时: {cmd} ({timeout}s)"
-                    ) from None
+                    raise RuntimeError(f"Shell 命令执行超时: {cmd} ({timeout}s)") from None
                 except OSError as e:
                     raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}") from e
 
@@ -253,9 +249,7 @@ class TaskSpec(Generic[T]):
         if callable(cmd):
             return cmd  # type: ignore[return-value]
 
-        raise TypeError(
-            f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}"
-        )
+        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")
 
     def should_execute(self) -> bool:
         """检查任务是否应该执行.

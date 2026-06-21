@@ -15,7 +15,7 @@ import argparse
 import enum
 import sys
 from dataclasses import dataclass, field, replace
-from typing import Sequence, get_args
+from typing import Any, Sequence, get_args
 
 from .errors import PyFlowXError
 from .executors import Strategy, run
@@ -51,7 +51,7 @@ def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
     Graph
         所有 spec 的 verbose 字段已更新的新图.
     """
-    new_specs: list[TaskSpec[object]] = []
+    new_specs: list[TaskSpec[Any]] = []
     for spec in graph.all_specs().values():
         if spec.verbose == verbose:
             new_specs.append(spec)
@@ -116,9 +116,7 @@ class CliRunner:
 
         for name, graph in self.graphs.items():
             if not isinstance(graph, Graph):
-                raise TypeError(
-                    f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}"
-                )
+                raise TypeError(f"CliRunner 命令 {name!r} 的值必须是 Graph 实例, 实际是 {type(graph).__name__}")
 
     # ------------------------------------------------------------------ #
     # 内省
@@ -249,11 +247,7 @@ class CliRunner:
                 dry_run=parsed.dry_run,
                 verbose=verbose,
             )
-            return (
-                CliExitCode.SUCCESS.value
-                if report.success
-                else CliExitCode.FAILURE.value
-            )
+            return CliExitCode.SUCCESS.value if report.success else CliExitCode.FAILURE.value
         except KeyboardInterrupt:
             print("\n操作已取消", file=sys.stderr)
             return CliExitCode.INTERRUPTED.value

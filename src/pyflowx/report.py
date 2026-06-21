@@ -24,7 +24,7 @@ class RunReport:
         当且仅当所有非跳过任务都以 ``SUCCESS`` 结束时为 ``True``。
     """
 
-    results: dict[str, TaskResult[object]] = field(default_factory=dict)
+    results: dict[str, TaskResult[Any]] = field(default_factory=dict)
     success: bool = True
 
     # ---- 类型化访问 --------------------------------------------------- #
@@ -36,11 +36,11 @@ class RunReport:
         """
         return self.results[name].value
 
-    def result_of(self, name: str) -> TaskResult[object]:
+    def result_of(self, name: str) -> TaskResult[Any]:
         """返回 ``name`` 的完整 :class:`TaskResult`。"""
         return self.results[name]
 
-    def __contains__(self, name: object) -> bool:
+    def __contains__(self, name: Any) -> bool:
         return name in self.results
 
     def __iter__(self) -> Iterator[str]:
@@ -67,9 +67,7 @@ class RunReport:
 
     def failed_tasks(self) -> list[str]:
         """以 FAILED 状态结束的任务名列表。"""
-        return [
-            name for name, r in self.results.items() if r.status == TaskStatus.FAILED
-        ]
+        return [name for name, r in self.results.items() if r.status == TaskStatus.FAILED]
 
     def describe(self) -> str:
         """用于调试的人类可读多行报告。"""
@@ -77,7 +75,5 @@ class RunReport:
         for name, r in self.results.items():
             dur = f"{r.duration:.3f}s" if r.duration is not None else "-"
             err = f" error={r.error!r}" if r.error else ""
-            lines.append(
-                f"  {name}: {r.status.value} ({dur} attempts={r.attempts}){err}"
-            )
+            lines.append(f"  {name}: {r.status.value} ({dur} attempts={r.attempts}){err}")
         return "\n".join(lines)
