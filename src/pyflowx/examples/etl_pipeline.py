@@ -35,11 +35,7 @@ def transform(
     extract_orders: list[dict],
 ) -> list[dict]:
     cmap = {c["id"]: c for c in extract_customers}
-    return [
-        {**o, "customer_name": cmap[o["customer_id"]]["name"]}
-        for o in extract_orders
-        if o["customer_id"] in cmap
-    ]
+    return [{**o, "customer_name": cmap[o["customer_id"]]["name"]} for o in extract_orders if o["customer_id"] in cmap]
 
 
 def load(transform: list[dict]) -> int:
@@ -58,9 +54,7 @@ def main() -> None:
                 depends_on=("extract_customers", "extract_orders"),
                 tags=("transform",),
             ),
-            px.TaskSpec(
-                "load", load, depends_on=("transform",), retries=1, tags=("load",)
-            ),
+            px.TaskSpec("load", load, depends_on=("transform",), retries=1, tags=("load",)),
         ]
     )
 
@@ -68,7 +62,7 @@ def main() -> None:
     print(graph.describe())
 
     print("\n=== Dry run (no execution) ===")
-    px.run(graph, strategy="sequential", dry_run=True)
+    _ = px.run(graph, strategy="sequential", dry_run=True)
 
     print("\n=== Sequential execution ===")
     report = px.run(graph, strategy="sequential")

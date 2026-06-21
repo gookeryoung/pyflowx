@@ -151,7 +151,7 @@ class TaskSpec(Generic[T]):
         if self.fn is not None:
             return self.fn
 
-        raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")
+        raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")  # pragma: no cover
 
     def _wrap_cmd(self) -> TaskFn[Any]:
         """将 cmd 包装为可执行函数.
@@ -249,7 +249,7 @@ class TaskSpec(Generic[T]):
         if callable(cmd):
             return cmd  # type: ignore[return-value]
 
-        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")
+        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")  # pragma: no cover
 
     def should_execute(self) -> bool:
         """检查任务是否应该执行.

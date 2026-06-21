@@ -27,7 +27,7 @@ class MissingDependencyError(PyFlowXError):
     def __init__(self, task: str, dependency: str) -> None:
         super().__init__(
             f"Task '{task}' depends on unknown task '{dependency}'. "
-            "Add the dependency before (or together with) this task."
+            + "Add the dependency before (or together with) this task."
         )
         self.task = task
         self.dependency = dependency
@@ -58,9 +58,7 @@ class TaskFailedError(PyFlowXError):
         layer: int | None = None,
     ) -> None:
         location = f" (layer {layer})" if layer is not None else ""
-        super().__init__(
-            f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}"
-        )
+        super().__init__(f"Task '{task}' failed after {attempts} attempt(s){location}: {cause}")
         self.task = task
         self.cause = cause
         self.attempts = attempts
