@@ -161,7 +161,7 @@ class CliRunner:
         _ = parser.add_argument(
             "--strategy",
             choices=list(get_args(Strategy)),
-            default="sequential",
+            default=self.strategy,
             help="执行策略 (默认: %(default)s)",
         )
         _ = parser.add_argument(

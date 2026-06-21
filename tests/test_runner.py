@@ -167,10 +167,10 @@ class TestCliRunnerParser:
 
     def test_parser_strategy_default(self) -> None:
         """--strategy 默认值应与构造时一致."""
-        runner = px.CliRunner({"clean": _echo_graph()}, "async")
+        runner = px.CliRunner({"clean": _echo_graph()}, strategy="async")
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
-        assert parsed.strategy == "sequential"
+        assert parsed.strategy == "async"
 
     def test_parser_has_dry_run_flag(self) -> None:
         """解析器应有 --dry-run 标志."""
