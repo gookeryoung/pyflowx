@@ -160,7 +160,7 @@ def test_app_installed_conditions():
             px.TaskSpec(
                 "python_check",
                 cmd=python_cmd,
-                conditions=(BuiltinConditions.HAS_APP_INSTALLED("python"),),
+                conditions=(BuiltinConditions.HAS_INSTALLED("python"),),
             ),
         ]
     )

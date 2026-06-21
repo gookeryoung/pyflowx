@@ -79,25 +79,23 @@ def test_builtin_conditions_python_version_at_least():
     current_major = sys.version_info.major
     current_minor = sys.version_info.minor
     # Current version should be at least itself
-    assert (
-        BuiltinConditions.PYTHON_VERSION_AT_LEAST(current_major, current_minor) is True
-    )
+    assert BuiltinConditions.PYTHON_VERSION_AT_LEAST(current_major, current_minor) is True
     # Current version should be at least an older version
     assert BuiltinConditions.PYTHON_VERSION_AT_LEAST(current_major - 1, 0) is True
     # Current version should NOT be at least a newer version
     assert BuiltinConditions.PYTHON_VERSION_AT_LEAST(current_major + 1, 0) is False
 
 
-def test_builtin_conditions_has_app_installed_true():
-    """Test BuiltinConditions.HAS_APP_INSTALLED when app exists."""
+def test_builtin_conditions_HAS_INSTALLED_true():
+    """Test BuiltinConditions.HAS_INSTALLED when app exists."""
     # Python should always be available
-    condition = BuiltinConditions.HAS_APP_INSTALLED("python")
+    condition = BuiltinConditions.HAS_INSTALLED("python")
     assert condition() is True
 
 
-def test_builtin_conditions_has_app_installed_false():
-    """Test BuiltinConditions.HAS_APP_INSTALLED when app doesn't exist."""
-    condition = BuiltinConditions.HAS_APP_INSTALLED("nonexistent_app_12345")
+def test_builtin_conditions_HAS_INSTALLED_false():
+    """Test BuiltinConditions.HAS_INSTALLED when app doesn't exist."""
+    condition = BuiltinConditions.HAS_INSTALLED("nonexistent_app_12345")
     assert condition() is False
 
 

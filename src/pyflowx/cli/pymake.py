@@ -40,7 +40,7 @@ def check(name: str) -> px.Condition:
     bool
         如果已安装则返回 True,否则返回 False.
     """
-    return BuiltinConditions.HAS_APP_INSTALLED(name)
+    return BuiltinConditions.HAS_INSTALLED(name)
 
 
 uv_build: px.TaskSpec = px.TaskSpec("uv_build", cmd=["uv", "build"], conditions=(check("uv"),))

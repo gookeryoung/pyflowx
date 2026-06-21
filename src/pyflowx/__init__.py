@@ -43,7 +43,7 @@
         px.TaskSpec(
             "git_check",
             cmd=["git", "--version"],
-            conditions=(BuiltinConditions.HAS_APP_INSTALLED("git"),)
+            conditions=(BuiltinConditions.HAS_INSTALLED("git"),)
         ),
     ])
     report = px.run(graph)

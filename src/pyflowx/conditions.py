@@ -85,7 +85,7 @@ class BuiltinConditions:
         return sys.version_info >= (major, minor)
 
     @staticmethod
-    def HAS_APP_INSTALLED(app_name: str) -> Condition:
+    def HAS_INSTALLED(app_name: str) -> Condition:
         """检查指定应用是否已安装.
 
         Parameters
@@ -102,7 +102,7 @@ class BuiltinConditions:
         def _check() -> bool:
             return shutil.which(app_name) is not None
 
-        _check.__name__ = f"HAS_APP_INSTALLED({app_name!r})"
+        _check.__name__ = f"HAS_INSTALLED({app_name!r})"
         return _check
 
     @staticmethod
