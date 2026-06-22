@@ -136,7 +136,7 @@ class TestDescribeInjection:
     def test_describe_injection(self) -> None:
         """应正确描述依赖注入、Context 标注和默认值."""
 
-        def fn(a: int, ctx: px.Context, flag: bool = False) -> None:  # noqa: ARG001
+        def fn(a: int, ctx: px.Context, flag: bool = False) -> None:
             return None
 
         spec = px.TaskSpec("t", fn, depends_on=("a",))
@@ -148,7 +148,7 @@ class TestDescribeInjection:
     def test_var_positional(self) -> None:
         """*args 参数应显示为 *args."""
 
-        def fn(*args: Any) -> None:  # noqa: ARG001
+        def fn(*args: Any) -> None:
             return None
 
         spec = px.TaskSpec("t", fn)
@@ -158,7 +158,7 @@ class TestDescribeInjection:
     def test_var_keyword(self) -> None:
         """**kwargs 参数应显示为 **kwargs=<all-deps>."""
 
-        def fn(**kwargs: Any) -> None:  # pyright: ignore[reportExplicitAny, reportAny]  # noqa: ARG001
+        def fn(**kwargs: Any) -> None:  # pyright: ignore[reportExplicitAny, reportAny]
             return None
 
         spec = px.TaskSpec("t", fn, depends_on=("a",))
@@ -168,7 +168,7 @@ class TestDescribeInjection:
     def test_unresolved(self) -> None:
         """无依赖、无静态值、无默认的参数应显示为 <UNRESOLVED>."""
 
-        def fn(missing: int) -> None:  # noqa: ARG001
+        def fn(missing: int) -> None:
             return None
 
         spec = px.TaskSpec("t", fn)
@@ -178,7 +178,7 @@ class TestDescribeInjection:
     def test_static_kwargs(self) -> None:
         """静态 kwargs 应显示具体值."""
 
-        def fn(flag: bool = False) -> None:  # noqa: ARG001
+        def fn(flag: bool = False) -> None:
             return None
 
         spec = px.TaskSpec("t", fn, kwargs={"flag": True})
@@ -188,7 +188,7 @@ class TestDescribeInjection:
     def test_positional_args_filled(self) -> None:
         """spec.args 填充的位置参数应显示具体值（覆盖 args_filled 分支）."""
 
-        def fn(a: int, b: str) -> None:  # noqa: ARG001
+        def fn(a: int, b: str) -> None:
             return None
 
         spec = px.TaskSpec("t", fn, args=(1, "x"))

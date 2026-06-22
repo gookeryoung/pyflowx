@@ -196,7 +196,7 @@ class TestMain:
 
     def test_main_with_no_args_shows_help(self) -> None:
         """main() with no args should show help."""
-        with patch("sys.argv", ["autofmt"]), patch.object(autofmt, "main") as mock_main:
+        with patch("sys.argv", ["autofmt"]), patch.object(autofmt, "main"):
             # Just call main, it should show help and return
             autofmt.main()
             # main() should return without calling px.run

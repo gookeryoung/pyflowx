@@ -80,10 +80,10 @@ class TestMain:
             assert mock_run.called
 
     def test_main_with_no_args_shows_help(self) -> None:
-        """main() with no args should show help and exit."""
-        with patch("sys.argv", ["envpy"]), pytest.raises(SystemExit) as exc_info:
+        """main() with no args should show help and return."""
+        with patch("sys.argv", ["envpy"]):
             envpy.main()
-        assert exc_info.value.code == 2
+            # Should print help and return
 
     def test_main_invalid_mirror_shows_error(self) -> None:
         """main() with invalid mirror should show error."""

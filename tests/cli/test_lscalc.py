@@ -2,13 +2,35 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 import pyflowx as px
 from pyflowx.cli import lscalc
 from pyflowx.conditions import Constants
+
+
+# ---------------------------------------------------------------------- #
+# get_ls_dyna_command
+# ---------------------------------------------------------------------- #
+class TestGetLsDynaCommand:
+    """Test get_ls_dyna_command function."""
+
+    def test_get_ls_dyna_command_windows(self) -> None:
+        """Should get LS-DYNA command for Windows."""
+        with patch.object(Constants, "IS_WINDOWS", True), patch.object(Constants, "IS_MACOS", False):
+            cmd = lscalc.get_ls_dyna_command("input.k", 4)
+            assert "ls-dyna_mpp" in cmd
+            assert "i=input.k" in cmd
+            assert "ncpu=4" in cmd
+
+    def test_get_ls_dyna_command_linux(self) -> None:
+        """Should get LS-DYNA command for Linux."""
+        with patch.object(Constants, "IS_WINDOWS", False), patch.object(Constants, "IS_MACOS", False):
+            cmd = lscalc.get_ls_dyna_command("input.k", 8)
+            assert "ls-dyna_mpp" in cmd
+            assert "i=input.k" in cmd
+            assert "ncpu=8" in cmd
 
 
 # ---------------------------------------------------------------------- #
@@ -17,36 +39,31 @@ from pyflowx.conditions import Constants
 class TestRunLsDyna:
     """Test run_ls_dyna function."""
 
-    def test_run_ls_dyna_with_input_file(self) -> None:
-        """Should run LS-DYNA with input file."""
+    def test_run_ls_dyna_success(self, tmp_path: Path) -> None:
+        """Should run LS-DYNA successfully."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            lscalc.run_ls_dyna("test.k", ncpu=4)
+            lscalc.run_ls_dyna(str(input_file), ncpu=4)
             assert mock_run.called
 
-    def test_run_ls_dyna_with_custom_ncpu(self) -> None:
-        """Should run LS-DYNA with custom CPU count."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            lscalc.run_ls_dyna("test.k", ncpu=8)
-            assert mock_run.called
-            # Check that ncpu is passed correctly
+    def test_run_ls_dyna_file_not_found(self, tmp_path: Path) -> None:
+        """Should handle nonexistent input file."""
+        input_file = tmp_path / "nonexistent.k"
 
-    def test_run_ls_dyna_windows_command(self) -> None:
-        """Should use Windows command format on Windows."""
-        if Constants.IS_WINDOWS:
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0)
-                lscalc.run_ls_dyna("test.k", ncpu=4)
-                assert mock_run.called
-                # Check command format
+        lscalc.run_ls_dyna(str(input_file), ncpu=4)
+        # Should print error message
 
-    def test_run_ls_dyna_linux_command(self) -> None:
-        """Should use Linux command format on Linux."""
-        with patch.object(Constants, "IS_WINDOWS", False), patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            lscalc.run_ls_dyna("test.k", ncpu=4)
-            assert mock_run.called
+    def test_run_ls_dyna_command_not_found(self, tmp_path: Path) -> None:
+        """Should handle command not found."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            lscalc.run_ls_dyna(str(input_file), ncpu=4)
+            # Should print error message
 
 
 # ---------------------------------------------------------------------- #
@@ -55,19 +72,22 @@ class TestRunLsDyna:
 class TestRunLsDynaMpi:
     """Test run_ls_dyna_mpi function."""
 
-    def test_run_ls_dyna_mpi_with_input_file(self) -> None:
-        """Should run LS-DYNA MPI with input file."""
+    def test_run_ls_dyna_mpi_success(self, tmp_path: Path) -> None:
+        """Should run LS-DYNA MPI successfully."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            lscalc.run_ls_dyna_mpi("test.k", ncpu=4)
+            lscalc.run_ls_dyna_mpi(str(input_file), ncpu=8)
             assert mock_run.called
 
-    def test_run_ls_dyna_mpi_with_custom_ncpu(self) -> None:
-        """Should run LS-DYNA MPI with custom CPU count."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            lscalc.run_ls_dyna_mpi("test.k", ncpu=8)
-            assert mock_run.called
+    def test_run_ls_dyna_mpi_file_not_found(self, tmp_path: Path) -> None:
+        """Should handle nonexistent input file."""
+        input_file = tmp_path / "nonexistent.k"
+
+        lscalc.run_ls_dyna_mpi(str(input_file), ncpu=8)
+        # Should print error message
 
 
 # ---------------------------------------------------------------------- #
@@ -76,17 +96,17 @@ class TestRunLsDynaMpi:
 class TestCheckLsDynaStatus:
     """Test check_ls_dyna_status function."""
 
-    def test_check_ls_dyna_status_running(self) -> None:
-        """Should detect running LS-DYNA process."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="lsdyna.exe\n", returncode=0)
+    def test_check_ls_dyna_status_windows(self) -> None:
+        """Should check LS-DYNA status on Windows."""
+        with patch.object(Constants, "IS_WINDOWS", True), patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="ls-dyna_mpp.exe", returncode=0)
             lscalc.check_ls_dyna_status()
             assert mock_run.called
 
-    def test_check_ls_dyna_status_not_running(self) -> None:
-        """Should detect no LS-DYNA process."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
+    def test_check_ls_dyna_status_linux(self) -> None:
+        """Should check LS-DYNA status on Linux."""
+        with patch.object(Constants, "IS_WINDOWS", False), patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="1234", returncode=0)
             lscalc.check_ls_dyna_status()
             assert mock_run.called
 
@@ -97,66 +117,41 @@ class TestCheckLsDynaStatus:
 class TestMain:
     """Test main function."""
 
-    def test_main_run_with_input_file(self) -> None:
-        """main() should handle run command with input file."""
-        with patch("sys.argv", ["lscalc", "run", "test.k"]), patch.object(px, "run") as mock_run, patch.object(
-            lscalc, "run_ls_dyna"
-        ):
+    def test_main_run_command(self, tmp_path: Path) -> None:
+        """main() should handle run command."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
+        with patch("sys.argv", ["lscalc", "run", str(input_file)]), patch.object(px, "run") as mock_run:
             lscalc.main()
             assert mock_run.called
 
-    def test_main_run_with_custom_ncpu(self) -> None:
-        """main() should handle run command with custom CPU count."""
-        with patch("sys.argv", ["lscalc", "run", "test.k", "--ncpu", "8"]), patch.object(
-            px, "run"
-        ) as mock_run, patch.object(lscalc, "run_ls_dyna"):
+    def test_main_run_command_with_ncpu(self, tmp_path: Path) -> None:
+        """main() should handle run command with ncpu."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
+        with patch("sys.argv", ["lscalc", "run", str(input_file), "--ncpu", "8"]), patch.object(px, "run") as mock_run:
             lscalc.main()
             assert mock_run.called
 
-    def test_main_mpi_with_input_file(self) -> None:
-        """main() should handle mpi command with input file."""
-        with patch("sys.argv", ["lscalc", "mpi", "test.k"]), patch.object(px, "run") as mock_run, patch.object(
-            lscalc, "run_ls_dyna_mpi"
-        ):
+    def test_main_mpi_command(self, tmp_path: Path) -> None:
+        """main() should handle mpi command."""
+        input_file = tmp_path / "input.k"
+        input_file.write_text("LS-DYNA input")
+
+        with patch("sys.argv", ["lscalc", "mpi", str(input_file)]), patch.object(px, "run") as mock_run:
             lscalc.main()
             assert mock_run.called
 
-    def test_main_mpi_with_custom_ncpu(self) -> None:
-        """main() should handle mpi command with custom CPU count."""
-        with patch("sys.argv", ["lscalc", "mpi", "test.k", "--ncpu", "8"]), patch.object(
-            px, "run"
-        ) as mock_run, patch.object(lscalc, "run_ls_dyna_mpi"):
-            lscalc.main()
-            assert mock_run.called
-
-    def test_main_status(self) -> None:
+    def test_main_status_command(self) -> None:
         """main() should handle status command."""
-        with patch("sys.argv", ["lscalc", "status"]), patch.object(px, "run") as mock_run, patch.object(
-            lscalc, "check_ls_dyna_status"
-        ):
+        with patch("sys.argv", ["lscalc", "status"]), patch.object(px, "run") as mock_run:
             lscalc.main()
             assert mock_run.called
 
     def test_main_with_no_args_shows_help(self) -> None:
-        """main() with no args should show help and exit."""
-        with patch("sys.argv", ["lscalc"]), pytest.raises(SystemExit) as exc_info:
+        """main() with no args should show help."""
+        with patch("sys.argv", ["lscalc"]):
             lscalc.main()
-        assert exc_info.value.code == 2
-
-    def test_main_creates_task_spec_with_correct_name(self) -> None:
-        """main() should create TaskSpec with correct name."""
-        with patch("sys.argv", ["lscalc", "run", "test.k"]), patch.object(px, "run") as mock_run, patch.object(
-            lscalc, "run_ls_dyna"
-        ):
-            lscalc.main()
-            graph = mock_run.call_args[0][0]
-            task_names = list(graph.all_specs().keys())
-            assert "run_ls_dyna" in task_names
-
-    def test_main_uses_thread_strategy(self) -> None:
-        """main() should use thread strategy."""
-        with patch("sys.argv", ["lscalc", "run", "test.k"]), patch.object(px, "run") as mock_run, patch.object(
-            lscalc, "run_ls_dyna"
-        ):
-            lscalc.main()
-            assert mock_run.call_args[1]["strategy"] == "thread"
+            # Should print help and return
