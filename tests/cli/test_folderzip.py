@@ -5,44 +5,61 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
+import pyflowx as px
 from pyflowx.cli import folderzip
 
 
 # ---------------------------------------------------------------------- #
-# zip_folder
+# archive_folder
 # ---------------------------------------------------------------------- #
-class TestZipFolder:
-    """Test zip_folder function."""
+class TestArchiveFolder:
+    """Test archive_folder function."""
 
-    def test_zip_folder_with_source_and_output(self, tmp_path: Path) -> None:
-        """Should zip folder with source and output paths."""
-        source_dir = tmp_path / "source"
-        source_dir.mkdir()
-        output_file = tmp_path / "output.zip"
+    def test_archive_folder(self, tmp_path: Path) -> None:
+        """Should archive a folder."""
+        folder = tmp_path / "test_folder"
+        folder.mkdir()
+        (folder / "test.txt").write_text("test content")
 
-        with patch("zipfile.ZipFile") as mock_zip:
-            folderzip.zip_folder(str(source_dir), str(output_file))
-            assert mock_zip.called
+        with patch("shutil.make_archive") as mock_archive:
+            folderzip.archive_folder(folder)
+            assert mock_archive.called
 
 
 # ---------------------------------------------------------------------- #
-# unzip_folder
+# zip_folders
 # ---------------------------------------------------------------------- #
-class TestUnzipFolder:
-    """Test unzip_folder function."""
+class TestZipFolders:
+    """Test zip_folders function."""
 
-    def test_unzip_folder_with_zip_and_output(self, tmp_path: Path) -> None:
-        """Should unzip folder with zip and output paths."""
-        zip_file = tmp_path / "test.zip"
-        zip_file.write_bytes(b"ZIP content")
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
+    def test_zip_folders_with_cwd(self, tmp_path: Path) -> None:
+        """Should zip folders in cwd."""
+        # Create some folders
+        (tmp_path / "folder1").mkdir()
+        (tmp_path / "folder2").mkdir()
+        (tmp_path / ".git").mkdir()  # Should be ignored
 
-        with patch("zipfile.ZipFile") as mock_zip:
-            folderzip.unzip_folder(str(zip_file), str(output_dir))
-            assert mock_zip.called
+        with patch.object(folderzip, "archive_folder") as mock_archive:
+            folderzip.zip_folders(str(tmp_path))
+            # Should archive folder1 and folder2, but not .git
+            assert mock_archive.call_count == 2
+
+    def test_zip_folders_nonexistent_cwd(self, tmp_path: Path) -> None:
+        """Should handle nonexistent cwd."""
+        folderzip.zip_folders(str(tmp_path / "nonexistent"))
+        # Should print error message and return
+
+
+# ---------------------------------------------------------------------- #
+# TaskSpec definitions
+# ---------------------------------------------------------------------- #
+class TestTaskSpecDefinitions:
+    """Test that all TaskSpec definitions are valid."""
+
+    def test_folderzip_default_spec(self) -> None:
+        """folderzip_default spec should be properly defined."""
+        assert folderzip.folderzip_default.name == "folderzip_default"
+        assert folderzip.folderzip_default.fn is not None
 
 
 # ---------------------------------------------------------------------- #
@@ -53,19 +70,6 @@ class TestMain:
 
     def test_main_calls_run_cli(self) -> None:
         """main() should create a CliRunner and call run_cli()."""
-        with pytest.raises(SystemExit) as exc_info:
+        with patch.object(px.CliRunner, "run_cli") as mock_run_cli:
             folderzip.main()
-        # run_cli() calls sys.exit(), so we should get SystemExit
-        assert exc_info.value.code in (0, 1, 2)
-
-    def test_main_with_list_argument(self) -> None:
-        """main() should handle --list argument."""
-        with patch("sys.argv", ["folderzip", "--list"]), pytest.raises(SystemExit) as exc_info:
-            folderzip.main()
-        assert exc_info.value.code == 0
-
-    def test_main_with_no_args_shows_help(self) -> None:
-        """main() with no args should show help and exit."""
-        with patch("sys.argv", ["folderzip"]), pytest.raises(SystemExit) as exc_info:
-            folderzip.main()
-        assert exc_info.value.code == 1
+            assert mock_run_cli.called

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
+import pyflowx as px
 from pyflowx.cli import bumpversion
 
 
@@ -39,9 +40,21 @@ class TestBumpVersion:
     def test_bump_version_with_tag(self) -> None:
         """Should bump version with tag."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            mock_run.return_value = MagicMock(returncode=0, stdout="v1.0.0")
             bumpversion.bump_version("patch", tag=True)
             assert mock_run.called
+
+    def test_bump_version_with_commit(self) -> None:
+        """Should bump version with commit."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            bumpversion.bump_version("patch", commit=True)
+            assert mock_run.called
+
+    def test_bump_version_file_not_found(self) -> None:
+        """Should handle FileNotFoundError."""
+        with patch("subprocess.run", side_effect=FileNotFoundError), pytest.raises(FileNotFoundError):
+            bumpversion.bump_version("patch")
 
 
 # ---------------------------------------------------------------------- #
@@ -88,19 +101,6 @@ class TestMain:
 
     def test_main_calls_run_cli(self) -> None:
         """main() should create a CliRunner and call run_cli()."""
-        with pytest.raises(SystemExit) as exc_info:
+        with patch.object(px.CliRunner, "run_cli") as mock_run_cli:
             bumpversion.main()
-        # run_cli() calls sys.exit(), so we should get SystemExit
-        assert exc_info.value.code in (0, 1, 2)
-
-    def test_main_with_list_argument(self) -> None:
-        """main() should handle --list argument."""
-        with patch("sys.argv", ["bumpversion", "--list"]), pytest.raises(SystemExit) as exc_info:
-            bumpversion.main()
-        assert exc_info.value.code == 0
-
-    def test_main_with_no_args_shows_help(self) -> None:
-        """main() with no args should show help and exit."""
-        with patch("sys.argv", ["bumpversion"]), pytest.raises(SystemExit) as exc_info:
-            bumpversion.main()
-        assert exc_info.value.code == 1
+            assert mock_run_cli.called

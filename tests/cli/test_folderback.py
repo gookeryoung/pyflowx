@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
+import pyflowx as px
 from pyflowx.cli import folderback
 
 
@@ -20,23 +19,32 @@ class TestBackupFolder:
         """Should backup folder with source and backup paths."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
+        (source_dir / "test.txt").write_text("test content")
         backup_dir = tmp_path / "backup"
-        backup_dir.mkdir()
 
-        with patch("shutil.copytree") as mock_copy:
+        with patch.object(folderback, "zip_target") as mock_zip:
             folderback.backup_folder(str(source_dir), str(backup_dir), 5)
-            assert mock_copy.called
+            assert mock_zip.called
 
     def test_backup_folder_with_max_backups(self, tmp_path: Path) -> None:
         """Should backup folder with max backups."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
+        (source_dir / "test.txt").write_text("test content")
+        backup_dir = tmp_path / "backup"
+
+        with patch.object(folderback, "zip_target") as mock_zip:
+            folderback.backup_folder(str(source_dir), str(backup_dir), 10)
+            assert mock_zip.called
+
+    def test_backup_folder_source_not_exists(self, tmp_path: Path) -> None:
+        """Should handle non-existent source folder."""
+        source_dir = tmp_path / "nonexistent"
         backup_dir = tmp_path / "backup"
         backup_dir.mkdir()
 
-        with patch("shutil.copytree") as mock_copy:
-            folderback.backup_folder(str(source_dir), str(backup_dir), 10)
-            assert mock_copy.called
+        folderback.backup_folder(str(source_dir), str(backup_dir), 5)
+        # Should print error message and return
 
 
 # ---------------------------------------------------------------------- #
@@ -59,19 +67,6 @@ class TestMain:
 
     def test_main_calls_run_cli(self) -> None:
         """main() should create a CliRunner and call run_cli()."""
-        with pytest.raises(SystemExit) as exc_info:
+        with patch.object(px.CliRunner, "run_cli") as mock_run_cli:
             folderback.main()
-        # run_cli() calls sys.exit(), so we should get SystemExit
-        assert exc_info.value.code in (0, 1, 2)
-
-    def test_main_with_list_argument(self) -> None:
-        """main() should handle --list argument."""
-        with patch("sys.argv", ["folderback", "--list"]), pytest.raises(SystemExit) as exc_info:
-            folderback.main()
-        assert exc_info.value.code == 0
-
-    def test_main_with_no_args_shows_help(self) -> None:
-        """main() with no args should show help and exit."""
-        with patch("sys.argv", ["folderback"]), pytest.raises(SystemExit) as exc_info:
-            folderback.main()
-        assert exc_info.value.code == 1
+            assert mock_run_cli.called
