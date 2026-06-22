@@ -58,33 +58,33 @@ class TestMain:
 
     def test_main_add_single_file(self) -> None:
         """main() should handle add command with single file."""
-        with patch("sys.argv", ["filedate", "add", "test.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "add", "test.txt"]), patch.object(px, "run") as mock_run, patch.object(
+            filedate, "process_files_date"
+        ):
             filedate.main()
             assert mock_run.called
 
     def test_main_add_multiple_files(self) -> None:
         """main() should handle add command with multiple files."""
-        with patch("sys.argv", ["filedate", "add", "test1.txt", "test2.txt", "test3.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "add", "test1.txt", "test2.txt", "test3.txt"]), patch.object(
+            px, "run"
+        ) as mock_run, patch.object(filedate, "process_files_date"):
             filedate.main()
             assert mock_run.called
 
     def test_main_clear_single_file(self) -> None:
         """main() should handle clear command with single file."""
-        with patch("sys.argv", ["filedate", "clear", "test.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "clear", "test.txt"]), patch.object(px, "run") as mock_run, patch.object(
+            filedate, "process_files_date"
+        ):
             filedate.main()
             assert mock_run.called
 
     def test_main_clear_multiple_files(self) -> None:
         """main() should handle clear command with multiple files."""
-        with patch("sys.argv", ["filedate", "clear", "test1.txt", "test2.txt", "test3.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "clear", "test1.txt", "test2.txt", "test3.txt"]), patch.object(
+            px, "run"
+        ) as mock_run, patch.object(filedate, "process_files_date"):
             filedate.main()
             assert mock_run.called
 
@@ -96,9 +96,9 @@ class TestMain:
 
     def test_main_creates_task_spec_with_correct_name(self) -> None:
         """main() should create TaskSpec with correct name."""
-        with patch("sys.argv", ["filedate", "add", "test.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "add", "test.txt"]), patch.object(px, "run") as mock_run, patch.object(
+            filedate, "process_files_date"
+        ):
             filedate.main()
             graph = mock_run.call_args[0][0]
             task_names = list(graph.all_specs().keys())
@@ -106,8 +106,8 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["filedate", "add", "test.txt"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(filedate, "process_files_date"):
+        with patch("sys.argv", ["filedate", "add", "test.txt"]), patch.object(px, "run") as mock_run, patch.object(
+            filedate, "process_files_date"
+        ):
             filedate.main()
             assert mock_run.call_args[1]["strategy"] == "thread"

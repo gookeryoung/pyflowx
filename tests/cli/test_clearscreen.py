@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-import pyflowx as px
 from pyflowx.cli import clearscreen
 from pyflowx.conditions import Constants
 
@@ -26,8 +25,7 @@ class TestClearScreen:
 
     def test_clear_screen_linux(self) -> None:
         """Should clear screen on Linux."""
-        with patch.object(Constants, "IS_WINDOWS", False), \
-             patch("os.system") as mock_system:
+        with patch.object(Constants, "IS_WINDOWS", False), patch("os.system") as mock_system:
             clearscreen.clear_screen()
             assert mock_system.called
 

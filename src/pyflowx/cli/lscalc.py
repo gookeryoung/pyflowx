@@ -158,13 +158,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "run":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("run_ls_dyna", fn=run_ls_dyna, args=(args.input_file,), kwargs={"ncpu": args.ncpu})
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("run_ls_dyna", fn=run_ls_dyna, args=(args.input_file,), kwargs={"ncpu": args.ncpu})]
+        )
     elif args.command == "mpi":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("run_ls_dyna_mpi", fn=run_ls_dyna_mpi, args=(args.input_file,), kwargs={"ncpu": args.ncpu})
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("run_ls_dyna_mpi", fn=run_ls_dyna_mpi, args=(args.input_file,), kwargs={"ncpu": args.ncpu})]
+        )
     elif args.command == "status":
         graph = px.Graph.from_specs([px.TaskSpec("check_ls_dyna_status", fn=check_ls_dyna_status)])
     else:

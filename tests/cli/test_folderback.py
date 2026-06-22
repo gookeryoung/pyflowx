@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 
-import pyflowx as px
 from pyflowx.cli import folderback
 
 

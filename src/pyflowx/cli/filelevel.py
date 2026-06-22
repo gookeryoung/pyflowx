@@ -126,9 +126,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "set":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("process_files_level", fn=process_files_level, args=([Path(f) for f in args.files], args.level))
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "process_files_level", fn=process_files_level, args=([Path(f) for f in args.files], args.level)
+                )
+            ]
+        )
     else:
         parser.print_help()
         return

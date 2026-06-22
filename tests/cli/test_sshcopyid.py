@@ -42,7 +42,7 @@ class TestSshCopyId:
             mock_client.connect.return_value = None
             mock_client.exec_command.return_value = (MagicMock(), MagicMock(), MagicMock())
 
-            result = sshcopyid.ssh_copy_id("localhost", "user", "password", port=2222)
+            sshcopyid.ssh_copy_id("localhost", "user", "password", port=2222)
             # Verify that connect was called with custom port
             mock_client.connect.assert_called_once()
             call_args = mock_client.connect.call_args

@@ -136,13 +136,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "mirror":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("set_rust_mirror", fn=set_rust_mirror, args=(args.name,), verbose=True)
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("set_rust_mirror", fn=set_rust_mirror, args=(args.name,), verbose=True)]
+        )
     elif args.command == "install":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("install_rust", cmd=["rustup", "toolchain", "install", args.version], verbose=True)
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("install_rust", cmd=["rustup", "toolchain", "install", args.version], verbose=True)]
+        )
     else:
         parser.print_help()
         return

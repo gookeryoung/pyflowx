@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -97,9 +97,8 @@ class TestInstallRust:
 
     def test_install_rust_file_not_found(self) -> None:
         """Should raise FileNotFoundError when rustup not found."""
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            with pytest.raises(FileNotFoundError):
-                envrs.install_rust("stable")
+        with patch("subprocess.run", side_effect=FileNotFoundError), pytest.raises(FileNotFoundError):
+            envrs.install_rust("stable")
 
     def test_install_rust_prints_message(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Should print installation message."""
@@ -118,61 +117,57 @@ class TestMain:
 
     def test_main_mirror_aliyun(self) -> None:
         """main() should handle mirror aliyun command."""
-        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             assert mock_run.called
 
     def test_main_mirror_ustc(self) -> None:
         """main() should handle mirror ustc command."""
-        with patch("sys.argv", ["envrs", "mirror", "ustc"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror", "ustc"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             assert mock_run.called
 
     def test_main_mirror_tsinghua(self) -> None:
         """main() should handle mirror tsinghua command."""
-        with patch("sys.argv", ["envrs", "mirror", "tsinghua"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror", "tsinghua"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             assert mock_run.called
 
     def test_main_mirror_default(self) -> None:
         """main() should use default mirror when not specified."""
-        with patch("sys.argv", ["envrs", "mirror"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             assert mock_run.called
 
     def test_main_install_stable(self) -> None:
         """main() should handle install stable command."""
-        with patch("sys.argv", ["envrs", "install", "stable"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["envrs", "install", "stable"]), patch.object(px, "run") as mock_run:
             envrs.main()
             assert mock_run.called
 
     def test_main_install_nightly(self) -> None:
         """main() should handle install nightly command."""
-        with patch("sys.argv", ["envrs", "install", "nightly"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["envrs", "install", "nightly"]), patch.object(px, "run") as mock_run:
             envrs.main()
             assert mock_run.called
 
     def test_main_install_beta(self) -> None:
         """main() should handle install beta command."""
-        with patch("sys.argv", ["envrs", "install", "beta"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["envrs", "install", "beta"]), patch.object(px, "run") as mock_run:
             envrs.main()
             assert mock_run.called
 
     def test_main_install_default(self) -> None:
         """main() should use default version when not specified."""
-        with patch("sys.argv", ["envrs", "install"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["envrs", "install"]), patch.object(px, "run") as mock_run:
             envrs.main()
             assert mock_run.called
 
@@ -196,9 +191,9 @@ class TestMain:
 
     def test_main_creates_task_spec_with_verbose(self) -> None:
         """main() should create TaskSpec with verbose=True."""
-        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             graph = mock_run.call_args[0][0]
             specs = graph.all_specs()
@@ -207,8 +202,8 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envrs, "set_rust_mirror"):
+        with patch("sys.argv", ["envrs", "mirror", "aliyun"]), patch.object(px, "run") as mock_run, patch.object(
+            envrs, "set_rust_mirror"
+        ):
             envrs.main()
             assert mock_run.call_args[1]["strategy"] == "thread"

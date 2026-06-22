@@ -97,7 +97,7 @@ class TestPipFreeze:
             mock_run.return_value = MagicMock(stdout="numpy==1.0.0\npandas==2.0.0\n", returncode=0)
             piptool.pip_freeze()
             # Should create requirements.txt
-            req_file = tmp_path / "requirements.txt"
+            tmp_path / "requirements.txt"
             # Note: The actual implementation might write to current directory
 
     def test_pip_freeze_calls_subprocess(self) -> None:

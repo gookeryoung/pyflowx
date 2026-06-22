@@ -18,7 +18,7 @@ from pyflowx.conditions import Constants
 class TestTakeScreenshotFull:
     """Test take_screenshot_full function."""
 
-    def test_take_screenshot_full_windows(self, tmp_path: Path) -> None:
+    def test_take_screenshot_full_windows(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Should take full screenshot on Windows."""
         if Constants.IS_WINDOWS:
             with patch("subprocess.run") as mock_run:
@@ -26,7 +26,7 @@ class TestTakeScreenshotFull:
                 screenshot.take_screenshot_full(filename="test.png")
                 assert mock_run.called
 
-    def test_take_screenshot_full_linux(self, tmp_path: Path) -> None:
+    def test_take_screenshot_full_linux(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Should take full screenshot on Linux."""
         with patch.object(Constants, "IS_WINDOWS", False), patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
@@ -54,7 +54,7 @@ class TestTakeScreenshotFull:
 class TestTakeScreenshotArea:
     """Test take_screenshot_area function."""
 
-    def test_take_screenshot_area_windows(self, tmp_path: Path) -> None:
+    def test_take_screenshot_area_windows(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Should take area screenshot on Windows."""
         if Constants.IS_WINDOWS:
             with patch("subprocess.run") as mock_run:
@@ -62,7 +62,7 @@ class TestTakeScreenshotArea:
                 screenshot.take_screenshot_area(filename="test.png")
                 assert mock_run.called
 
-    def test_take_screenshot_area_linux(self, tmp_path: Path) -> None:
+    def test_take_screenshot_area_linux(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Should take area screenshot on Linux."""
         with patch.object(Constants, "IS_WINDOWS", False), patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)

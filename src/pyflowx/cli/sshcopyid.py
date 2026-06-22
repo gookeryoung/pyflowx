@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -108,12 +109,14 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=30, help="SSH 操作超时秒数 (默认: 30)")
     args = parser.parse_args()
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec(
-            "ssh_deploy",
-            fn=ssh_copy_id,
-            args=(args.hostname, args.username, args.password),
-            kwargs={"port": args.port, "keypath": args.keypath, "timeout": args.timeout},
-        )
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec(
+                "ssh_deploy",
+                fn=ssh_copy_id,
+                args=(args.hostname, args.username, args.password),
+                kwargs={"port": args.port, "keypath": args.keypath, "timeout": args.timeout},
+            )
+        ]
+    )
     px.run(graph, strategy="thread")

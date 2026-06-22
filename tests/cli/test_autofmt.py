@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,8 +46,7 @@ class TestSyncPyprojectConfig:
 
     def test_sync_pyproject_config_creates_file(self, tmp_path: Path) -> None:
         """Should create pyproject.toml if it doesn't exist."""
-        with patch.object(Path, "exists", return_value=False), \
-             patch.object(Path, "write_text") as mock_write:
+        with patch.object(Path, "exists", return_value=False), patch.object(Path, "write_text") as mock_write:
             autofmt.sync_pyproject_config(tmp_path)
             # Should create pyproject.toml
             assert mock_write.called
@@ -57,9 +56,9 @@ class TestSyncPyprojectConfig:
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text("[tool.ruff]\n")
 
-        with patch.object(Path, "exists", return_value=True), \
-             patch.object(Path, "read_text", return_value="[tool.ruff]\n"), \
-             patch.object(Path, "write_text") as mock_write:
+        with patch.object(Path, "exists", return_value=True), patch.object(
+            Path, "read_text", return_value="[tool.ruff]\n"
+        ), patch.object(Path, "write_text") as mock_write:
             autofmt.sync_pyproject_config(tmp_path)
             # Should update pyproject.toml
             assert mock_write.called
@@ -96,8 +95,7 @@ class TestMain:
 
     def test_main_fmt_default_target(self) -> None:
         """main() should handle fmt with default target."""
-        with patch("sys.argv", ["autofmt", "fmt"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "fmt"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -109,8 +107,7 @@ class TestMain:
 
     def test_main_fmt_custom_target(self) -> None:
         """main() should handle fmt with custom target."""
-        with patch("sys.argv", ["autofmt", "fmt", "--target", "src"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "fmt", "--target", "src"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -122,8 +119,7 @@ class TestMain:
 
     def test_main_lint_default_target(self) -> None:
         """main() should handle lint with default target."""
-        with patch("sys.argv", ["autofmt", "lint"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "lint"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -134,8 +130,7 @@ class TestMain:
 
     def test_main_lint_with_fix(self) -> None:
         """main() should handle lint with fix."""
-        with patch("sys.argv", ["autofmt", "lint", "--fix"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "lint", "--fix"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -148,40 +143,39 @@ class TestMain:
 
     def test_main_lint_custom_target(self) -> None:
         """main() should handle lint with custom target."""
-        with patch("sys.argv", ["autofmt", "lint", "--target", "src"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "lint", "--target", "src"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.called
 
     def test_main_doc_default_root(self) -> None:
         """main() should handle doc with default root."""
-        with patch("sys.argv", ["autofmt", "doc"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(autofmt, "auto_add_docstrings"):
+        with patch("sys.argv", ["autofmt", "doc"]), patch.object(px, "run") as mock_run, patch.object(
+            autofmt, "auto_add_docstrings"
+        ):
             autofmt.main()
             assert mock_run.called
 
     def test_main_doc_custom_root(self) -> None:
         """main() should handle doc with custom root."""
-        with patch("sys.argv", ["autofmt", "doc", "--root-dir", "src"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(autofmt, "auto_add_docstrings"):
+        with patch("sys.argv", ["autofmt", "doc", "--root-dir", "src"]), patch.object(
+            px, "run"
+        ) as mock_run, patch.object(autofmt, "auto_add_docstrings"):
             autofmt.main()
             assert mock_run.called
 
     def test_main_sync_default_root(self) -> None:
         """main() should handle sync with default root."""
-        with patch("sys.argv", ["autofmt", "sync"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(autofmt, "sync_pyproject_config"):
+        with patch("sys.argv", ["autofmt", "sync"]), patch.object(px, "run") as mock_run, patch.object(
+            autofmt, "sync_pyproject_config"
+        ):
             autofmt.main()
             assert mock_run.called
 
     def test_main_sync_custom_root(self) -> None:
         """main() should handle sync with custom root."""
-        with patch("sys.argv", ["autofmt", "sync", "--root-dir", "src"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(autofmt, "sync_pyproject_config"):
+        with patch("sys.argv", ["autofmt", "sync", "--root-dir", "src"]), patch.object(
+            px, "run"
+        ) as mock_run, patch.object(autofmt, "sync_pyproject_config"):
             autofmt.main()
             assert mock_run.called
 
@@ -193,8 +187,7 @@ class TestMain:
 
     def test_main_creates_task_specs_with_verbose(self) -> None:
         """main() should create TaskSpecs with verbose=True."""
-        with patch("sys.argv", ["autofmt", "fmt"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "fmt"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             graph = mock_run.call_args[0][0]
             specs = graph.all_specs()
@@ -203,7 +196,6 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["autofmt", "fmt"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["autofmt", "fmt"]), patch.object(px, "run") as mock_run:
             autofmt.main()
             assert mock_run.call_args[1]["strategy"] == "thread"

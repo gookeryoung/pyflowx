@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -59,9 +59,9 @@ class TestMain:
 
     def test_main_with_single_command(self) -> None:
         """main() should handle single command argument."""
-        with patch("sys.argv", ["which", "python"]), \
-             patch.object(shutil, "which", return_value="/usr/bin/python"), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["which", "python"]), patch.object(
+            shutil, "which", return_value="/usr/bin/python"
+        ), patch.object(px, "run") as mock_run:
             which.main()
             # Should create a graph with one task
             assert mock_run.called
@@ -70,9 +70,9 @@ class TestMain:
 
     def test_main_with_multiple_commands(self) -> None:
         """main() should handle multiple command arguments."""
-        with patch("sys.argv", ["which", "python", "pip", "node"]), \
-             patch.object(shutil, "which", return_value="/usr/bin/cmd"), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["which", "python", "pip", "node"]), patch.object(
+            shutil, "which", return_value="/usr/bin/cmd"
+        ), patch.object(px, "run") as mock_run:
             which.main()
             # Should create a graph with three tasks
             assert mock_run.called
@@ -87,9 +87,9 @@ class TestMain:
 
     def test_main_creates_task_specs_with_correct_names(self) -> None:
         """main() should create TaskSpecs with correct names."""
-        with patch("sys.argv", ["which", "git", "npm"]), \
-             patch.object(shutil, "which", return_value="/usr/bin/cmd"), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["which", "git", "npm"]), patch.object(
+            shutil, "which", return_value="/usr/bin/cmd"
+        ), patch.object(px, "run") as mock_run:
             which.main()
             graph = mock_run.call_args[0][0]
             # Check that task names are correct
@@ -99,8 +99,8 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["which", "python"]), \
-             patch.object(shutil, "which", return_value="/usr/bin/python"), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["which", "python"]), patch.object(
+            shutil, "which", return_value="/usr/bin/python"
+        ), patch.object(px, "run") as mock_run:
             which.main()
             assert mock_run.call_args[1]["strategy"] == "thread"

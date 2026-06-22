@@ -113,23 +113,27 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "add":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "process_files_date",
-                fn=process_files_date,
-                args=([Path(f) for f in args.files],),
-                kwargs={"clear": False},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "process_files_date",
+                    fn=process_files_date,
+                    args=([Path(f) for f in args.files],),
+                    kwargs={"clear": False},
+                )
+            ]
+        )
     elif args.command == "clear":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "process_files_date",
-                fn=process_files_date,
-                args=([Path(f) for f in args.files],),
-                kwargs={"clear": True},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "process_files_date",
+                    fn=process_files_date,
+                    args=([Path(f) for f in args.files],),
+                    kwargs={"clear": True},
+                )
+            ]
+        )
     else:
         parser.print_help()
         return

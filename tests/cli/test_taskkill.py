@@ -19,8 +19,7 @@ class TestMain:
 
     def test_main_with_single_process(self) -> None:
         """main() should handle single process argument."""
-        with patch("sys.argv", ["taskkill", "chrome.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(px, "run") as mock_run:
             taskkill.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -28,8 +27,9 @@ class TestMain:
 
     def test_main_with_multiple_processes(self) -> None:
         """main() should handle multiple process arguments."""
-        with patch("sys.argv", ["taskkill", "chrome.exe", "python.exe", "node.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe", "python.exe", "node.exe"]), patch.object(
+            px, "run"
+        ) as mock_run:
             taskkill.main()
             assert mock_run.called
             graph = mock_run.call_args[0][0]
@@ -43,8 +43,7 @@ class TestMain:
 
     def test_main_creates_task_specs_with_correct_names(self) -> None:
         """main() should create TaskSpecs with correct names."""
-        with patch("sys.argv", ["taskkill", "chrome.exe", "python.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe", "python.exe"]), patch.object(px, "run") as mock_run:
             taskkill.main()
             graph = mock_run.call_args[0][0]
             task_names = list(graph.all_specs().keys())
@@ -53,16 +52,14 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["taskkill", "chrome.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(px, "run") as mock_run:
             taskkill.main()
             assert mock_run.call_args[1]["strategy"] == "thread"
 
     def test_main_windows_command_format(self) -> None:
         """main() should use Windows command format on Windows."""
         if Constants.IS_WINDOWS:
-            with patch("sys.argv", ["taskkill", "chrome.exe"]), \
-                 patch.object(px, "run") as mock_run:
+            with patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(px, "run") as mock_run:
                 taskkill.main()
                 graph = mock_run.call_args[0][0]
                 specs = graph.all_specs()
@@ -74,9 +71,9 @@ class TestMain:
 
     def test_main_linux_command_format(self) -> None:
         """main() should use Linux command format on Linux."""
-        with patch.object(Constants, "IS_WINDOWS", False), \
-             patch("sys.argv", ["taskkill", "chrome.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch.object(Constants, "IS_WINDOWS", False), patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(
+            px, "run"
+        ) as mock_run:
             taskkill.main()
             graph = mock_run.call_args[0][0]
             specs = graph.all_specs()
@@ -87,8 +84,7 @@ class TestMain:
 
     def test_main_tasks_have_verbose_true(self) -> None:
         """main() should create tasks with verbose=True."""
-        with patch("sys.argv", ["taskkill", "chrome.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(px, "run") as mock_run:
             taskkill.main()
             graph = mock_run.call_args[0][0]
             specs = graph.all_specs()
@@ -97,8 +93,7 @@ class TestMain:
 
     def test_main_adds_wildcard_to_process_name(self) -> None:
         """main() should add wildcard to process name."""
-        with patch("sys.argv", ["taskkill", "chrome.exe"]), \
-             patch.object(px, "run") as mock_run:
+        with patch("sys.argv", ["taskkill", "chrome.exe"]), patch.object(px, "run") as mock_run:
             taskkill.main()
             graph = mock_run.call_args[0][0]
             specs = graph.all_specs()

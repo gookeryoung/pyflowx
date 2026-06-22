@@ -346,7 +346,7 @@ def pdf_repair(input_path: Path, output_path: Path) -> None:
 # ============================================================================
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0912
     """PDF 工具主函数."""
     parser = argparse.ArgumentParser(
         description="PDFTool - PDF 文件工具集",
@@ -436,79 +436,87 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "m":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_merge", fn=pdf_merge, args=([Path(p) for p in args.inputs], Path(args.output)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_merge", fn=pdf_merge, args=([Path(p) for p in args.inputs], Path(args.output)))]
+        )
     elif args.command == "s":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_split", fn=pdf_split, args=(Path(args.input), Path(args.output_dir)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_split", fn=pdf_split, args=(Path(args.input), Path(args.output_dir)))]
+        )
     elif args.command == "c":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_compress", fn=pdf_compress, args=(Path(args.input), Path(args.output)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_compress", fn=pdf_compress, args=(Path(args.input), Path(args.output)))]
+        )
     elif args.command == "e":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_encrypt", fn=pdf_encrypt, args=(Path(args.input), Path(args.output), args.password))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_encrypt", fn=pdf_encrypt, args=(Path(args.input), Path(args.output), args.password))]
+        )
     elif args.command == "d":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_decrypt", fn=pdf_decrypt, args=(Path(args.input), Path(args.output), args.password))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_decrypt", fn=pdf_decrypt, args=(Path(args.input), Path(args.output), args.password))]
+        )
     elif args.command == "xt":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_extract_text", fn=pdf_extract_text, args=(Path(args.input), Path(args.output)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_extract_text", fn=pdf_extract_text, args=(Path(args.input), Path(args.output)))]
+        )
     elif args.command == "xi":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_extract_images", fn=pdf_extract_images, args=(Path(args.input), Path(args.output_dir)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_extract_images", fn=pdf_extract_images, args=(Path(args.input), Path(args.output_dir)))]
+        )
     elif args.command == "w":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pdf_watermark",
-                fn=pdf_add_watermark,
-                args=(Path(args.input), Path(args.output)),
-                kwargs={"text": args.text},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pdf_watermark",
+                    fn=pdf_add_watermark,
+                    args=(Path(args.input), Path(args.output)),
+                    kwargs={"text": args.text},
+                )
+            ]
+        )
     elif args.command == "r":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pdf_rotate",
-                fn=pdf_rotate,
-                args=(Path(args.input), Path(args.output)),
-                kwargs={"rotation": args.rotation},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pdf_rotate",
+                    fn=pdf_rotate,
+                    args=(Path(args.input), Path(args.output)),
+                    kwargs={"rotation": args.rotation},
+                )
+            ]
+        )
     elif args.command == "crop":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pdf_crop",
-                fn=pdf_crop,
-                args=(Path(args.input), Path(args.output)),
-                kwargs={"margins": (args.left, args.top, args.right, args.bottom)},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pdf_crop",
+                    fn=pdf_crop,
+                    args=(Path(args.input), Path(args.output)),
+                    kwargs={"margins": (args.left, args.top, args.right, args.bottom)},
+                )
+            ]
+        )
     elif args.command == "i":
         graph = px.Graph.from_specs([px.TaskSpec("pdf_info", fn=pdf_info, args=(Path(args.input),))])
     elif args.command == "ocr":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_ocr", fn=pdf_ocr, args=(Path(args.input), Path(args.output)), kwargs={"lang": args.lang})
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_ocr", fn=pdf_ocr, args=(Path(args.input), Path(args.output)), kwargs={"lang": args.lang})]
+        )
     elif args.command == "img":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pdf_to_images",
-                fn=pdf_to_images,
-                args=(Path(args.input), Path(args.output_dir)),
-                kwargs={"dpi": args.dpi},
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pdf_to_images",
+                    fn=pdf_to_images,
+                    args=(Path(args.input), Path(args.output_dir)),
+                    kwargs={"dpi": args.dpi},
+                )
+            ]
+        )
     elif args.command == "repair":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("pdf_repair", fn=pdf_repair, args=(Path(args.input), Path(args.output)))
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("pdf_repair", fn=pdf_repair, args=(Path(args.input), Path(args.output)))]
+        )
     else:
         parser.print_help()
         return

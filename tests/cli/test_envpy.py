@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,25 +57,25 @@ class TestMain:
 
     def test_main_mirror_tsinghua(self) -> None:
         """main() should handle mirror tsinghua command."""
-        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envpy, "set_pip_mirror"):
+        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), patch.object(px, "run") as mock_run, patch.object(
+            envpy, "set_pip_mirror"
+        ):
             envpy.main()
             assert mock_run.called
 
     def test_main_mirror_aliyun(self) -> None:
         """main() should handle mirror aliyun command."""
-        with patch("sys.argv", ["envpy", "mirror", "aliyun"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envpy, "set_pip_mirror"):
+        with patch("sys.argv", ["envpy", "mirror", "aliyun"]), patch.object(px, "run") as mock_run, patch.object(
+            envpy, "set_pip_mirror"
+        ):
             envpy.main()
             assert mock_run.called
 
     def test_main_mirror_with_token(self) -> None:
         """main() should handle mirror with token."""
-        with patch("sys.argv", ["envpy", "mirror", "tsinghua", "--token", "test_token"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envpy, "set_pip_mirror"):
+        with patch("sys.argv", ["envpy", "mirror", "tsinghua", "--token", "test_token"]), patch.object(
+            px, "run"
+        ) as mock_run, patch.object(envpy, "set_pip_mirror"):
             envpy.main()
             assert mock_run.called
 
@@ -94,9 +93,9 @@ class TestMain:
 
     def test_main_creates_task_spec_with_correct_name(self) -> None:
         """main() should create TaskSpec with correct name."""
-        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envpy, "set_pip_mirror"):
+        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), patch.object(px, "run") as mock_run, patch.object(
+            envpy, "set_pip_mirror"
+        ):
             envpy.main()
             graph = mock_run.call_args[0][0]
             task_names = list(graph.all_specs().keys())
@@ -104,8 +103,8 @@ class TestMain:
 
     def test_main_uses_thread_strategy(self) -> None:
         """main() should use thread strategy."""
-        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), \
-             patch.object(px, "run") as mock_run, \
-             patch.object(envpy, "set_pip_mirror"):
+        with patch("sys.argv", ["envpy", "mirror", "tsinghua"]), patch.object(px, "run") as mock_run, patch.object(
+            envpy, "set_pip_mirror"
+        ):
             envpy.main()
             assert mock_run.call_args[1]["strategy"] == "thread"

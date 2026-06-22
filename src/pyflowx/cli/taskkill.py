@@ -31,7 +31,10 @@ def main() -> None:
     else:
         cmd = ["pkill", "-f"]
 
-    graph = px.Graph.from_specs([
-        px.TaskSpec(f"kill_{proc_name}", cmd=[*cmd, f"{proc_name}*"], verbose=True) for proc_name in args.process_names
-    ])
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec(f"kill_{proc_name}", cmd=[*cmd, f"{proc_name}*"], verbose=True)
+            for proc_name in args.process_names
+        ]
+    )
     px.run(graph, strategy="thread")

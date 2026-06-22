@@ -261,24 +261,20 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "fmt":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("ruff_format", cmd=["ruff", "format", args.target], verbose=True)
-        ])
+        graph = px.Graph.from_specs([px.TaskSpec("ruff_format", cmd=["ruff", "format", args.target], verbose=True)])
     elif args.command == "lint":
         cmd = ["ruff", "check", args.target]
         if args.fix:
             cmd.extend(["--fix", "--unsafe-fixes"])
-        graph = px.Graph.from_specs([
-            px.TaskSpec("ruff_check", cmd=cmd, verbose=True)
-        ])
+        graph = px.Graph.from_specs([px.TaskSpec("ruff_check", cmd=cmd, verbose=True)])
     elif args.command == "doc":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("auto_docstring", fn=auto_add_docstrings, args=(Path(args.root_dir),), verbose=True)
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("auto_docstring", fn=auto_add_docstrings, args=(Path(args.root_dir),), verbose=True)]
+        )
     elif args.command == "sync":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("sync_config", fn=sync_pyproject_config, args=(Path(args.root_dir),), verbose=True)
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("sync_config", fn=sync_pyproject_config, args=(Path(args.root_dir),), verbose=True)]
+        )
     else:
         parser.print_help()
         return

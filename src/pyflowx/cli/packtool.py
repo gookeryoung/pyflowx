@@ -291,45 +291,55 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "src":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pack_source",
-                fn=pack_source,
-                args=(Path(args.project_dir), Path(args.output_dir)),
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pack_source",
+                    fn=pack_source,
+                    args=(Path(args.project_dir), Path(args.output_dir)),
+                )
+            ]
+        )
     elif args.command == "deps":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pack_deps",
-                fn=pack_dependencies,
-                args=(Path(args.lib_dir), args.dependencies),
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pack_deps",
+                    fn=pack_dependencies,
+                    args=(Path(args.lib_dir), args.dependencies),
+                )
+            ]
+        )
     elif args.command == "wheel":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "pack_wheel",
-                fn=pack_wheel,
-                args=(Path(args.project_dir), Path(args.output_dir)),
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "pack_wheel",
+                    fn=pack_wheel,
+                    args=(Path(args.project_dir), Path(args.output_dir)),
+                )
+            ]
+        )
     elif args.command == "embed":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "install_embed",
-                fn=install_embed_python,
-                args=(args.version, Path(args.output_dir)),
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "install_embed",
+                    fn=install_embed_python,
+                    args=(args.version, Path(args.output_dir)),
+                )
+            ]
+        )
     elif args.command == "zip":
-        graph = px.Graph.from_specs([
-            px.TaskSpec(
-                "create_zip",
-                fn=create_zip_package,
-                args=(Path(args.source_dir), Path(args.output_file)),
-            )
-        ])
+        graph = px.Graph.from_specs(
+            [
+                px.TaskSpec(
+                    "create_zip",
+                    fn=create_zip_package,
+                    args=(Path(args.source_dir), Path(args.output_file)),
+                )
+            ]
+        )
     elif args.command == "clean":
         graph = px.Graph.from_specs([px.TaskSpec("clean_build", fn=clean_build_dir, args=(Path(DEFAULT_BUILD_DIR),))])
     else:

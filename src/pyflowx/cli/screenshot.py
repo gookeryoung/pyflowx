@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -148,13 +149,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "full":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("screenshot_full", fn=take_screenshot_full, kwargs={"filename": args.filename})
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("screenshot_full", fn=take_screenshot_full, kwargs={"filename": args.filename})]
+        )
     elif args.command == "area":
-        graph = px.Graph.from_specs([
-            px.TaskSpec("screenshot_area", fn=take_screenshot_area, kwargs={"filename": args.filename})
-        ])
+        graph = px.Graph.from_specs(
+            [px.TaskSpec("screenshot_area", fn=take_screenshot_area, kwargs={"filename": args.filename})]
+        )
     else:
         parser.print_help()
         return
