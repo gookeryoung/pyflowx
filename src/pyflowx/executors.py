@@ -443,7 +443,7 @@ def run(
     *,
     max_workers: int | None = None,
     dry_run: bool = False,
-    verbose: bool = True,
+    verbose: bool = False,
     on_event: EventCallback | None = None,
     state: StateBackend | None = None,
 ) -> RunReport:
