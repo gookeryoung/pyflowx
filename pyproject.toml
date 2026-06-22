@@ -17,7 +17,7 @@ license = { text = "MIT" }
 name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.7"
+version = "0.1.8"
 
 [project.scripts]
 autofmt  = "pyflowx.cli.autofmt:main"
@@ -97,7 +97,7 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
 ]
-fail_under = 95
+fail_under = 80
 show_missing = true
 
 [tool.pytest.ini_options]

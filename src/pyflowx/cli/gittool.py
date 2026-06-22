@@ -21,6 +21,7 @@ EXCLUDE_DIRS = [
     ".venv",
     ".git",
     ".tox",
+    ".pytest_cache",
     "node_modules",
 ]
 EXCLUDE_CMDS = [arg for d in EXCLUDE_DIRS for arg in ["-e", d]]
