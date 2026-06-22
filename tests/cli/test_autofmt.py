@@ -22,6 +22,15 @@ class TestFormatWithRuff:
             autofmt.format_with_ruff(tmp_path, fix=True)
             assert mock_run.called
 
+    def test_format_with_ruff_no_fix(self, tmp_path: Path) -> None:
+        """Should format with ruff without fix."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            autofmt.format_with_ruff(tmp_path, fix=False)
+            # Should not include --fix flag
+            call_args = mock_run.call_args[0][0]
+            assert "--fix" not in call_args
+
 
 # ---------------------------------------------------------------------- #
 # lint_with_ruff
@@ -35,6 +44,15 @@ class TestLintWithRuff:
             mock_run.return_value = MagicMock(returncode=0)
             autofmt.lint_with_ruff(tmp_path, fix=True)
             assert mock_run.called
+
+    def test_lint_with_ruff_no_fix(self, tmp_path: Path) -> None:
+        """Should lint with ruff without fix."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            autofmt.lint_with_ruff(tmp_path, fix=False)
+            # Should not include --fix flag
+            call_args = mock_run.call_args[0][0]
+            assert "--fix" not in call_args
 
 
 # ---------------------------------------------------------------------- #
@@ -51,14 +69,63 @@ class TestAddDocstring:
         result = autofmt.add_docstring(py_file, '"""Test module."""')
         assert result is True
 
-    def test_add_docstring_skips_non_python_files(self, tmp_path: Path) -> None:
-        """Should skip non-Python files."""
-        txt_file = tmp_path / "test.txt"
-        txt_file.write_text("test content")
+    def test_add_docstring_skips_files_with_docstring(self, tmp_path: Path) -> None:
+        """Should skip files that already have docstring."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text('"""Existing docstring."""\ndef test():\n    pass\n')
 
-        result = autofmt.add_docstring(txt_file, '"""Test."""')
-        # Should return False for non-Python files
+        result = autofmt.add_docstring(py_file, '"""New docstring."""')
         assert result is False
+
+    def test_add_docstring_empty_file(self, tmp_path: Path) -> None:
+        """Should handle empty file."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("")
+
+        result = autofmt.add_docstring(py_file, '"""Test module."""')
+        # Should handle empty file
+        assert result is True
+
+
+# ---------------------------------------------------------------------- #
+# generate_module_docstring
+# ---------------------------------------------------------------------- #
+class TestGenerateModuleDocstring:
+    """Test generate_module_docstring function."""
+
+    def test_generate_module_docstring_basic(self, tmp_path: Path) -> None:
+        """Should generate basic docstring."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("def test():\n    pass\n")
+
+        result = autofmt.generate_module_docstring(py_file)
+        # Should contain "Tests for" since stem contains "test"
+        assert "Tests for" in result
+
+    def test_generate_module_docstring_with_package(self, tmp_path: Path) -> None:
+        """Should generate docstring for package."""
+        py_file = tmp_path / "mypackage" / "test.py"
+        py_file.parent.mkdir(parents=True)
+        py_file.write_text("def test():\n    pass\n")
+
+        result = autofmt.generate_module_docstring(py_file)
+        assert "mypackage" in result
+
+    def test_generate_module_docstring_cli(self, tmp_path: Path) -> None:
+        """Should generate docstring for CLI module."""
+        py_file = tmp_path / "cli.py"
+        py_file.write_text("def test():\n    pass\n")
+
+        result = autofmt.generate_module_docstring(py_file)
+        assert "Command-line interface" in result
+
+    def test_generate_module_docstring_util(self, tmp_path: Path) -> None:
+        """Should generate docstring for utility module."""
+        py_file = tmp_path / "utils.py"
+        py_file.write_text("def test():\n    pass\n")
+
+        result = autofmt.generate_module_docstring(py_file)
+        assert "Utility functions" in result
 
 
 # ---------------------------------------------------------------------- #
@@ -75,6 +142,24 @@ class TestAutoAddDocstrings:
         with patch.object(autofmt, "add_docstring", return_value=True):
             count = autofmt.auto_add_docstrings(tmp_path)
             assert count >= 0
+
+    def test_auto_add_docstrings_skips_ignored(self, tmp_path: Path) -> None:
+        """Should skip ignored directories."""
+        py_file = tmp_path / "__pycache__" / "test.py"
+        py_file.parent.mkdir()
+        py_file.write_text("def test():\n    pass\n")
+
+        count = autofmt.auto_add_docstrings(tmp_path)
+        # Should skip __pycache__
+        assert count == 0
+
+    def test_auto_add_docstrings_no_files(self, tmp_path: Path) -> None:
+        """Should handle no Python files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("test content")
+
+        count = autofmt.auto_add_docstrings(tmp_path)
+        assert count == 0
 
 
 # ---------------------------------------------------------------------- #

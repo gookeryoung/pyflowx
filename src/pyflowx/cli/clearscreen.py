@@ -10,10 +10,6 @@ import subprocess
 import pyflowx as px
 from pyflowx.conditions import Constants
 
-# ============================================================================
-# 辅助函数
-# ============================================================================
-
 
 def clear_screen() -> None:
     """使用系统命令清屏."""
@@ -23,7 +19,6 @@ def clear_screen() -> None:
         subprocess.run(["clear"], check=False)
 
     print("\033[2J\033[H", end="")
-    print("ClearScreen - 清屏工具")
 
 
 def main() -> None:

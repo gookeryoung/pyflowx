@@ -8,10 +8,6 @@ from __future__ import annotations
 import pyflowx as px
 from pyflowx.conditions import Constants
 
-# ============================================================================
-# Qt 依赖列表
-# ============================================================================
-
 QT_LIBS: list[str] = [
     "build-essential",
     "libgl1",
@@ -40,47 +36,22 @@ CHINESE_FONTS: list[str] = [
 ]
 
 
-# ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-
-# 条件: 仅在 Unix 系统上执行
-def is_linux() -> bool:
-    """判断是否为 Linux 系统."""
-    return Constants.IS_LINUX and not Constants.IS_MACOS
-
-
-envqt_install: px.TaskSpec = px.TaskSpec(
-    "envqt_install",
-    cmd=["sudo", "apt", "install", "-y", *QT_LIBS],
-    conditions=(is_linux,),
-)
-
-envqt_fonts: px.TaskSpec = px.TaskSpec(
-    "envqt_fonts",
-    cmd=["sudo", "apt", "install", "-y", *CHINESE_FONTS],
-    conditions=(is_linux,),
-)
-
-
-# ============================================================================
-# CLI Runner
-# ============================================================================
-
-
 def main() -> None:
     """PyQt 环境配置工具主函数."""
-    runner = px.CliRunner(
-        strategy="thread",
-        description="EnvQt - PyQt 环境配置工具",
-        graphs={
-            # 安装 Qt 依赖
-            "i": px.Graph.from_specs([envqt_install]),
-            # 安装中文字体
-            "f": px.Graph.from_specs([envqt_fonts]),
-            # 安装全部
-            "a": px.Graph.from_specs([envqt_install, envqt_fonts]),
-        },
+    graph = px.Graph.from_specs(
+        [
+            px.TaskSpec(
+                "envqt_install",
+                cmd=["sudo", "apt", "install", "-y", *QT_LIBS],
+                conditions=(lambda: Constants.IS_LINUX,),
+                verbose=True,
+            ),
+            px.TaskSpec(
+                "envqt_fonts",
+                cmd=["sudo", "apt", "install", "-y", *CHINESE_FONTS],
+                conditions=(lambda: Constants.IS_LINUX,),
+                verbose=True,
+            ),
+        ],
     )
-    runner.run_cli()
+    px.run(graph, strategy="thread", verbose=True)
