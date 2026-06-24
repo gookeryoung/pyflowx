@@ -9,6 +9,12 @@ from __future__ import annotations
 from pyflowx.cli.autofmt import main as autofmt_main
 from pyflowx.cli.bumpversion import main as bumpversion_main
 from pyflowx.cli.clearscreen import main as clearscreen_main
+
+# EML 邮件管理工具
+from pyflowx.cli.emlmanager import main as emlmanager_main
+
+# EML 邮件管理工具
+from pyflowx.cli.emlmanager import main as emlmanager_web_main
 from pyflowx.cli.envpy import main as envpy_main
 from pyflowx.cli.envqt import main as envqt_main
 from pyflowx.cli.envrs import main as envrs_main
@@ -37,15 +43,14 @@ from pyflowx.cli.pymake import main as pymake_main
 from pyflowx.cli.screenshot import main as screenshot_main
 from pyflowx.cli.sshcopyid import main as sshcopyid_main
 
-# 系统工具
-from pyflowx.cli.taskkill import main as taskkill_main
-from pyflowx.cli.which import main as which_main
-
 __all__ = [
     # 自动格式化工具
     "autofmt_main",
     "bumpversion_main",
     "clearscreen_main",
+    # EML 邮件管理工具
+    "emlmanager_main",
+    "emlmanager_web_main",
     "envpy_main",
     "envqt_main",
     "envrs_main",
