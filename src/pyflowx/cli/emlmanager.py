@@ -557,13 +557,15 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
 
         emails = self.db.search_emails(keyword, field, limit, offset)
         total_count = self.db.get_email_count()
-        self._send_json_response({
-            "emails": emails,
-            "count": len(emails),
-            "total": total_count,
-            "limit": limit,
-            "offset": offset,
-        })
+        self._send_json_response(
+            {
+                "emails": emails,
+                "count": len(emails),
+                "total": total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
     def _api_get_email(self, query_params: dict[str, list[str]]) -> None:
         """API: 获取单个邮件详情."""

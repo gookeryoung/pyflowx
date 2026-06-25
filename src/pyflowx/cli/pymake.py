@@ -20,15 +20,7 @@ def maturin_build_cmd() -> list[str]:
     """
     command = ["maturin", "build", "-r"].copy()
     if Constants.IS_WINDOWS:
-        command.extend(
-            [
-                "--target",
-                "x86_64-win7-windows-msvc",
-                "-Zbuild-std",
-                "-i",
-                "python3.8",
-            ]
-        )
+        command.extend(["--target", "x86_64-win7-windows-msvc", "-Zbuild-std", "-i", "python3.8"])
     return command
 
 
@@ -47,7 +39,6 @@ test_coverage: px.TaskSpec = px.TaskSpec(
     cmd=["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
 )
 ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
-ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "."], depends_on=("lint",))
 typecheck: px.TaskSpec = px.TaskSpec("pyrefly_check", cmd=["pyrefly", "check", "."])
 git_add_all: px.TaskSpec = px.TaskSpec("git_add_all", cmd=["git", "add", "-A"])
 bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion", "-t"])
@@ -121,7 +112,7 @@ def main():
             "bumpmi": px.Graph.from_specs([px.TaskSpec("bumpversion_minor", cmd=["bumpversion", "minor"])]),
             "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
-            "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
+            "lint": px.Graph.from_specs([ruff_lint]),
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
             "t": px.Graph.from_specs([test]),
             "tf": px.Graph.from_specs([test_fast]),

@@ -40,9 +40,6 @@ jobs:
       - name: Ruff 检查
         run: uv run ruff check src tests
 
-      - name: Ruff 格式检查
-        run: uv run ruff format --check src tests
-
   # ─────────────────────────────────────────────────────────────
   # typecheck：pyrefly 严格类型检查
   # ─────────────────────────────────────────────────────────────

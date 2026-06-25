@@ -17,13 +17,14 @@ license = { text = "MIT" }
 name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.2.0"
+version = "0.2.1"
 
 [project.scripts]
 autofmt     = "pyflowx.cli.autofmt:main"
 bumpversion = "pyflowx.cli.bumpversion:main"
 clr         = "pyflowx.cli.clearscreen:main"
 emlman      = "pyflowx.cli.emlmanager:main"
+envlinux    = "pyflowx.cli.envlinux:main"
 envpy       = "pyflowx.cli.envpy:main"
 envqt       = "pyflowx.cli.envqt:main"
 envrs       = "pyflowx.cli.envrs:main"
@@ -110,15 +111,6 @@ markers                            = ["slow: marks tests as slow (deselect with 
 [tool.ruff]
 line-length    = 120
 target-version = "py38"
-
-[tool.ruff.format]
-# 使用双引号
-quote-style = "double"
-# 缩进使用空格
-indent-style = "space"
-# 保留尾随逗号
-skip-magic-trailing-comma = false
-# 行长度由 [tool.ruff] 中的 line-length 控制
 
 [tool.ruff.lint]
 ignore = [
