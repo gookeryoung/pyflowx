@@ -90,16 +90,14 @@ class TestInstallEmbedPython:
         output_dir = tmp_path / "python"
 
         # Create a mock cache file that doesn't exist (force download)
-        with patch("urllib.request.urlretrieve") as mock_urlretrieve, \
-             patch("zipfile.ZipFile") as mock_zipfile:
-
+        with patch("urllib.request.urlretrieve") as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
             # Mock successful download
             mock_urlretrieve.return_value = None
             mock_zip_instance = MagicMock()
             mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
 
             # Ensure cache doesn't exist by using tmp_path as cache dir
-            with patch.object(packtool, 'DEFAULT_CACHE_DIR', str(tmp_path / ".cache")):
+            with patch.object(packtool, "DEFAULT_CACHE_DIR", str(tmp_path / ".cache")):
                 packtool.install_embed_python("3.10", output_dir)
 
                 # Verify download was called

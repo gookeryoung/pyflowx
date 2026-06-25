@@ -57,18 +57,59 @@ class Graph:
         return self
 
     @classmethod
-    def from_specs(cls, specs: Iterable[TaskSpec[Any]]) -> Graph:
-        """从可迭代的 task spec 构建图。
+    def from_specs(cls, specs: Iterable[TaskSpec[Any] | str]) -> Graph:
+        """从可迭代的 task spec 构建图.
 
         先收集所有 spec，再统一校验。这意味着任务可以引用*后出现*的
         依赖——顺序无关，就像声明式配置文件的读取方式。
+
+        支持字符串引用，允许引用其他命令图中的任务。
+        字符串引用将在CliRunner中解析展开。
+
+        Parameters
+        ----------
+        specs : Iterable[TaskSpec[Any] | str]
+            TaskSpec对象或字符串引用的列表
+
+        Returns
+        -------
+        Graph
+            构建完成的图
+
+        Note
+        -----
+        字符串引用格式：
+        - "command_name" - 引用整个命令图
+        - "command_name.task_name" - 引用特定任务
+
+        Examples
+        --------
+        >>> graph = Graph.from_specs([
+        ...     TaskSpec("build", cmd=["uv", "build"]),
+        ...     "test",  # 引用test命令图
+        ... ])
         """
         graph = cls()
+        pending_refs: list[str] = []
+
         for spec in specs:
-            if spec.name in graph.specs:
-                raise DuplicateTaskError(spec.name)
-            graph.specs[spec.name] = spec
-            graph.deps[spec.name] = spec.depends_on
+            if isinstance(spec, str):
+                # 字符串引用，稍后解析
+                pending_refs.append(spec)
+            elif isinstance(spec, TaskSpec):
+                if spec.name in graph.specs:
+                    raise DuplicateTaskError(spec.name)
+                graph.specs[spec.name] = spec
+                graph.deps[spec.name] = spec.depends_on
+            else:
+                raise TypeError(f"from_specs只接受TaskSpec或str，收到: {type(spec)}")
+
+        # 存储待解析的引用
+        if pending_refs:
+            # 使用特殊属性存储引用，稍后在CliRunner中解析
+            # 由于Graph是frozen dataclass，我们需要特殊处理
+            object.__setattr__(graph, "_pending_refs", pending_refs)
+
         graph._validate_references()
         graph.validate()
         return graph

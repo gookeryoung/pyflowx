@@ -20,13 +20,15 @@ def maturin_build_cmd() -> list[str]:
     """
     command = ["maturin", "build", "-r"].copy()
     if Constants.IS_WINDOWS:
-        command.extend([
-            "--target",
-            "x86_64-win7-windows-msvc",
-            "-Zbuild-std",
-            "-i",
-            "python3.8",
-        ])
+        command.extend(
+            [
+                "--target",
+                "x86_64-win7-windows-msvc",
+                "-Zbuild-std",
+                "-i",
+                "python3.8",
+            ]
+        )
     return command
 
 
@@ -99,26 +101,26 @@ def main():
       pymake type        # 类型检查
     """
     runner = px.CliRunner(
-        strategy="thread",
+        strategy="sequential",
         description="PyMake - Python 构建工具",
         graphs={
             # 构建命令
             "b": px.Graph.from_specs([uv_build]),
             "bc": px.Graph.from_specs([maturin_build]),
-            "ba": px.Graph.from_specs([uv_build, maturin_build]),
+            "ba": px.Graph.from_specs(["b", "bc"]),
             # 安装命令
             "sync": px.Graph.from_specs([uv_sync]),
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
-            "bump": px.Graph.from_specs([git_clean, typecheck, ruff_lint, ruff_format, bump]),
+            "bump": px.Graph.from_specs(["c", "tc", bump]),
             "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
             "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
             "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
             "t": px.Graph.from_specs([test]),
             "tf": px.Graph.from_specs([test_fast]),
-            "tc": px.Graph.from_specs([typecheck, ruff_lint, ruff_format]),
+            "tc": px.Graph.from_specs([typecheck, "lint"]),
             "tox": px.Graph.from_specs([tox]),
             # 发布命令
             "p": px.Graph.from_specs([git_clean, git_push, git_push_tags]),
