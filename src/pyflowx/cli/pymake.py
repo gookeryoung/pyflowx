@@ -20,15 +20,13 @@ def maturin_build_cmd() -> list[str]:
     """
     command = ["maturin", "build", "-r"].copy()
     if Constants.IS_WINDOWS:
-        command.extend(
-            [
-                "--target",
-                "x86_64-win7-windows-msvc",
-                "-Zbuild-std",
-                "-i",
-                "python3.8",
-            ]
-        )
+        command.extend([
+            "--target",
+            "x86_64-win7-windows-msvc",
+            "-Zbuild-std",
+            "-i",
+            "python3.8",
+        ])
     return command
 
 
@@ -113,7 +111,7 @@ def main():
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
-            "bump": px.Graph.from_specs([git_clean, bump]),
+            "bump": px.Graph.from_specs([git_clean, typecheck, ruff_lint, ruff_format, bump]),
             "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
             "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
