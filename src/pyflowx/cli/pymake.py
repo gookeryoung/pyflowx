@@ -41,7 +41,7 @@ test_coverage: px.TaskSpec = px.TaskSpec(
 ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
 typecheck: px.TaskSpec = px.TaskSpec("pyrefly_check", cmd=["pyrefly", "check", "."])
 git_add_all: px.TaskSpec = px.TaskSpec("git_add_all", cmd=["git", "add", "-A"])
-bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion", "-t"])
+bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion"])
 doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
 git_push: px.TaskSpec = px.TaskSpec("git_push", cmd=["git", "push"])
 git_push_tags: px.TaskSpec = px.TaskSpec("git_push_tags", cmd=["git", "push", "--tags"])

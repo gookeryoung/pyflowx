@@ -17,7 +17,7 @@ license = { text = "MIT" }
 name = "pyflowx"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.2.1"
+version = "0.2.2"
 
 [project.scripts]
 autofmt     = "pyflowx.cli.autofmt:main"

@@ -215,7 +215,7 @@ class TestInstallEmbedPython:
             packtool.install_embed_python("3.10", output_dir)
 
             # Verify cache directory was created (now in tmp_path)
-            cache_dir = Path(packtool.DEFAULT_CACHE_DIR)
+            Path(packtool.DEFAULT_CACHE_DIR)
             # Note: In test environment, cache might not persist due to mocking
 
 
