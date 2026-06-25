@@ -60,9 +60,9 @@ class TestSetRustMirror:
             assert cargo_dir.exists()
             assert cargo_dir.is_dir()
 
-    def test_set_rust_mirror_prints_message(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_set_rust_mirror_prints_message(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should print mirror name."""
-        with patch.object(Path, "home", return_value=Path("/tmp")):
+        with patch.object(Path, "home", return_value=tmp_path):
             envrs.set_rust_mirror("aliyun")
             captured = capsys.readouterr()
             assert "已设置 Rust 镜像源: aliyun" in captured.out
