@@ -5,8 +5,27 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import pyflowx as px
 from pyflowx.cli import packtool
+
+
+# ---------------------------------------------------------------------- #
+# Fixtures: 确保所有测试都在临时目录执行，不污染项目根目录
+# ---------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def packtool_tmp_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """自动切换到临时工作目录，防止测试污染项目根目录.
+
+    Args:
+        tmp_path: pytest 提供的临时目录
+        monkeypatch: pytest 的 monkeypatch 工具
+    """
+    # 切换工作目录到 tmp_path
+    monkeypatch.chdir(tmp_path)
+    # Mock DEFAULT_CACHE_DIR 到临时目录
+    monkeypatch.setattr(packtool, "DEFAULT_CACHE_DIR", str(tmp_path / ".cache" / "pypack"))
 
 
 # ---------------------------------------------------------------------- #
@@ -96,16 +115,14 @@ class TestInstallEmbedPython:
             mock_zip_instance = MagicMock()
             mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
 
-            # Ensure cache doesn't exist by using tmp_path as cache dir
-            with patch.object(packtool, "DEFAULT_CACHE_DIR", str(tmp_path / ".cache")):
-                packtool.install_embed_python("3.10", output_dir)
+            packtool.install_embed_python("3.10", output_dir)
 
-                # Verify download was called
-                assert mock_urlretrieve.called
-                # Verify extraction was called
-                assert mock_zip_instance.extractall.called
-                # Verify output directory was created
-                assert output_dir.exists()
+            # Verify download was called
+            assert mock_urlretrieve.called
+            # Verify extraction was called
+            assert mock_zip_instance.extractall.called
+            # Verify output directory was created
+            assert output_dir.exists()
 
     def test_install_embed_python_with_cache(self, tmp_path: Path) -> None:
         """Should use cached Python if available."""
@@ -197,8 +214,8 @@ class TestInstallEmbedPython:
 
             packtool.install_embed_python("3.10", output_dir)
 
-            # Verify cache directory was created
-            Path(packtool.DEFAULT_CACHE_DIR)
+            # Verify cache directory was created (now in tmp_path)
+            cache_dir = Path(packtool.DEFAULT_CACHE_DIR)
             # Note: In test environment, cache might not persist due to mocking
 
 
