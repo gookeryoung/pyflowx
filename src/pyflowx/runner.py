@@ -163,15 +163,13 @@ class CliRunner:
         if not pending_refs:
             return graph
 
-        # 收集所有TaskSpec（包括原始图中的）
+        # 收集所有TaskSpec（按正确顺序：先引用，后原始TaskSpec）
         all_specs: list[TaskSpec[Any]] = []
-        for spec in graph.all_specs().values():
-            all_specs.append(spec)
 
         # 记录每个引用展开后的所有任务名，用于建立依赖链
         previous_ref_last_task: str | None = None
 
-        # 解析每个引用，并建立依赖关系
+        # 先解析每个引用，并建立依赖关系
         for ref in pending_refs:
             expanded_specs = self._parse_ref(ref, current_cmd)
 
@@ -190,17 +188,27 @@ class CliRunner:
 
             all_specs.extend(expanded_specs)
 
-        # 如果原始图中有TaskSpec，让它们依赖于最后一个引用的任务
+        # 然后添加原始图中的TaskSpec，并让它们按顺序执行
         original_specs = list(graph.all_specs().values())
-        if previous_ref_last_task and original_specs:
-            # 为每个原始TaskSpec添加依赖
-            for i, original_task in enumerate(original_specs):
-                # 只为第一个原始任务添加依赖，或者为没有依赖的任务添加依赖
-                if i == 0 or not original_task.depends_on:
-                    updated_task = replace(
-                        original_task, depends_on=tuple({*original_task.depends_on, previous_ref_last_task})
-                    )
-                    all_specs[all_specs.index(original_task)] = updated_task
+        if original_specs:
+            # 第一个原始TaskSpec依赖于最后一个引用的任务
+            if previous_ref_last_task:
+                first_original = original_specs[0]
+                updated_first = replace(
+                    first_original, depends_on=tuple({*first_original.depends_on, previous_ref_last_task})
+                )
+                all_specs.append(updated_first)
+            else:
+                # 如果没有引用，直接添加第一个原始TaskSpec
+                all_specs.append(original_specs[0])
+
+            # 后续的原始TaskSpec依赖于前一个原始TaskSpec
+            for i in range(1, len(original_specs)):
+                current_task = original_specs[i]
+                previous_task_name = original_specs[i - 1].name
+                # 更新依赖，确保顺序执行
+                updated_task = replace(current_task, depends_on=tuple({*current_task.depends_on, previous_task_name}))
+                all_specs.append(updated_task)
 
         # 创建新的图（不包含引用）
         return Graph.from_specs(all_specs)

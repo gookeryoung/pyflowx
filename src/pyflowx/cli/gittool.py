@@ -23,6 +23,7 @@ EXCLUDE_DIRS = [
     ".tox",
     ".pytest_cache",
     "node_modules",
+    ".ruff_cache",
 ]
 EXCLUDE_CMDS = [arg for d in EXCLUDE_DIRS for arg in ["-e", d]]
 

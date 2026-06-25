@@ -49,6 +49,7 @@ test_coverage: px.TaskSpec = px.TaskSpec(
 ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
 ruff_format: px.TaskSpec = px.TaskSpec("format", cmd=["ruff", "format", "."], depends_on=("lint",))
 typecheck: px.TaskSpec = px.TaskSpec("pyrefly_check", cmd=["pyrefly", "check", "."])
+git_add_all: px.TaskSpec = px.TaskSpec("git_add_all", cmd=["git", "add", "-A"])
 bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion", "-t"])
 doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
 git_push: px.TaskSpec = px.TaskSpec("git_push", cmd=["git", "push"])
@@ -86,7 +87,10 @@ def main():
     📦 发布命令:
       pymake pb   - 发布到 PyPI (twine + hatch)
 
-    💡 常用工作流:
+    � 版本管理:
+      pymake bump  - 自动升级版本号并提交修改 (清理 + 检查 + 格式化 + git add + bumpversion)
+
+    �💡 常用工作流:
       1. 日常开发: pymake lint && pymake t
       2. 构建发布包: pymake ba
       3. 多版本兼容性测试: pymake tox
@@ -113,7 +117,7 @@ def main():
             # 清理命令
             "c": px.Graph.from_specs([git_clean]),
             # 开发工具
-            "bump": px.Graph.from_specs(["c", "tc", bump]),
+            "bump": px.Graph.from_specs(["c", "tc", git_add_all, bump]),
             "cov": px.Graph.from_specs([git_clean, test_coverage]),
             "doc": px.Graph.from_specs([doc]),
             "lint": px.Graph.from_specs([ruff_lint, ruff_format]),
