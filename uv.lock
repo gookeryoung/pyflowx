@@ -2184,7 +2184,7 @@ wheels = [
 
 [[package]]
 name = "pyflowx"
-version = "0.1.12"
+version = "0.1.13"
 source = { editable = "." }
 dependencies = [
     { name = "graphlib-backport", marker = "python_full_version < '3.9'" },
