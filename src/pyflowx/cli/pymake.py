@@ -20,13 +20,15 @@ def maturin_build_cmd() -> list[str]:
     """
     command = ["maturin", "build", "-r"].copy()
     if Constants.IS_WINDOWS:
-        command.extend([
-            "--target",
-            "x86_64-win7-windows-msvc",
-            "-Zbuild-std",
-            "-i",
-            "python3.8",
-        ])
+        command.extend(
+            [
+                "--target",
+                "x86_64-win7-windows-msvc",
+                "-Zbuild-std",
+                "-i",
+                "python3.8",
+            ]
+        )
     return command
 
 
