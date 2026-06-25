@@ -17,38 +17,38 @@ class TestBumpFileVersion:
 
     def test_bump_patch_version(self, tmp_path: Path) -> None:
         """Should bump patch version correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.2.3", encoding="utf-8")
+        test_file = tmp_path / "pyproject.toml"
+        test_file.write_text('version = "1.2.3"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
         assert result == "1.2.4"
-        assert test_file.read_text(encoding="utf-8") == "version = 1.2.4"
+        assert test_file.read_text(encoding="utf-8") == 'version = "1.2.4"'
 
     def test_bump_minor_version(self, tmp_path: Path) -> None:
         """Should bump minor version correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.2.3", encoding="utf-8")
+        test_file = tmp_path / "pyproject.toml"
+        test_file.write_text('version = "1.2.3"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "minor")
 
         assert result == "1.3.0"
-        assert test_file.read_text(encoding="utf-8") == "version = 1.3.0"
+        assert test_file.read_text(encoding="utf-8") == 'version = "1.3.0"'
 
     def test_bump_major_version(self, tmp_path: Path) -> None:
         """Should bump major version correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.2.3", encoding="utf-8")
+        test_file = tmp_path / "pyproject.toml"
+        test_file.write_text('version = "1.2.3"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "major")
 
         assert result == "2.0.0"
-        assert test_file.read_text(encoding="utf-8") == "version = 2.0.0"
+        assert test_file.read_text(encoding="utf-8") == 'version = "2.0.0"'
 
     def test_version_pattern_with_prerelease(self, tmp_path: Path) -> None:
         """Should handle version with prerelease suffix."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.2.3-alpha.1", encoding="utf-8")
+        test_file = tmp_path / "pyproject.toml"
+        test_file.write_text('version = "1.2.3-alpha.1"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
@@ -59,8 +59,8 @@ class TestBumpFileVersion:
 
     def test_version_pattern_with_build_metadata(self, tmp_path: Path) -> None:
         """Should handle version with build metadata."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.2.3+build.123", encoding="utf-8")
+        test_file = tmp_path / "pyproject.toml"
+        test_file.write_text('version = "1.2.3+build.123"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
@@ -82,13 +82,13 @@ class TestBumpFileVersion:
 
     def test_utf8_encoding(self, tmp_path: Path) -> None:
         """Should handle UTF-8 encoded files correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("版本 = 1.2.3", encoding="utf-8")
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "1.2.3"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
         assert result == "1.2.4"
-        assert test_file.read_text(encoding="utf-8") == "版本 = 1.2.4"
+        assert test_file.read_text(encoding="utf-8") == '__version__ = "1.2.4"'
 
     def test_pyproject_toml_format(self, tmp_path: Path) -> None:
         """Should handle pyproject.toml format correctly."""
@@ -124,16 +124,23 @@ __version__ = "1.0.0"
         assert '__version__ = "2.0.0"' in updated
 
     def test_multiple_versions_in_file(self, tmp_path: Path) -> None:
-        """Should only bump the first version occurrence."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version1 = 1.0.0\nversion2 = 2.0.0", encoding="utf-8")
+        """Should only bump the project version, not dependencies."""
+        test_file = tmp_path / "pyproject.toml"
+        content = """
+[project]
+version = "1.0.0"
+dependencies = ["lib >= 2.0.0", "other >= 3.0.0"]
+"""
+        test_file.write_text(content, encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
         assert result == "1.0.1"
-        content = test_file.read_text(encoding="utf-8")
-        assert "version1 = 1.0.1" in content
-        assert "version2 = 2.0.0" in content
+        updated = test_file.read_text(encoding="utf-8")
+        assert 'version = "1.0.1"' in updated
+        # 确保 dependencies 中的版本没有被更新
+        assert "lib >= 2.0.0" in updated
+        assert "other >= 3.0.0" in updated
 
     def test_file_read_error(self, tmp_path: Path, capsys) -> None:
         """Should handle file read errors."""
@@ -147,13 +154,13 @@ __version__ = "1.0.0"
     def test_file_write_error(self, tmp_path: Path, capsys) -> None:
         """Should handle file write errors."""
         # 在只读目录中创建文件（这个测试在某些系统上可能不适用）
-        test_file = tmp_path / "readonly.txt"
-        test_file.write_text("version = 1.0.0", encoding="utf-8")
+        test_file = tmp_path / "readonly.toml"
+        test_file.write_text('version = "1.0.0"', encoding="utf-8")
         # 设置为只读
         test_file.chmod(0o444)
 
         try:
-            with pytest.raises(Exception):
+            with pytest.raises(Exception):  # noqa: B017
                 bumpversion.bump_file_version(test_file, "patch")
         finally:
             # 恢复权限以便清理
@@ -168,8 +175,8 @@ class TestVersionPattern:
 
     def test_simple_version(self, tmp_path: Path) -> None:
         """Should match simple version."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("1.0.0", encoding="utf-8")
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "1.0.0"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
@@ -177,8 +184,8 @@ class TestVersionPattern:
 
     def test_version_with_zeros(self, tmp_path: Path) -> None:
         """Should handle versions with zeros correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("0.0.0", encoding="utf-8")
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "0.0.0"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
@@ -186,21 +193,22 @@ class TestVersionPattern:
 
     def test_large_version_numbers(self, tmp_path: Path) -> None:
         """Should handle large version numbers."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("10.20.30", encoding="utf-8")
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "10.20.30"', encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "minor")
 
         assert result == "10.21.0"
 
     def test_version_in_url(self, tmp_path: Path) -> None:
-        """Should only match first version in complex text."""
+        """Should not match version in URL or other contexts."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("https://example.com/v1.2.3/download", encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
 
-        assert result == "1.2.4"
+        # 不应该匹配 URL 中的版本号
+        assert result is None
 
 
 # ---------------------------------------------------------------------- #
@@ -222,8 +230,8 @@ class TestEdgeCases:
 
     def test_file_with_special_chars(self, tmp_path: Path) -> None:
         """Should handle file with special characters."""
-        test_file = tmp_path / "test.txt"
-        content = "# 中文注释\nversion = 1.0.0\n# 特殊字符: @#$%"
+        test_file = tmp_path / "__init__.py"
+        content = '# 中文注释\n__version__ = "1.0.0"\n# 特殊字符: @#$%'
         test_file.write_text(content, encoding="utf-8")
 
         result = bumpversion.bump_file_version(test_file, "patch")
@@ -235,8 +243,8 @@ class TestEdgeCases:
 
     def test_consecutive_bumps(self, tmp_path: Path) -> None:
         """Should handle consecutive version bumps correctly."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("version = 1.0.0", encoding="utf-8")
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "1.0.0"', encoding="utf-8")
 
         # 第一次 bump
         result1 = bumpversion.bump_file_version(test_file, "patch")
@@ -251,4 +259,4 @@ class TestEdgeCases:
         assert result3 == "2.0.0"
 
         # 验证最终结果
-        assert test_file.read_text(encoding="utf-8") == "version = 2.0.0"
+        assert test_file.read_text(encoding="utf-8") == '__version__ = "2.0.0"'
