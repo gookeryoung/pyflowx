@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import email
+import gzip
 import hashlib
 import json
 import sqlite3
@@ -15,7 +16,7 @@ import threading
 from datetime import datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -86,7 +87,7 @@ class EmailDatabase:
                 cursor = self.conn.cursor()
                 cursor.execute(
                     f"""
-                    INSERT OR REPLACE INTO {TABLE_NAME} 
+                    INSERT OR REPLACE INTO {TABLE_NAME}
                     (file_path, file_hash, subject, sender, recipients, date, date_parsed,
                      body_text, body_html, has_attachments, file_size, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -112,29 +113,35 @@ class EmailDatabase:
         except sqlite3.Error:
             return False
 
-    def search_emails(self, keyword: str = "", field: str = "all") -> list[dict[str, Any]]:
+    def search_emails(
+        self, keyword: str = "", field: str = "all", limit: int = 100, offset: int = 0
+    ) -> list[dict[str, Any]]:
         """搜索邮件."""
         with self._lock:
             cursor = self.conn.cursor()
 
+            # 只返回必要字段，减少数据量
+            select_fields = "id, subject, sender, date_parsed, has_attachments, file_size"
+
             if not keyword:
-                cursor.execute(f"SELECT * FROM {TABLE_NAME} ORDER BY date_parsed DESC")
+                query = f"SELECT {select_fields} FROM {TABLE_NAME} ORDER BY date_parsed DESC LIMIT ? OFFSET ?"
+                cursor.execute(query, (limit, offset))
             elif field == "subject":
-                query = f"SELECT * FROM {TABLE_NAME} WHERE subject LIKE ? ORDER BY date_parsed DESC"
-                cursor.execute(query, (f"%{keyword}%",))
+                query = f"SELECT {select_fields} FROM {TABLE_NAME} WHERE subject LIKE ? ORDER BY date_parsed DESC LIMIT ? OFFSET ?"
+                cursor.execute(query, (f"%{keyword}%", limit, offset))
             elif field == "sender":
-                query = f"SELECT * FROM {TABLE_NAME} WHERE sender LIKE ? ORDER BY date_parsed DESC"
-                cursor.execute(query, (f"%{keyword}%",))
+                query = f"SELECT {select_fields} FROM {TABLE_NAME} WHERE sender LIKE ? ORDER BY date_parsed DESC LIMIT ? OFFSET ?"
+                cursor.execute(query, (f"%{keyword}%", limit, offset))
             elif field == "recipients":
-                query = f"SELECT * FROM {TABLE_NAME} WHERE recipients LIKE ? ORDER BY date_parsed DESC"
-                cursor.execute(query, (f"%{keyword}%",))
+                query = f"SELECT {select_fields} FROM {TABLE_NAME} WHERE recipients LIKE ? ORDER BY date_parsed DESC LIMIT ? OFFSET ?"
+                cursor.execute(query, (f"%{keyword}%", limit, offset))
             else:  # all
                 query = f"""
-                        SELECT * FROM {TABLE_NAME} 
+                        SELECT {select_fields} FROM {TABLE_NAME}
                         WHERE subject LIKE ? OR sender LIKE ? OR recipients LIKE ? OR body_text LIKE ?
-                        ORDER BY date_parsed DESC
+                        ORDER BY date_parsed DESC LIMIT ? OFFSET ?
                     """
-                cursor.execute(query, (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"))
+                cursor.execute(query, (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit, offset))
 
             columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -312,7 +319,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
         path = parsed_path.path
         query_params = parse_qs(parsed_path.query)
 
-        if path == "/" or path == "/index.html":
+        if path in {"/", "/index.html"}:
             self._serve_index()
         elif path == "/test":
             self._serve_test_page()
@@ -344,13 +351,28 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
     def _serve_index(self) -> None:
         """返回主页 HTML."""
         html_content = self._get_html_template()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
-        self.end_headers()
-        self.wfile.write(html_content.encode("utf-8"))
+        html_bytes = html_content.encode("utf-8")
+
+        # 检查客户端是否支持gzip压缩
+        accept_encoding = self.headers.get("Accept-Encoding", "")
+        if "gzip" in accept_encoding.lower():
+            # 使用gzip压缩
+            compressed = gzip.compress(html_bytes)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(compressed)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(compressed)
+        else:
+            # 不压缩
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(html_bytes)
 
     def _serve_test_page(self) -> None:
         """返回测试页面 HTML."""
@@ -396,11 +418,11 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
         <h1>EML 邮件管理器 API 测试</h1>
         <div id="testResults"></div>
     </div>
-    
+
     <script>
         async function testAPI() {
             const resultsDiv = document.getElementById('testResults');
-            
+
             // 测试状态API
             try {
                 const statusResponse = await fetch('/api/status');
@@ -409,13 +431,13 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             } catch (error) {
                 resultsDiv.innerHTML += '<div class="test-result error">❌ 状态API失败: ' + error.message + '</div>';
             }
-            
+
             // 测试邮件列表API
             try {
                 const emailsResponse = await fetch('/api/emails');
                 const emailsData = await emailsResponse.json();
                 resultsDiv.innerHTML += '<div class="test-result success">✅ 邮件列表API正常: ' + emailsData.count + ' 封邮件</div>';
-                
+
                 // 显示邮件详情
                 if (emailsData.emails && emailsData.emails.length > 0) {
                     const email = emailsData.emails[0];
@@ -424,7 +446,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             } catch (error) {
                 resultsDiv.innerHTML += '<div class="test-result error">❌ 邮件列表API失败: ' + error.message + '</div>';
             }
-            
+
             // 测试聚合API
             try {
                 const groupedResponse = await fetch('/api/grouped');
@@ -434,7 +456,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 resultsDiv.innerHTML += '<div class="test-result error">❌ 聚合API失败: ' + error.message + '</div>';
             }
         }
-        
+
         // 页面加载后执行测试
         window.onload = testAPI;
     </script>
@@ -454,9 +476,18 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
 
         keyword = query_params.get("keyword", [""])[0]
         field = query_params.get("field", ["all"])[0]
+        limit = int(query_params.get("limit", ["100"])[0])  # 默认返回100条
+        offset = int(query_params.get("offset", ["0"])[0])  # 默认偏移0
 
-        emails = self.db.search_emails(keyword, field)
-        self._send_json_response({"emails": emails, "count": len(emails)})
+        emails = self.db.search_emails(keyword, field, limit, offset)
+        total_count = self.db.get_email_count()
+        self._send_json_response({
+            "emails": emails,
+            "count": len(emails),
+            "total": total_count,
+            "limit": limit,
+            "offset": offset,
+        })
 
     def _api_get_email(self, query_params: dict[str, list[str]]) -> None:
         """API: 获取单个邮件详情."""
@@ -561,11 +592,28 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
 
     def _send_json_response(self, data: dict[str, Any], status_code: int = 200) -> None:
         """发送 JSON 响应."""
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        json_bytes = json.dumps(data, ensure_ascii=False).encode("utf-8")
+
+        # 检查客户端是否支持gzip压缩
+        accept_encoding = self.headers.get("Accept-Encoding", "")
+        if "gzip" in accept_encoding.lower():
+            # 使用gzip压缩
+            compressed = gzip.compress(json_bytes)
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(compressed)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(compressed)
+        else:
+            # 不压缩
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(json_bytes)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json_bytes)
 
     def _get_html_template(self) -> str:
         """获取 HTML 模板."""
@@ -581,20 +629,20 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             min-height: 100vh;
         }
-        
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .header {
             background: white;
             padding: 30px;
@@ -602,20 +650,20 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             margin-bottom: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
-        
+
         .header h1 {
             color: #667eea;
             font-size: 32px;
             margin-bottom: 20px;
         }
-        
+
         .toolbar {
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
             align-items: center;
         }
-        
+
         .btn {
             padding: 12px 24px;
             border: none;
@@ -625,32 +673,32 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .btn-primary {
             background: #667eea;
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: #5568d3;
             transform: translateY(-2px);
         }
-        
+
         .btn-danger {
             background: #e74c3c;
             color: white;
         }
-        
+
         .btn-danger:hover {
             background: #c0392b;
         }
-        
+
         .search-box {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        
+
         .search-input {
             padding: 12px 20px;
             border: 2px solid #ddd;
@@ -658,24 +706,24 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             font-size: 14px;
             width: 300px;
         }
-        
+
         .search-input:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         .search-select {
             padding: 12px 15px;
             border: 2px solid #ddd;
             border-radius: 8px;
             font-size: 14px;
         }
-        
+
         .view-toggle {
             display: flex;
             gap: 10px;
         }
-        
+
         .radio-btn {
             padding: 8px 16px;
             background: #f8f9fa;
@@ -684,20 +732,20 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .radio-btn.active {
             background: #667eea;
             color: white;
             border-color: #667eea;
         }
-        
+
         .main-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             height: calc(100vh - 200px);
         }
-        
+
         .email-list {
             background: white;
             border-radius: 15px;
@@ -705,36 +753,36 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             overflow-y: auto;
         }
-        
+
         .email-item {
             padding: 15px;
             border-bottom: 1px solid #eee;
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         .email-item:hover {
             background: #f8f9fa;
         }
-        
+
         .email-item.active {
             background: #e8f4f8;
             border-left: 4px solid #667eea;
         }
-        
+
         .email-subject {
             font-weight: 600;
             color: #2c3e50;
             margin-bottom: 5px;
         }
-        
+
         .email-meta {
             display: flex;
             gap: 15px;
             color: #7f8c8d;
             font-size: 12px;
         }
-        
+
         .email-group {
             background: #f8f9fa;
             padding: 10px 15px;
@@ -743,7 +791,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             border-radius: 8px;
             margin-bottom: 10px;
         }
-        
+
         .email-detail {
             background: white;
             border-radius: 15px;
@@ -751,38 +799,38 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             overflow-y: auto;
         }
-        
+
         .detail-header {
             border-bottom: 2px solid #eee;
             padding-bottom: 20px;
             margin-bottom: 20px;
         }
-        
+
         .detail-title {
             font-size: 24px;
             color: #2c3e50;
             margin-bottom: 15px;
         }
-        
+
         .detail-meta {
             display: grid;
             grid-template-columns: auto 1fr;
             gap: 10px 20px;
             color: #7f8c8d;
         }
-        
+
         .detail-label {
             font-weight: 600;
             color: #2c3e50;
         }
-        
+
         .detail-body {
             white-space: pre-wrap;
             font-size: 14px;
             line-height: 1.6;
             color: #34495e;
         }
-        
+
         .status-bar {
             background: white;
             padding: 15px 30px;
@@ -792,17 +840,17 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             text-align: center;
             color: #7f8c8d;
         }
-        
+
         .loading {
             display: none;
             text-align: center;
             padding: 40px;
         }
-        
+
         .loading.active {
             display: block;
         }
-        
+
         .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #667eea;
@@ -812,18 +860,18 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: #7f8c8d;
         }
-        
+
         .empty-state h3 {
             font-size: 20px;
             margin-bottom: 10px;
@@ -838,7 +886,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 <button class="btn btn-primary" onclick="openDirectory()">📂 打开目录</button>
                 <button class="btn btn-primary" onclick="refreshEmails()">🔄 刷新</button>
                 <button class="btn btn-danger" onclick="clearDatabase()">🗑️ 清空数据库</button>
-                
+
                 <div class="search-box">
                     <input type="text" class="search-input" id="searchKeyword" placeholder="搜索邮件...">
                     <select class="search-select" id="searchField">
@@ -850,14 +898,14 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                     <button class="btn btn-primary" onclick="searchEmails()">🔍 搜索</button>
                     <button class="btn btn-primary" onclick="resetSearch()">↩️ 重置</button>
                 </div>
-                
+
                 <div class="view-toggle">
                     <div class="radio-btn active" onclick="switchView('list')" id="viewList">📋 列表</div>
                     <div class="radio-btn" onclick="switchView('grouped')" id="viewGrouped">📦 聚合</div>
                 </div>
             </div>
         </div>
-        
+
         <div class="main-content">
             <div class="email-list" id="emailList">
                 <div class="empty-state">
@@ -865,7 +913,7 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                     <p>请先打开目录导入邮件</p>
                 </div>
             </div>
-            
+
             <div class="email-detail" id="emailDetail">
                 <div class="empty-state">
                     <h3>邮件详情</h3>
@@ -873,16 +921,16 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 </div>
             </div>
         </div>
-        
+
         <div class="status-bar" id="statusBar">
             就绪 | 邮件总数: <span id="emailCount">0</span>
         </div>
     </div>
-    
+
     <script>
         let currentView = 'list';
         let selectedEmailId = null;
-        
+
         // API 调用函数
         async function apiCall(url, method = 'GET') {
             try {
@@ -893,18 +941,18 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 return null;
             }
         }
-        
+
         // 打开目录
         async function openDirectory() {
             const dir = prompt('请输入邮件目录路径:');
             if (!dir) return;
-            
+
             updateStatus('正在初始化...');
-            
+
             // 这里简化处理，实际应该通过文件选择器
             // 由于浏览器安全限制，这里使用提示框模拟
             const result = await apiCall('/api/import', 'POST');
-            
+
             if (result) {
                 updateStatus('导入任务已启动...');
                 setTimeout(() => {
@@ -912,11 +960,11 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 }, 2000);
             }
         }
-        
+
         // 刷新邮件列表
         async function refreshEmails() {
             updateStatus('正在加载...');
-            
+
             if (currentView === 'list') {
                 const result = await apiCall('/api/emails');
                 if (result && result.emails) {
@@ -934,19 +982,19 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 }
             }
         }
-        
+
         // 搜索邮件
         async function searchEmails() {
             const keyword = document.getElementById('searchKeyword').value;
             const field = document.getElementById('searchField').value;
-            
+
             if (!keyword) {
                 refreshEmails();
                 return;
             }
-            
+
             updateStatus('正在搜索...');
-            
+
             const result = await apiCall(`/api/emails?keyword=${encodeURIComponent(keyword)}&field=${field}`);
             if (result && result.emails) {
                 renderEmailList(result.emails);
@@ -954,28 +1002,28 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 updateStatus(`找到 ${result.count} 封邮件`);
             }
         }
-        
+
         // 重置搜索
         function resetSearch() {
             document.getElementById('searchKeyword').value = '';
             document.getElementById('searchField').value = 'all';
             refreshEmails();
         }
-        
+
         // 切换视图
         function switchView(view) {
             currentView = view;
-            
+
             document.getElementById('viewList').classList.toggle('active', view === 'list');
             document.getElementById('viewGrouped').classList.toggle('active', view === 'grouped');
-            
+
             refreshEmails();
         }
-        
+
         // 渲染邮件列表
         function renderEmailList(emails) {
             const container = document.getElementById('emailList');
-            
+
             if (emails.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -985,9 +1033,9 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 `;
                 return;
             }
-            
+
             container.innerHTML = emails.map(email => `
-                <div class="email-item ${selectedEmailId === email.id ? 'active' : ''}" 
+                <div class="email-item ${selectedEmailId === email.id ? 'active' : ''}"
                      onclick="selectEmail(${email.id})">
                     <div class="email-subject">${email.subject || '(无主题)'}</div>
                     <div class="email-meta">
@@ -998,11 +1046,11 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 </div>
             `).join('');
         }
-        
+
         // 渲染聚合邮件
         function renderGroupedEmails(grouped) {
             const container = document.getElementById('emailList');
-            
+
             if (Object.keys(grouped).length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1012,13 +1060,13 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 `;
                 return;
             }
-            
+
             let html = '';
             for (const [subject, emails] of Object.entries(grouped)) {
                 html += `
                     <div class="email-group">${subject} (${emails.length}封)</div>
                     ${emails.map(email => `
-                        <div class="email-item ${selectedEmailId === email.id ? 'active' : ''}" 
+                        <div class="email-item ${selectedEmailId === email.id ? 'active' : ''}"
                              onclick="selectEmail(${email.id})">
                             <div class="email-subject">${email.subject || '(无主题)'}</div>
                             <div class="email-meta">
@@ -1029,31 +1077,31 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                     `).join('')}
                 `;
             }
-            
+
             container.innerHTML = html;
         }
-        
+
         // 选择邮件
         async function selectEmail(id) {
             selectedEmailId = id;
-            
+
             // 更新列表选中状态
             document.querySelectorAll('.email-item').forEach(item => {
                 item.classList.remove('active');
             });
             event.target.closest('.email-item').classList.add('active');
-            
+
             // 获取邮件详情
             const result = await apiCall(`/api/email?id=${id}`);
             if (result && result.email) {
                 renderEmailDetail(result.email);
             }
         }
-        
+
         // 渲染邮件详情
         function renderEmailDetail(email) {
             const container = document.getElementById('emailDetail');
-            
+
             container.innerHTML = `
                 <div class="detail-header">
                     <div class="detail-title">${email.subject || '(无主题)'}</div>
@@ -1075,18 +1123,18 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 <div class="detail-body">${email.body_text || email.body_html || '(无正文)'}</div>
             `;
         }
-        
+
         // 清空数据库
         async function clearDatabase() {
             if (!confirm('确定要清空数据库吗？此操作不可恢复！')) return;
-            
+
             const result = await apiCall('/api/clear', 'POST');
             if (result) {
                 refreshEmails();
                 alert('数据库已清空');
             }
         }
-        
+
         // 格式化日期
         function formatDate(dateStr) {
             if (!dateStr) return '未知';
@@ -1097,12 +1145,12 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
                 return dateStr;
             }
         }
-        
+
         // 更新状态栏
         function updateStatus(message) {
             document.getElementById('statusBar').innerHTML = `${message} | 邮件总数: <span id="emailCount">${document.getElementById('emailCount').textContent}</span>`;
         }
-        
+
         // 页面加载完成后初始化
         window.onload = async function() {
             const status = await apiCall('/api/status');
@@ -1168,9 +1216,9 @@ def main() -> None:
     else:
         print("警告: 未指定工作目录，请在Web界面中手动导入")
 
-    # 启动服务器
+    # 启动多线程服务器
     server_address = ("", args.port)
-    httpd = HTTPServer(server_address, EmlManagerHandler)
+    httpd = ThreadingHTTPServer(server_address, EmlManagerHandler)
 
     print("EML 邮件管理器 Web 版已启动")
     print(f"访问地址: http://localhost:{args.port}")
