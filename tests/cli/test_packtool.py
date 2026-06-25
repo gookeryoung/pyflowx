@@ -11,9 +11,6 @@ import pyflowx as px
 from pyflowx.cli import packtool
 
 
-# ---------------------------------------------------------------------- #
-# Fixtures: 确保所有测试都在临时目录执行，不污染项目根目录
-# ---------------------------------------------------------------------- #
 @pytest.fixture(autouse=True)
 def packtool_tmp_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """自动切换到临时工作目录，防止测试污染项目根目录.
@@ -22,8 +19,6 @@ def packtool_tmp_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         tmp_path: pytest 提供的临时目录
         monkeypatch: pytest 的 monkeypatch 工具
     """
-    # 切换工作目录到 tmp_path
-    monkeypatch.chdir(tmp_path)
     # Mock DEFAULT_CACHE_DIR 到临时目录
     monkeypatch.setattr(packtool, "DEFAULT_CACHE_DIR", str(tmp_path / ".cache" / "pypack"))
 
@@ -109,7 +104,9 @@ class TestInstallEmbedPython:
         output_dir = tmp_path / "python"
 
         # Create a mock cache file that doesn't exist (force download)
-        with patch("urllib.request.urlretrieve") as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
+        with patch("platform.machine", return_value="x86_64"), patch(
+            "urllib.request.urlretrieve"
+        ) as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
             # Mock successful download
             mock_urlretrieve.return_value = None
             mock_zip_instance = MagicMock()
@@ -134,7 +131,7 @@ class TestInstallEmbedPython:
         cache_file = cache_dir / "python-3.10.11-embed-amd64.zip"
         cache_file.write_bytes(b"PK\x03\x04" + b"\x00" * 100)  # Minimal ZIP header
 
-        with patch("zipfile.ZipFile") as mock_zipfile:
+        with patch("platform.machine", return_value="x86_64"), patch("zipfile.ZipFile") as mock_zipfile:
             mock_zip_instance = MagicMock()
             mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
 
@@ -194,7 +191,9 @@ class TestInstallEmbedPython:
         """Should handle different Python versions."""
         output_dir = tmp_path / "python"
 
-        with patch("urllib.request.urlretrieve") as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
+        with patch("platform.machine", return_value="x86_64"), patch(
+            "urllib.request.urlretrieve"
+        ) as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
             mock_zip_instance = MagicMock()
             mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
 
@@ -207,7 +206,9 @@ class TestInstallEmbedPython:
         """Should create cache directory and file."""
         output_dir = tmp_path / "python"
 
-        with patch("urllib.request.urlretrieve") as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
+        with patch("platform.machine", return_value="x86_64"), patch(
+            "urllib.request.urlretrieve"
+        ) as mock_urlretrieve, patch("zipfile.ZipFile") as mock_zipfile:
             mock_urlretrieve.return_value = None
             mock_zip_instance = MagicMock()
             mock_zipfile.return_value.__enter__.return_value = mock_zip_instance
