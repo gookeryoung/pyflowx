@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from pyflowx.cli import bumpversion
+
+
+@pytest.fixture(autouse=True)
+def auto_use_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """自动使用临时路径."""
+    monkeypatch.chdir(tmp_path)
 
 
 # ---------------------------------------------------------------------- #
@@ -260,3 +267,51 @@ class TestEdgeCases:
 
         # 验证最终结果
         assert test_file.read_text(encoding="utf-8") == '__version__ = "2.0.0"'
+
+
+class TestBumpVersionCli:
+    """Test bumpversion CLI."""
+
+    def test_minor(self, tmp_path: Path) -> None:
+        """Should handle minor version bump."""
+        test_file = tmp_path / "__init__.py"
+        test_file.write_text('__version__ = "1.0.0"', encoding="utf-8")
+
+        # Mock px.run: 只真正执行第一次调用(版本更新),其余返回空 dict
+        with patch("sys.argv", ["bumpversion", "minor", "--no-tag"]), patch("pyflowx.run") as mock_run:
+
+            def run_side_effect(graph, strategy=None):
+                # 执行实际版本更新任务
+                results = {}
+                for spec in graph.specs.values():
+                    if spec.fn is not None and spec.args:
+                        results[spec.name] = spec.fn(*spec.args)
+                return results
+
+            mock_run.side_effect = run_side_effect
+            bumpversion.main()
+
+        # 验证版本号已更新
+        assert test_file.read_text(encoding="utf-8") == '__version__ = "1.1.0"'
+
+    def test_no_valid_files(self, tmp_path: Path, capsys) -> None:
+        """Should handle no valid files."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("这是一个测试文件", encoding="utf-8")
+
+        with patch("sys.argv", ["bumpversion", "minor", "--no-tag"]), patch("pyflowx.run") as mock_run:
+
+            def run_side_effect(graph, strategy=None):
+                # 执行实际版本更新任务
+                results = {}
+                for spec in graph.specs.values():
+                    if spec.fn is not None and spec.args:
+                        results[spec.name] = spec.fn(*spec.args)
+                return results
+
+            mock_run.side_effect = run_side_effect
+            bumpversion.main()
+
+        # 验证未更新任何文件
+        assert test_file.read_text(encoding="utf-8") == "这是一个测试文件"
+        assert "未找到包含版本号的文件" in capsys.readouterr().out
