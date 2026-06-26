@@ -28,7 +28,7 @@ def SETENV(name: str, value: str, default: bool = False):
         else:
             os.environ[name] = value
 
-    return px.TaskSpec(f"set_env_{name}", fn=set_env)
+    return px.TaskSpec(f"setenv_{name.lower()}", fn=set_env, verbose=True)
 
 
 def WHICH(cmd: str):
