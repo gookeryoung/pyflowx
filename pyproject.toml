@@ -25,7 +25,7 @@ version = "0.2.5"
 [project.scripts]
 autofmt     = "pyflowx.cli.autofmt:main"
 bumpversion = "pyflowx.cli.bumpversion:main"
-cls         = "pyflowx.cli.clearscreen:main"
+clr         = "pyflowx.cli.clearscreen:main"
 emlman      = "pyflowx.cli.emlmanager:main"
 envdev      = "pyflowx.cli.envdev:main"
 envpy       = "pyflowx.cli.envpy:main"

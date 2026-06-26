@@ -6,14 +6,10 @@
 from __future__ import annotations
 
 import pyflowx as px
-from pyflowx.conditions import Constants
+from pyflowx.tasks.system import CLR
 
 
 def main() -> None:
     """清屏工具主函数."""
-    graph = px.Graph.from_specs([
-        px.TaskSpec("cls_win", cmd=["cmd", "/c", "cls"], conditions=(lambda: Constants.IS_WINDOWS,)),
-        px.TaskSpec("cls_unix", cmd=["clear"], conditions=(lambda: not Constants.IS_WINDOWS,)),
-        px.TaskSpec("cls_ascii", fn=lambda: print("\033[2J\033[H", end="")),
-    ])
+    graph = px.Graph.from_specs([CLR()])
     px.run(graph, strategy="thread")
