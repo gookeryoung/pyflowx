@@ -15,6 +15,7 @@
 * ``TaskStatus`` 是封闭枚举；执行器绝不发明临时字符串。
 """
 
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -32,7 +33,10 @@ from typing import (
     cast,
 )
 
-from typing_extensions import TypeVar
+if sys.version_info >= (3, 13):
+    from typing import TypeVar
+else:
+    from typing_extensions import TypeVar
 
 T = TypeVar("T", default=Any)
 

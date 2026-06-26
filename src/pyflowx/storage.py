@@ -17,11 +17,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Mapping
 
-from typing_extensions import override
+if sys.version_info >= (3, 12):
+    from typing import override
+else:
+    from typing_extensions import override
 
 from .errors import StorageError
 
