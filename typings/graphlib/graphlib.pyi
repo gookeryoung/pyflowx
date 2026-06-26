@@ -11,7 +11,7 @@ _NODE_DONE = ...
 class _NodeInfo:
     __slots__: list[str]
 
-    def __init__(self, node) -> None: ...
+    def __init__(self, node: Any) -> None: ...
 
 class CycleError(ValueError):
     """Subclass of ValueError raised by TopologicalSorterif cycles exist in the graph
@@ -29,8 +29,8 @@ class CycleError(ValueError):
 class TopologicalSorter:
     """Provides functionality to topologically sort a graph of hashable nodes"""
 
-    def __init__(self, graph=...) -> None: ...
-    def add(self, node, *predecessors) -> None:
+    def __init__(self, graph: Any) -> None: ...
+    def add(self, node: Any, *predecessors: Any) -> None:
         """Add a new node and its predecessors to the graph.
 
         Both the *node* and all elements in *predecessors* must be hashable.
@@ -86,7 +86,7 @@ class TopologicalSorter:
         ...
 
     def __bool__(self) -> bool: ...
-    def done(self, *nodes) -> None:
+    def done(self, *nodes: Any) -> None:
         """Marks a set of nodes returned by "get_ready" as processed.
 
         This method unblocks any successor of each node in *nodes* for being returned

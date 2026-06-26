@@ -54,7 +54,7 @@ def test_verbose_event_callback_running():
     assert report.success
 
 
-def test_verbose_run_with_success_lifecycle(capsys):
+def test_verbose_run_with_success_lifecycle(capsys: pytest.CaptureFixture[str]):
     """Test px.run with verbose=True prints SUCCESS lifecycle."""
     spec = px.TaskSpec("test", fn=lambda: "result")
     graph = px.Graph.from_specs([spec])
@@ -64,7 +64,7 @@ def test_verbose_run_with_success_lifecycle(capsys):
     assert "成功" in captured.out
 
 
-def test_verbose_run_with_failed_lifecycle(capsys):
+def test_verbose_run_with_failed_lifecycle(capsys: pytest.CaptureFixture[str]):
     """Test px.run with verbose=True prints FAILED lifecycle with error."""
 
     def raise_error():
@@ -80,7 +80,7 @@ def test_verbose_run_with_failed_lifecycle(capsys):
     assert "test error" in captured.out
 
 
-def test_verbose_run_with_skipped_lifecycle(capsys):
+def test_verbose_run_with_skipped_lifecycle(capsys: pytest.CaptureFixture[str]):
     """Test px.run with verbose=True prints SKIPPED lifecycle."""
     spec = px.TaskSpec(
         "test",
@@ -98,7 +98,7 @@ def test_verbose_run_with_user_callback():
     """Test px.run with verbose=True and user callback both called."""
     events = []
 
-    def on_event(event):
+    def on_event(event: px.TaskEvent):
         events.append(event)
 
     spec = px.TaskSpec("test", fn=lambda: "result")

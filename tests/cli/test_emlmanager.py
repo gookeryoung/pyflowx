@@ -30,6 +30,8 @@ class TestEmailDatabase:
         db_path = tmp_path / "test.db"
         db = emlmanager.EmailDatabase(db_path)
 
+        assert db.conn is not None
+
         cursor = db.conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='emails'")
         result = cursor.fetchone()
@@ -40,6 +42,8 @@ class TestEmailDatabase:
         """Should create indexes for better query performance."""
         db_path = tmp_path / "test.db"
         db = emlmanager.EmailDatabase(db_path)
+
+        assert db.conn is not None
 
         cursor = db.conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_subject'")
@@ -68,6 +72,7 @@ class TestEmailDatabase:
 
         result = db.insert_email(email_data)
         assert result is True
+        assert db.conn is not None
 
         cursor = db.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM emails")
@@ -101,6 +106,8 @@ class TestEmailDatabase:
         email_data["file_hash"] = "xyz789"
         db.insert_email(email_data)
 
+        assert db.conn is not None
+
         cursor = db.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM emails")
         count = cursor.fetchone()[0]
@@ -118,21 +125,19 @@ class TestEmailDatabase:
 
         # Insert test emails
         for i in range(5):
-            db.insert_email(
-                {
-                    "file_path": f"/test/path{i}.eml",
-                    "file_hash": f"hash{i}",
-                    "subject": f"Subject {i}",
-                    "sender": f"sender{i}@example.com",
-                    "recipients": "recipient@example.com",
-                    "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
-                    "date_parsed": f"2024-01-0{i + 1}T12:00:00",
-                    "body_text": f"Body {i}",
-                    "body_html": f"<p>Body {i}</p>",
-                    "has_attachments": 0,
-                    "file_size": 1024,
-                }
-            )
+            db.insert_email({
+                "file_path": f"/test/path{i}.eml",
+                "file_hash": f"hash{i}",
+                "subject": f"Subject {i}",
+                "sender": f"sender{i}@example.com",
+                "recipients": "recipient@example.com",
+                "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
+                "date_parsed": f"2024-01-0{i + 1}T12:00:00",
+                "body_text": f"Body {i}",
+                "body_html": f"<p>Body {i}</p>",
+                "has_attachments": 0,
+                "file_size": 1024,
+            })
 
         results = db.search_emails(limit=3)
         assert len(results) == 3
@@ -143,37 +148,33 @@ class TestEmailDatabase:
         db_path = tmp_path / "test.db"
         db = emlmanager.EmailDatabase(db_path)
 
-        db.insert_email(
-            {
-                "file_path": "/test/path1.eml",
-                "file_hash": "hash1",
-                "subject": "Important Meeting",
-                "sender": "sender1@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Meeting body",
-                "body_html": "<p>Meeting body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path1.eml",
+            "file_hash": "hash1",
+            "subject": "Important Meeting",
+            "sender": "sender1@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Meeting body",
+            "body_html": "<p>Meeting body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
-        db.insert_email(
-            {
-                "file_path": "/test/path2.eml",
-                "file_hash": "hash2",
-                "subject": "Casual Chat",
-                "sender": "sender2@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Tue, 2 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-02T12:00:00",
-                "body_text": "Chat body",
-                "body_html": "<p>Chat body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path2.eml",
+            "file_hash": "hash2",
+            "subject": "Casual Chat",
+            "sender": "sender2@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Tue, 2 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-02T12:00:00",
+            "body_text": "Chat body",
+            "body_html": "<p>Chat body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         results = db.search_emails(keyword="Meeting", field="subject")
         assert len(results) == 1
@@ -185,37 +186,33 @@ class TestEmailDatabase:
         db_path = tmp_path / "test.db"
         db = emlmanager.EmailDatabase(db_path)
 
-        db.insert_email(
-            {
-                "file_path": "/test/path1.eml",
-                "file_hash": "hash1",
-                "subject": "Test",
-                "sender": "alice@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Body",
-                "body_html": "<p>Body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path1.eml",
+            "file_hash": "hash1",
+            "subject": "Test",
+            "sender": "alice@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Body",
+            "body_html": "<p>Body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
-        db.insert_email(
-            {
-                "file_path": "/test/path2.eml",
-                "file_hash": "hash2",
-                "subject": "Test",
-                "sender": "bob@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Tue, 2 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-02T12:00:00",
-                "body_text": "Body",
-                "body_html": "<p>Body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path2.eml",
+            "file_hash": "hash2",
+            "subject": "Test",
+            "sender": "bob@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Tue, 2 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-02T12:00:00",
+            "body_text": "Body",
+            "body_html": "<p>Body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         results = db.search_emails(keyword="alice", field="sender")
         assert len(results) == 1
@@ -227,21 +224,19 @@ class TestEmailDatabase:
         db_path = tmp_path / "test.db"
         db = emlmanager.EmailDatabase(db_path)
 
-        db.insert_email(
-            {
-                "file_path": "/test/path1.eml",
-                "file_hash": "hash1",
-                "subject": "Project Update",
-                "sender": "manager@example.com",
-                "recipients": "team@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Please review the quarterly report",
-                "body_html": "<p>Please review the quarterly report</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path1.eml",
+            "file_hash": "hash1",
+            "subject": "Project Update",
+            "sender": "manager@example.com",
+            "recipients": "team@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Please review the quarterly report",
+            "body_html": "<p>Please review the quarterly report</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         # Search for keyword in subject
         results = db.search_emails(keyword="Project", field="all")
@@ -258,53 +253,47 @@ class TestEmailDatabase:
         db = emlmanager.EmailDatabase(db_path)
 
         # Insert emails with same subject (different prefixes)
-        db.insert_email(
-            {
-                "file_path": "/test/path1.eml",
-                "file_hash": "hash1",
-                "subject": "Meeting Tomorrow",
-                "sender": "sender1@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Body 1",
-                "body_html": "<p>Body 1</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path1.eml",
+            "file_hash": "hash1",
+            "subject": "Meeting Tomorrow",
+            "sender": "sender1@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Body 1",
+            "body_html": "<p>Body 1</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
-        db.insert_email(
-            {
-                "file_path": "/test/path2.eml",
-                "file_hash": "hash2",
-                "subject": "Re: Meeting Tomorrow",
-                "sender": "sender2@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Tue, 2 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-02T12:00:00",
-                "body_text": "Body 2",
-                "body_html": "<p>Body 2</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path2.eml",
+            "file_hash": "hash2",
+            "subject": "Re: Meeting Tomorrow",
+            "sender": "sender2@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Tue, 2 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-02T12:00:00",
+            "body_text": "Body 2",
+            "body_html": "<p>Body 2</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
-        db.insert_email(
-            {
-                "file_path": "/test/path3.eml",
-                "file_hash": "hash3",
-                "subject": "Different Topic",
-                "sender": "sender3@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Wed, 3 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-03T12:00:00",
-                "body_text": "Body 3",
-                "body_html": "<p>Body 3</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path3.eml",
+            "file_hash": "hash3",
+            "subject": "Different Topic",
+            "sender": "sender3@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Wed, 3 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-03T12:00:00",
+            "body_text": "Body 3",
+            "body_html": "<p>Body 3</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         grouped = db.get_grouped_emails()
         # Should have 2 groups: "Meeting Tomorrow" and "Different Topic"
@@ -333,21 +322,19 @@ class TestEmailDatabase:
         assert db.get_email_count() == 0
 
         for i in range(3):
-            db.insert_email(
-                {
-                    "file_path": f"/test/path{i}.eml",
-                    "file_hash": f"hash{i}",
-                    "subject": f"Subject {i}",
-                    "sender": f"sender{i}@example.com",
-                    "recipients": "recipient@example.com",
-                    "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
-                    "date_parsed": f"2024-01-0{i + 1}T12:00:00",
-                    "body_text": f"Body {i}",
-                    "body_html": f"<p>Body {i}</p>",
-                    "has_attachments": 0,
-                    "file_size": 1024,
-                }
-            )
+            db.insert_email({
+                "file_path": f"/test/path{i}.eml",
+                "file_hash": f"hash{i}",
+                "subject": f"Subject {i}",
+                "sender": f"sender{i}@example.com",
+                "recipients": "recipient@example.com",
+                "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
+                "date_parsed": f"2024-01-0{i + 1}T12:00:00",
+                "body_text": f"Body {i}",
+                "body_html": f"<p>Body {i}</p>",
+                "has_attachments": 0,
+                "file_size": 1024,
+            })
 
         assert db.get_email_count() == 3
         db.close()
@@ -359,21 +346,19 @@ class TestEmailDatabase:
 
         # Insert some emails
         for i in range(3):
-            db.insert_email(
-                {
-                    "file_path": f"/test/path{i}.eml",
-                    "file_hash": f"hash{i}",
-                    "subject": f"Subject {i}",
-                    "sender": f"sender{i}@example.com",
-                    "recipients": "recipient@example.com",
-                    "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
-                    "date_parsed": f"2024-01-0{i + 1}T12:00:00",
-                    "body_text": f"Body {i}",
-                    "body_html": f"<p>Body {i}</p>",
-                    "has_attachments": 0,
-                    "file_size": 1024,
-                }
-            )
+            db.insert_email({
+                "file_path": f"/test/path{i}.eml",
+                "file_hash": f"hash{i}",
+                "subject": f"Subject {i}",
+                "sender": f"sender{i}@example.com",
+                "recipients": "recipient@example.com",
+                "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
+                "date_parsed": f"2024-01-0{i + 1}T12:00:00",
+                "body_text": f"Body {i}",
+                "body_html": f"<p>Body {i}</p>",
+                "has_attachments": 0,
+                "file_size": 1024,
+            })
 
         assert db.get_email_count() == 3
 
@@ -411,7 +396,7 @@ class TestDecodeMimeWords:
 
     def test_decode_none(self) -> None:
         """Should handle None input."""
-        result = emlmanager.decode_mime_words(None)
+        result = emlmanager.decode_mime_words("")
         assert result == ""
 
     def test_decode_mixed_encoding(self) -> None:
@@ -702,21 +687,19 @@ class TestEmlManagerHandler:
 
         # Insert some emails
         for i in range(3):
-            db.insert_email(
-                {
-                    "file_path": f"/test/path{i}.eml",
-                    "file_hash": f"hash{i}",
-                    "subject": f"Subject {i}",
-                    "sender": f"sender{i}@example.com",
-                    "recipients": "recipient@example.com",
-                    "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
-                    "date_parsed": f"2024-01-0{i + 1}T12:00:00",
-                    "body_text": f"Body {i}",
-                    "body_html": f"<p>Body {i}</p>",
-                    "has_attachments": 0,
-                    "file_size": 1024,
-                }
-            )
+            db.insert_email({
+                "file_path": f"/test/path{i}.eml",
+                "file_hash": f"hash{i}",
+                "subject": f"Subject {i}",
+                "sender": f"sender{i}@example.com",
+                "recipients": "recipient@example.com",
+                "date": f"Mon, {i + 1} Jan 2024 12:00:00 +0000",
+                "date_parsed": f"2024-01-0{i + 1}T12:00:00",
+                "body_text": f"Body {i}",
+                "body_html": f"<p>Body {i}</p>",
+                "has_attachments": 0,
+                "file_size": 1024,
+            })
 
         # Create a mock handler instance without calling __init__
         handler = Mock(spec=emlmanager.EmlManagerHandler)
@@ -738,21 +721,19 @@ class TestEmlManagerHandler:
         db = emlmanager.EmailDatabase(db_path)
 
         # Insert test email
-        db.insert_email(
-            {
-                "file_path": "/test/path.eml",
-                "file_hash": "hash",
-                "subject": "Test Subject",
-                "sender": "sender@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Test body",
-                "body_html": "<p>Test body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path.eml",
+            "file_hash": "hash",
+            "subject": "Test Subject",
+            "sender": "sender@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Test body",
+            "body_html": "<p>Test body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         # Create a mock handler instance without calling __init__
         handler = Mock(spec=emlmanager.EmlManagerHandler)
@@ -775,21 +756,19 @@ class TestEmlManagerHandler:
         db = emlmanager.EmailDatabase(db_path)
 
         # Insert test email
-        db.insert_email(
-            {
-                "file_path": "/test/path.eml",
-                "file_hash": "hash",
-                "subject": "Test Subject",
-                "sender": "sender@example.com",
-                "recipients": "recipient@example.com",
-                "date": "Mon, 1 Jan 2024 12:00:00 +0000",
-                "date_parsed": "2024-01-01T12:00:00",
-                "body_text": "Test body",
-                "body_html": "<p>Test body</p>",
-                "has_attachments": 0,
-                "file_size": 1024,
-            }
-        )
+        db.insert_email({
+            "file_path": "/test/path.eml",
+            "file_hash": "hash",
+            "subject": "Test Subject",
+            "sender": "sender@example.com",
+            "recipients": "recipient@example.com",
+            "date": "Mon, 1 Jan 2024 12:00:00 +0000",
+            "date_parsed": "2024-01-01T12:00:00",
+            "body_text": "Test body",
+            "body_html": "<p>Test body</p>",
+            "has_attachments": 0,
+            "file_size": 1024,
+        })
 
         assert db.get_email_count() == 1
 

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+import pyflowx as px
 from pyflowx.cli import bumpversion
 
 
@@ -76,7 +77,7 @@ class TestBumpFileVersion:
         content = test_file.read_text(encoding="utf-8")
         assert "build" not in content
 
-    def test_no_version_found(self, tmp_path: Path, capsys) -> None:
+    def test_no_version_found(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should return None when no version pattern found."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("no version here", encoding="utf-8")
@@ -149,7 +150,7 @@ dependencies = ["lib >= 2.0.0", "other >= 3.0.0"]
         assert "lib >= 2.0.0" in updated
         assert "other >= 3.0.0" in updated
 
-    def test_file_read_error(self, tmp_path: Path, capsys) -> None:
+    def test_file_read_error(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should handle file read errors."""
         # 创建一个目录而不是文件
         test_file = tmp_path / "test_dir"
@@ -158,7 +159,7 @@ dependencies = ["lib >= 2.0.0", "other >= 3.0.0"]
         with pytest.raises(Exception):  # noqa: B017
             bumpversion.bump_file_version(test_file, "patch")
 
-    def test_file_write_error(self, tmp_path: Path, capsys) -> None:
+    def test_file_write_error(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should handle file write errors."""
         # 在只读目录中创建文件（这个测试在某些系统上可能不适用）
         test_file = tmp_path / "readonly.toml"
@@ -224,7 +225,7 @@ class TestVersionPattern:
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
-    def test_empty_file(self, tmp_path: Path, capsys) -> None:
+    def test_empty_file(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should handle empty file."""
         test_file = tmp_path / "empty.txt"
         test_file.write_text("", encoding="utf-8")
@@ -280,7 +281,7 @@ class TestBumpVersionCli:
         # Mock px.run: 只真正执行第一次调用(版本更新),其余返回空 dict
         with patch("sys.argv", ["bumpversion", "minor", "--no-tag"]), patch("pyflowx.run") as mock_run:
 
-            def run_side_effect(graph, strategy=None):
+            def run_side_effect(graph: px.Graph, strategy: str | None = None):
                 # 执行实际版本更新任务
                 results = {}
                 for spec in graph.specs.values():
@@ -294,14 +295,14 @@ class TestBumpVersionCli:
         # 验证版本号已更新
         assert test_file.read_text(encoding="utf-8") == '__version__ = "1.1.0"'
 
-    def test_no_valid_files(self, tmp_path: Path, capsys) -> None:
+    def test_no_valid_files(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Should handle no valid files."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("这是一个测试文件", encoding="utf-8")
 
         with patch("sys.argv", ["bumpversion", "minor", "--no-tag"]), patch("pyflowx.run") as mock_run:
 
-            def run_side_effect(graph, strategy=None):
+            def run_side_effect(graph: px.Graph, strategy: str | None = None):
                 # 执行实际版本更新任务
                 results = {}
                 for spec in graph.specs.values():

@@ -107,6 +107,7 @@ class TestTaskSpecDefinitions:
     def test_kill_tgit_spec(self) -> None:
         """kill_tgit spec should be properly defined."""
         assert gittool.kill_tgit.name == "task_kill"
+        assert isinstance(gittool.kill_tgit.cmd, list)
         assert "taskkill" in gittool.kill_tgit.cmd
 
 

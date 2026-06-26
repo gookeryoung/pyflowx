@@ -177,7 +177,7 @@ def test_taskspec_shell_cmd_file_not_found_mocked():
         _ = wrapped_fn()
 
 
-def test_taskspec_shell_cmd_with_cwd_verbose(capsys):
+def test_taskspec_shell_cmd_with_cwd_verbose(capsys: pytest.CaptureFixture[str]):
     """Test TaskSpec._wrap_cmd with shell command, cwd and verbose=True."""
     with tempfile.TemporaryDirectory() as tmpdir:
         if sys.platform == "win32":

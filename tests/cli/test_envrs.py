@@ -48,6 +48,7 @@ class TestSetRustMirror:
     def test_set_rust_mirror_unknown_uses_default(self, tmp_path: Path) -> None:
         """Should use default mirror for unknown mirror name."""
         with patch.object(Path, "home", return_value=tmp_path):
+            # pyrefly: ignore [bad-argument-type]
             envrs.set_rust_mirror("unknown")
             # Should use default mirror (tsinghua)
             assert os.environ.get("RUSTUP_DIST_SERVER") == "https://mirrors.tuna.tsinghua.edu.cn/rustup"

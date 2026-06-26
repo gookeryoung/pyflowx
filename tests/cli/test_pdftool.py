@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -71,7 +72,7 @@ class TestPdfCompress:
             mock_fitz_open.return_value = mock_doc
 
             # Mock save to actually create the file
-            def mock_save(*args, **kwargs):
+            def mock_save(*args: Any, **kwargs: Any):
                 output_file.write_bytes(b"Compressed PDF")
 
             mock_doc.save = mock_save
