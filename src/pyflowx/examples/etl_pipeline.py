@@ -10,19 +10,21 @@ Demonstrates the core PyFlowX workflow:
 
 from __future__ import annotations
 
+from typing import Any
+
 import pyflowx as px
 
 # --- task functions: pure, testable, no framework coupling ------------- #
 
 
-def extract_customers() -> list[dict]:
+def extract_customers() -> list[dict[str, Any]]:
     return [
         {"id": "C001", "name": "Alice"},
         {"id": "C002", "name": "Bob"},
     ]
 
 
-def extract_orders() -> list[dict]:
+def extract_orders() -> list[dict[str, Any]]:
     return [
         {"id": "O001", "customer_id": "C001", "amount": 150.0},
         {"id": "O002", "customer_id": "C002", "amount": 200.5},
@@ -31,32 +33,30 @@ def extract_orders() -> list[dict]:
 
 # Parameter names match dependency names → automatic injection.
 def transform(
-    extract_customers: list[dict],
-    extract_orders: list[dict],
-) -> list[dict]:
+    extract_customers: list[dict[str, Any]],
+    extract_orders: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     cmap = {c["id"]: c for c in extract_customers}
     return [{**o, "customer_name": cmap[o["customer_id"]]["name"]} for o in extract_orders if o["customer_id"] in cmap]
 
 
-def load(transform: list[dict]) -> int:
+def load(transform: list[dict[str, Any]]) -> int:
     print(f"  loaded {len(transform)} records")
     return len(transform)
 
 
 def main() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("extract_customers", extract_customers, tags=("extract",)),
-            px.TaskSpec("extract_orders", extract_orders, tags=("extract",)),
-            px.TaskSpec(
-                "transform",
-                transform,
-                depends_on=("extract_customers", "extract_orders"),
-                tags=("transform",),
-            ),
-            px.TaskSpec("load", load, depends_on=("transform",), retries=1, tags=("load",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("extract_customers", extract_customers, tags=("extract",)),
+        px.TaskSpec("extract_orders", extract_orders, tags=("extract",)),
+        px.TaskSpec(
+            "transform",
+            transform,
+            depends_on=("extract_customers", "extract_orders"),
+            tags=("transform",),
+        ),
+        px.TaskSpec("load", load, depends_on=("transform",), retries=1, tags=("load",)),
+    ])
 
     print("=== Execution plan ===")
     print(graph.describe())

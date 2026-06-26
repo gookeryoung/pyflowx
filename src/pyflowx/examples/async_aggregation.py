@@ -31,14 +31,12 @@ def aggregate(ctx: px.Context) -> dict[str, Any]:
 
 
 def main() -> None:
-    graph = px.Graph.from_specs(
-        [
-            # Static positional args parameterise the same function twice.
-            px.TaskSpec("fetch_user", fetch_user, args=(1,)),
-            px.TaskSpec("fetch_posts", fetch_posts, args=(1,)),
-            px.TaskSpec("aggregate", aggregate, depends_on=("fetch_user", "fetch_posts")),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        # Static positional args parameterise the same function twice.
+        px.TaskSpec("fetch_user", fetch_user, args=(1,)),
+        px.TaskSpec("fetch_posts", fetch_posts, args=(1,)),
+        px.TaskSpec("aggregate", aggregate, depends_on=("fetch_user", "fetch_posts")),
+    ])
 
     print("=== Dry run ===")
     _ = px.run(graph, strategy="async", dry_run=True)

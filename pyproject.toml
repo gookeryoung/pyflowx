@@ -10,7 +10,10 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
-dependencies = ["graphlib_backport >= 1.0.0; python_version < '3.9'"]
+dependencies = [
+    "graphlib_backport >= 1.0.0; python_version < '3.9'",
+    "typing-extensions>=4.13.2",
+]
 description = "Lightweight, type-safe DAG task scheduler with multi-strategy execution."
 keywords = ["async", "dag", "scheduler", "task", "workflow"]
 license = { text = "MIT" }
@@ -22,9 +25,9 @@ version = "0.2.3"
 [project.scripts]
 autofmt     = "pyflowx.cli.autofmt:main"
 bumpversion = "pyflowx.cli.bumpversion:main"
-clr         = "pyflowx.cli.clearscreen:main"
+cls         = "pyflowx.cli.clearscreen:main"
 emlman      = "pyflowx.cli.emlmanager:main"
-envlinux    = "pyflowx.cli.envlinux:main"
+envdev      = "pyflowx.cli.envdev:main"
 envpy       = "pyflowx.cli.envpy:main"
 envqt       = "pyflowx.cli.envqt:main"
 envrs       = "pyflowx.cli.envrs:main"
@@ -146,6 +149,6 @@ select = [
 "**/tests/**" = ["ARG001", "ARG002"]
 
 [tool.pyrefly]
-preset           = "basic"
+preset           = "strict"
 project-includes = ["**/*.ipynb", "**/*.py*"]
 python-version   = "3.8"

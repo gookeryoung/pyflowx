@@ -174,19 +174,18 @@ class TaskSpec(Generic[T]):
         verbose = self.verbose
 
         if isinstance(cmd, list):
-            cmd_list = cast(List[str], cmd)
 
             def _run_list() -> T:
                 import subprocess
 
-                cmd_str = " ".join(str(arg) for arg in cmd_list)
+                cmd_str = " ".join(arg for arg in cmd)
                 if verbose:
                     print(f"[verbose] 执行命令: {cmd_str}", flush=True)
                     if cwd is not None:
                         print(f"[verbose] 工作目录: {cwd}", flush=True)
                 try:
                     result = subprocess.run(
-                        cmd_list,
+                        cmd,
                         cwd=cwd,
                         timeout=timeout,
                         capture_output=not verbose,
@@ -288,7 +287,7 @@ class TaskSpec(Generic[T]):
 
         cmd = self.cmd
         if isinstance(cmd, list) and cmd:
-            first_arg = cast(str, cmd[0])
+            first_arg = cmd[0]
             return shutil.which(first_arg) is not None
         return True
 

@@ -5,23 +5,15 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import pyflowx as px
 from pyflowx.conditions import Constants
 
 
-def clear_screen() -> None:
-    """使用系统命令清屏."""
-    if Constants.IS_WINDOWS:
-        subprocess.run(["cmd", "/c", "cls"], check=False)
-    else:
-        subprocess.run(["clear"], check=False)
-
-    print("\033[2J\033[H", end="")
-
-
 def main() -> None:
     """清屏工具主函数."""
-    graph = px.Graph.from_specs([px.TaskSpec("clearscreen", fn=clear_screen)])
+    graph = px.Graph.from_specs([
+        px.TaskSpec("cls_win", cmd=["cmd", "/c", "cls"], conditions=(lambda: Constants.IS_WINDOWS,)),
+        px.TaskSpec("cls_unix", cmd=["clear"], conditions=(lambda: not Constants.IS_WINDOWS,)),
+        px.TaskSpec("cls_ascii", fn=lambda: print("\033[2J\033[H", end="")),
+    ])
     px.run(graph, strategy="thread")

@@ -2184,10 +2184,12 @@ wheels = [
 
 [[package]]
 name = "pyflowx"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "." }
 dependencies = [
     { name = "graphlib-backport", marker = "python_full_version < '3.9'" },
+    { name = "typing-extensions", version = "4.13.2", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
+    { name = "typing-extensions", version = "4.15.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.9'" },
 ]
 
 [package.optional-dependencies]
@@ -2257,6 +2259,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "tox", marker = "extra == 'dev'", specifier = ">=4.25.0" },
     { name = "tox-uv", marker = "extra == 'dev'", specifier = ">=1.13.1" },
+    { name = "typing-extensions", specifier = ">=4.13.2" },
 ]
 provides-extras = ["dev", "office"]
 
@@ -3179,6 +3182,7 @@ name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 resolution-markers = [
+    "python_full_version >= '3.15'",
     "python_full_version >= '3.10' and python_full_version < '3.15'",
     "python_full_version > '3.9' and python_full_version < '3.10'",
     "python_full_version == '3.9'",

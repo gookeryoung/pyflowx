@@ -132,7 +132,9 @@ def _check_conditions_for_skip(
     if failed_conditions:
         return f"条件不满足: {', '.join(failed_conditions)}"
     elif spec.skip_if_missing and not spec._is_cmd_available():
-        return f"命令不存在: {spec.cmd[0] if spec.cmd else 'unknown'}"
+        # _is_cmd_available() 仅对 list[str] 类型返回 False
+        cmd_name = spec.cmd[0] if isinstance(spec.cmd, list) and spec.cmd else "unknown"
+        return f"命令不存在: {cmd_name}"
     else:
         return "条件不满足"
 

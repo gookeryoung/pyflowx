@@ -212,16 +212,14 @@ def main() -> None:
 
     # 更新所有文件的版本号（使用顺序执行避免竞争条件）
     # 使用相对于 cwd 的路径作为任务名，确保唯一性
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                f"bump_{file.relative_to(Path.cwd())}".replace("\\", "_").replace("/", "_").replace(".", "_"),
-                fn=bump_file_version,
-                args=(file, part),
-            )
-            for file in all_files
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            f"bump_{file.relative_to(Path.cwd())}".replace("\\", "_").replace("/", "_").replace(".", "_"),
+            fn=bump_file_version,
+            args=(file, part),
+        )
+        for file in all_files
+    ])
     report = px.run(graph, strategy="sequential")
 
     # 收集新版本号（取第一个成功的结果）
@@ -239,23 +237,25 @@ def main() -> None:
     print(f"版本号已更新为: {new_version}")
 
     # 提交修改
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("git_add", cmd=["git", "add", "."]),
-            px.TaskSpec(
-                "git_commit", cmd=["git", "commit", "-m", f"bump version to {new_version}"], depends_on=["git_add"]
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("git_add", cmd=["git", "add", "."]),
+        px.TaskSpec(
+            "git_commit",
+            cmd=["git", "commit", "-m", f"bump version to {new_version}"],
+            depends_on=("git_add",),
+        ),
+    ])
     px.run(graph, strategy="sequential")
 
     # 创建 git tag
     if not args.no_tag:
         tag_name = f"v{new_version}"
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec("git_tag", cmd=["git", "tag", "-a", tag_name, "-m", f"Release {tag_name}"]),
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "git_tag",
+                cmd=["git", "tag", "-a", tag_name, "-m", f"Release {tag_name}"],
+                depends_on=("git_commit",),
+            ),
+        ])
         px.run(graph, strategy="sequential")
         print(f"已创建标签: {tag_name}")

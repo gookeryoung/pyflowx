@@ -29,13 +29,11 @@ def merge(fetch_a: str, fetch_b: str) -> str:
 
 
 def main() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("fetch_a", fetch_a),
-            px.TaskSpec("fetch_b", fetch_b),
-            px.TaskSpec("merge", merge, depends_on=("fetch_a", "fetch_b")),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("fetch_a", fetch_a),
+        px.TaskSpec("fetch_b", fetch_b),
+        px.TaskSpec("merge", merge, depends_on=("fetch_a", "fetch_b")),
+    ])
 
     print("=== Mermaid diagram ===")
     print(graph.to_mermaid("LR"))

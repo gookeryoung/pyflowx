@@ -21,6 +21,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Mapping
 
+from typing_extensions import override
+
 from .errors import StorageError
 
 
@@ -54,18 +56,23 @@ class MemoryBackend(StateBackend):
     def __init__(self) -> None:
         self._store: dict[str, Any] = {}
 
+    @override
     def load(self) -> Mapping[str, Any]:
         return dict(self._store)
 
+    @override
     def save(self, name: str, value: Any) -> None:
         self._store[name] = value
 
+    @override
     def has(self, name: str) -> bool:
         return name in self._store
 
+    @override
     def get(self, name: str) -> Any:
         return self._store[name]
 
+    @override
     def clear(self) -> None:
         self._store.clear()
 
@@ -104,9 +111,11 @@ class JSONBackend(StateBackend):
         except (OSError, TypeError) as exc:
             raise StorageError(f"cannot write state file {self._path!r}", exc) from exc
 
+    @override
     def load(self) -> Mapping[str, Any]:
         return dict(self._store)
 
+    @override
     def save(self, name: str, value: Any) -> None:
         # 在修改内存状态前先校验可序列化性。
         try:
@@ -116,12 +125,15 @@ class JSONBackend(StateBackend):
         self._store[name] = value
         self._flush()
 
+    @override
     def has(self, name: str) -> bool:
         return name in self._store
 
+    @override
     def get(self, name: str) -> Any:
         return self._store[name]
 
+    @override
     def clear(self) -> None:
         self._store.clear()
         self._flush()
