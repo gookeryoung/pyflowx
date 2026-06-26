@@ -28,12 +28,13 @@ from typing import (
     Mapping,
     Optional,
     Tuple,
-    TypeVar,
     Union,
     cast,
 )
 
-T = TypeVar("T")
+from typing_extensions import TypeVar
+
+T = TypeVar("T", default=Any)
 
 # 任务可调用对象可以是同步或异步的。显式保留联合类型，让 mypy 理解两种形态。
 TaskFn = Union[

@@ -146,7 +146,7 @@ def pdf_extract_text(input_path: Path, output_path: Path) -> None:
     doc = fitz.open(str(input_path))
     text = ""
     for page in doc:
-        text += page.get_text() + "\n\n"
+        text += str(page.get_text()) + "\n\n"
     doc.close()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +164,7 @@ def pdf_extract_images(input_path: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     image_count = 0
+    # pyrefly: ignore [bad-argument-type]
     for page_num, page in enumerate(doc):
         images = page.get_images(full=True)
         for img_idx, img in enumerate(images):
@@ -249,9 +250,13 @@ def pdf_info(input_path: Path) -> None:
     doc = fitz.open(str(input_path))
     print(f"文件: {input_path}")
     print(f"页数: {doc.page_count}")
+    # pyrefly: ignore [missing-attribute]
     print(f"标题: {doc.metadata.get('title', 'N/A')}")
+    # pyrefly: ignore [missing-attribute]
     print(f"作者: {doc.metadata.get('author', 'N/A')}")
+    # pyrefly: ignore [missing-attribute]
     print(f"创建日期: {doc.metadata.get('creationDate', 'N/A')}")
+    # pyrefly: ignore [missing-attribute]
     print(f"修改日期: {doc.metadata.get('modDate', 'N/A')}")
     print(f"文件大小: {input_path.stat().st_size / 1024:.1f} KB")
     doc.close()
@@ -281,6 +286,7 @@ def pdf_ocr(input_path: Path, output_path: Path, lang: str = "chi_sim+eng") -> N
         new_page = new_doc.new_page(width=page.rect.width, height=page.rect.height)
         new_page.insert_image(new_page.rect, pixmap=pix)
         text_rect = fitz.Rect(0, 0, page.rect.width, page.rect.height)
+        # pyrefly: ignore [bad-argument-type]
         new_page.insert_textbox(text_rect, ocr_text)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +325,7 @@ def pdf_to_images(input_path: Path, output_dir: Path, dpi: int = 300) -> None:
     doc = fitz.open(str(input_path))
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # pyrefly: ignore [bad-argument-type]
     for page_num, page in enumerate(doc):
         pix = page.get_pixmap(dpi=dpi)
         image_path = output_dir / f"{input_path.stem}_page_{page_num + 1}.png"

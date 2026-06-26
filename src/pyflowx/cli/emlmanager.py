@@ -88,6 +88,8 @@ class EmailDatabase:
 
     def insert_email(self, email_data: dict[str, Any]) -> bool:
         """插入邮件数据."""
+        assert self.conn, "数据库连接未初始化"
+
         try:
             with self._lock:
                 cursor = self.conn.cursor()
@@ -123,6 +125,8 @@ class EmailDatabase:
         self, keyword: str = "", field: str = "all", limit: int = 100, offset: int = 0
     ) -> list[dict[str, Any]]:
         """搜索邮件."""
+        assert self.conn, "数据库连接未初始化"
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -154,6 +158,8 @@ class EmailDatabase:
 
     def get_grouped_emails(self) -> dict[str, list[dict[str, Any]]]:
         """获取按主题分组的邮件."""
+        assert self.conn, "数据库连接未初始化"
+
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute(f"SELECT * FROM {TABLE_NAME} ORDER BY subject, date_parsed DESC")
@@ -183,6 +189,8 @@ class EmailDatabase:
 
     def get_email_count(self) -> int:
         """获取邮件总数."""
+        assert self.conn, "数据库连接未初始化"
+
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
@@ -190,6 +198,8 @@ class EmailDatabase:
 
     def clear_all(self) -> None:
         """清空所有邮件数据."""
+        assert self.conn, "数据库连接未初始化"
+
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute(f"DELETE FROM {TABLE_NAME}")
@@ -557,15 +567,13 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
 
         emails = self.db.search_emails(keyword, field, limit, offset)
         total_count = self.db.get_email_count()
-        self._send_json_response(
-            {
-                "emails": emails,
-                "count": len(emails),
-                "total": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
-        )
+        self._send_json_response({
+            "emails": emails,
+            "count": len(emails),
+            "total": total_count,
+            "limit": limit,
+            "offset": offset,
+        })
 
     def _api_get_email(self, query_params: dict[str, list[str]]) -> None:
         """API: 获取单个邮件详情."""
@@ -576,6 +584,10 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
         email_id = query_params.get("id", [""])[0]
         if not email_id:
             self._send_json_response({"error": "缺少邮件ID"}, 400)
+            return
+
+        if not self.db.conn:
+            self._send_json_response({"error": "数据库连接未初始化"}, 500)
             return
 
         with self.db._lock:
@@ -628,6 +640,10 @@ class EmlManagerHandler(BaseHTTPRequestHandler):
         def import_emails():
             eml_files = list(self.work_dir.rglob("*.eml"))
             if not eml_files:
+                return
+
+            if not self.db.conn:
+                self._send_json_response({"error": "数据库连接未初始化"}, 500)
                 return
 
             # 先批量查询所有已存在的文件
@@ -1267,6 +1283,10 @@ def main() -> None:
             eml_files = list(work_dir.rglob("*.eml"))
             if eml_files:
                 print(f"发现 {len(eml_files)} 个 EML 文件，开始导入...")
+
+                if not EmlManagerHandler.db.conn:
+                    print("数据库连接未初始化，无法导入邮件")
+                    return
 
                 # 先批量查询所有已存在的文件
                 with EmlManagerHandler.db._lock:
