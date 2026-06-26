@@ -236,26 +236,28 @@ def main() -> None:
 
     print(f"版本号已更新为: {new_version}")
 
-    # 提交修改
-    graph = px.Graph.from_specs([
+    # 提交修改并创建标签
+    tasks = [
         px.TaskSpec("git_add", cmd=["git", "add", "."]),
         px.TaskSpec(
             "git_commit",
             cmd=["git", "commit", "-m", f"bump version to {new_version}"],
             depends_on=("git_add",),
         ),
-    ])
-    px.run(graph, strategy="sequential")
+    ]
 
-    # 创建 git tag
     if not args.no_tag:
         tag_name = f"v{new_version}"
-        graph = px.Graph.from_specs([
+        tasks.append(
             px.TaskSpec(
                 "git_tag",
                 cmd=["git", "tag", "-a", tag_name, "-m", f"Release {tag_name}"],
                 depends_on=("git_commit",),
-            ),
-        ])
-        px.run(graph, strategy="sequential")
-        print(f"已创建标签: {tag_name}")
+            )
+        )
+
+    graph = px.Graph.from_specs(tasks)
+    px.run(graph, strategy="sequential")
+
+    if not args.no_tag:
+        print(f"已创建标签: v{new_version}")
