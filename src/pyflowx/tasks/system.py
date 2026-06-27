@@ -66,7 +66,7 @@ def reset_icon_cache() -> list[px.TaskSpec]:
     ]
 
 
-def setenv(name: str, value: str, default: bool = False):
+def setenv(name: str, value: str, default: bool = False) -> px.TaskSpec:
     """设置环境变量任务."""
 
     def set_env():
@@ -78,7 +78,12 @@ def setenv(name: str, value: str, default: bool = False):
     return px.TaskSpec(f"setenv_{name.lower()}", fn=set_env, verbose=True)
 
 
-def which(cmd: str):
+def setenv_group(envs: dict[str, str], default: bool = False) -> list[px.TaskSpec]:
+    """设置环境变量组任务."""
+    return [setenv(name, value, default) for name, value in envs.items()]
+
+
+def which(cmd: str) -> px.TaskSpec:
     """查找命令路径任务."""
     which_cmd = "where" if Constants.IS_WINDOWS else "which"
 
@@ -95,4 +100,17 @@ def which(cmd: str):
     return px.TaskSpec(f"which_{cmd}", fn=find_command)
 
 
-__all__ = ["clr", "setenv", "which"]
+def write_file(path: str, content: str, encoding: str = "utf-8") -> px.TaskSpec:
+    """写入文件任务."""
+
+    def write():
+        try:
+            with open(path, "w", encoding=encoding) as f:
+                f.write(content)
+        except Exception as e:
+            print(f"写入文件 {path} 失败: {e}")
+
+    return px.TaskSpec(f"write_file_{path}", fn=write, verbose=True)
+
+
+__all__ = ["clr", "reset_icon_cache", "setenv", "setenv_group", "which", "write_file"]
