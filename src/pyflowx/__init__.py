@@ -4,9 +4,15 @@
 --------
 * :class:`TaskSpec` —— 不可变任务描述符（唯一需要配置的东西）。
 * :class:`Graph` —— 由一组 spec 构建的 DAG；负责校验、分层、可视化。
-* :func:`run` —— 以 ``sequential`` / ``thread`` / ``async`` 策略执行图。
+* :func:`run` ——以 ``sequential`` / ``thread`` / ``async`` / ``dependency``
+  策略执行图。
 * :class:`RunReport` —— 类型化、可查询的运行结果。
 * :class:`Context` —— 整体上下文注入的标注标记。
+* :class:`RetryPolicy` —— 重试策略（max_attempts/delay/backoff/jitter/retry_on）。
+* :class:`TaskHooks` —— 任务生命周期钩子（pre_run/post_run/on_failure）。
+* :class:`GraphDefaults` —— 图级默认值。
+* :func:`compose` —— 编程式组合多图。
+* :func:`task_template` —— 批量生成相似 TaskSpec 的工厂。
 * 状态后端：:class:`StateBackend`、:class:`MemoryBackend`、:class:`JSONBackend`。
 
 快速上手
@@ -18,7 +24,7 @@
 
     graph = px.Graph.from_specs([
         px.TaskSpec("extract", extract),
-        px.TaskSpec("double", double, ("extract",)),
+        px.TaskSpec("double", double, depends_on=("extract",)),
     ])
     report = px.run(graph, strategy="sequential")
     print(report["double"])  # [2, 4, 6]
@@ -29,23 +35,18 @@
     from pyflowx.conditions import IS_WINDOWS, BuiltinConditions
 
     graph = px.Graph.from_specs([
-        # 使用命令列表
         px.TaskSpec("list_files", cmd=["ls", "-la"]),
-        # 使用 shell 命令
         px.TaskSpec("check_git", cmd="git status"),
-        # 条件执行：仅在 Windows 上运行
         px.TaskSpec(
             "win_only",
             cmd=["dir"],
             conditions=(IS_WINDOWS,)
         ),
-        # 条件执行：仅在 git 已安装时运行
         px.TaskSpec(
             "git_check",
             cmd=["git", "--version"],
             conditions=(BuiltinConditions.HAS_INSTALLED("git"),)
         ),
-        # 命令不存在时自动跳过（而非失败）
         px.TaskSpec(
             "optional_build",
             cmd=["maturin", "build"],
@@ -58,6 +59,10 @@
 from __future__ import annotations
 
 from .conditions import (
+    IS_LINUX,
+    IS_MACOS,
+    IS_POSIX,
+    IS_WINDOWS,
     BuiltinConditions,
     Condition,
     Constants,
@@ -74,20 +79,33 @@ from .errors import (
     TaskTimeoutError,
 )
 from .executors import Strategy, run
-from .graph import Graph, GraphComposer
+from .graph import Graph, GraphComposer, GraphDefaults, compose
 from .report import RunReport
 from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
-from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
+from .task import (
+    CacheKeyFn,
+    RetryPolicy,
+    TaskCmd,
+    TaskEvent,
+    TaskHooks,
+    TaskResult,
+    TaskSpec,
+    TaskStatus,
+    task_template,
+)
 
-__version__ = "0.2.6"
+__version__ = "0.3.0"
 
 __all__ = [
+    "IS_LINUX",
+    "IS_MACOS",
+    "IS_POSIX",
+    "IS_WINDOWS",
     "BuiltinConditions",
+    "CacheKeyFn",
     "CliExitCode",
-    # CLI 运行器
     "CliRunner",
-    # 条件判断
     "Condition",
     "Constants",
     "Context",
@@ -95,28 +113,28 @@ __all__ = [
     "DuplicateTaskError",
     "Graph",
     "GraphComposer",
+    "GraphDefaults",
     "InjectionError",
     "JSONBackend",
     "MemoryBackend",
     "MissingDependencyError",
-    # 错误
     "PyFlowXError",
+    "RetryPolicy",
     "RunReport",
-    # 状态后端
     "StateBackend",
     "StorageError",
     "Strategy",
     "TaskCmd",
     "TaskEvent",
     "TaskFailedError",
+    "TaskHooks",
     "TaskResult",
-    # 核心类型
     "TaskSpec",
     "TaskStatus",
     "TaskTimeoutError",
-    # 辅助（高级）
     "build_call_args",
+    "compose",
     "describe_injection",
-    # 执行
     "run",
+    "task_template",
 ]

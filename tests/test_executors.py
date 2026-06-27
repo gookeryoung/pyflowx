@@ -84,7 +84,9 @@ def test_retries_then_succeeds() -> None:
             raise RuntimeError("not yet")
         return "ok"
 
-    graph = px.Graph.from_specs([px.TaskSpec("flaky", flaky, retries=2)])
+    graph = px.Graph.from_specs([
+        px.TaskSpec("flaky", flaky, retry=px.RetryPolicy(max_attempts=3)),
+    ])
     report = px.run(graph, strategy="sequential")
     assert report.success
     assert report["flaky"] == "ok"
@@ -95,7 +97,9 @@ def test_retries_exhausted() -> None:
     def always_fail() -> None:
         raise RuntimeError("nope")
 
-    graph = px.Graph.from_specs([px.TaskSpec("f", always_fail, retries=2)])
+    graph = px.Graph.from_specs([
+        px.TaskSpec("f", always_fail, retry=px.RetryPolicy(max_attempts=3)),
+    ])
     with pytest.raises(TaskFailedError) as exc_info:
         _ = px.run(graph, strategy="sequential")
     assert exc_info.value.attempts == 3
@@ -332,7 +336,9 @@ def test_async_timeout_retry_then_succeed() -> None:
             await asyncio.sleep(10)  # 触发超时
         return "ok"
 
-    graph = px.Graph.from_specs([px.TaskSpec("a", flaky, retries=2, timeout=0.05)])
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", flaky, retry=px.RetryPolicy(max_attempts=3), timeout=0.05),
+    ])
     report = px.run(graph, strategy="async")
     assert report.success
     assert report["a"] == "ok"
@@ -349,7 +355,9 @@ def test_async_failure_retry_branch(caplog: pytest.LogCaptureFixture) -> None:
             raise RuntimeError("not yet")
         return "ok"
 
-    graph = px.Graph.from_specs([px.TaskSpec("a", flaky, retries=2)])
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", flaky, retry=px.RetryPolicy(max_attempts=3)),
+    ])
     with caplog.at_level("WARNING", logger="pyflowx"):
         report = px.run(graph, strategy="async")
     assert report.success
@@ -489,7 +497,7 @@ def test_run_empty_graph() -> None:
 # ---------------------------------------------------------------------- #
 def test_downstream_skipped_when_upstream_skipped_sequential() -> None:
     """上游任务被 SKIPPED 后，下游任务也应被 SKIPPED（sequential 策略）."""
-    never_true = lambda: False  # noqa: E731
+    never_true = lambda _ctx: False  # noqa: E731
 
     def downstream(upstream: str) -> str:
         return upstream + "_processed"
@@ -506,7 +514,7 @@ def test_downstream_skipped_when_upstream_skipped_sequential() -> None:
 
 def test_downstream_skipped_when_upstream_skipped_thread() -> None:
     """上游任务被 SKIPPED 后，下游任务也应被 SKIPPED（thread 策略）."""
-    never_true = lambda: False  # noqa: E731
+    never_true = lambda _ctx: False  # noqa: E731
 
     def downstream(upstream: str) -> str:
         return upstream + "_processed"
@@ -530,7 +538,7 @@ def test_downstream_skipped_when_upstream_skipped_async() -> None:
     async def downstream(upstream: str) -> str:
         return upstream + "_processed"
 
-    never_true = lambda: False  # noqa: E731
+    never_true = lambda _ctx: False  # noqa: E731
 
     graph = px.Graph.from_specs([
         px.TaskSpec("upstream", upstream, conditions=(never_true,)),
@@ -544,7 +552,7 @@ def test_downstream_skipped_when_upstream_skipped_async() -> None:
 
 def test_downstream_executes_when_upstream_succeeds() -> None:
     """上游任务成功时，下游任务应正常执行."""
-    always_true = lambda: True  # noqa: E731
+    always_true = lambda _ctx: True  # noqa: E731
 
     def upstream() -> str:
         return "hello"

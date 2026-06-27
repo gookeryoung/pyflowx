@@ -85,7 +85,7 @@ def test_verbose_run_with_skipped_lifecycle(capsys: pytest.CaptureFixture[str]):
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
     )
     graph = px.Graph.from_specs([spec])
     report = px.run(graph, strategy="sequential", verbose=True)
@@ -140,7 +140,7 @@ def test_verbose_event_callback_skipped():
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
         verbose=True,
     )
     graph = px.Graph.from_specs([spec])
@@ -161,7 +161,11 @@ def test_execute_sync_with_retries():
             raise ValueError("temporary error")
         return "success"
 
-    spec = px.TaskSpec("retry_test", fn=failing_function, retries=3)
+    spec = px.TaskSpec(
+        "retry_test",
+        fn=failing_function,
+        retry=px.RetryPolicy(max_attempts=3),
+    )
     graph = px.Graph.from_specs([spec])
 
     # Should succeed after retries
@@ -182,7 +186,11 @@ def test_execute_async_with_retries():
             raise ValueError("temporary error")
         return "success"
 
-    spec = px.TaskSpec("retry_async_test", fn=failing_async_function, retries=3)
+    spec = px.TaskSpec(
+        "retry_async_test",
+        fn=failing_async_function,
+        retry=px.RetryPolicy(max_attempts=3),
+    )
     graph = px.Graph.from_specs([spec])
 
     # Should succeed after retries
@@ -196,7 +204,7 @@ def test_execute_sync_skip_on_condition():
     spec = px.TaskSpec(
         "skip_test",
         fn=lambda: "result",
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
     )
     graph = px.Graph.from_specs([spec])
 
@@ -210,7 +218,7 @@ def test_execute_async_skip_on_condition():
     spec = px.TaskSpec(
         "skip_async_test",
         fn=lambda: "result",
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
     )
     graph = px.Graph.from_specs([spec])
 

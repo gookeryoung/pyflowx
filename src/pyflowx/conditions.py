@@ -1,7 +1,12 @@
 """条件判断模块.
 
-提供平台条件、应用安装条件等预定义条件判断函数,
-用于 TaskSpec 的条件执行功能.
+所有条件均为 ``Callable[[Context], bool]``，接收依赖上下文映射（可能为空）。
+这使得条件可基于上游任务的运行时返回值做决策，实现动态分支。
+
+内置条件分两类：
+1. *静态条件* —— 不依赖上下文（平台/环境变量/安装检查），通过 ``_static``
+   包装忽略传入的 context，便于作为模块级常量使用。
+2. *上下文条件* —— 基于上游结果判断，如 :meth:`BuiltinConditions.DEP_EQUALS`。
 """
 
 from __future__ import annotations
@@ -11,10 +16,11 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
-# 条件判断函数类型
-Condition = Callable[[], bool]
+from .task import Condition, Context
+
+__all__ = ["BuiltinConditions", "Condition", "Constants"]
 
 
 class Constants:
@@ -26,65 +32,56 @@ class Constants:
     IS_POSIX: bool = sys.platform != "win32"
 
 
+def _static(predicate: Callable[[], bool], name: str) -> Condition:
+    """将无参谓词包装为忽略上下文的 :class:`Condition`。"""
+
+    def _cond(_ctx: Context) -> bool:
+        return predicate()
+
+    _cond.__name__ = name
+    return _cond
+
+
+# ---------------------------------------------------------------------- #
+# 模块级静态条件常量
+# ---------------------------------------------------------------------- #
+IS_WINDOWS: Condition = _static(lambda: Constants.IS_WINDOWS, "IS_WINDOWS")
+IS_LINUX: Condition = _static(lambda: Constants.IS_LINUX, "IS_LINUX")
+IS_MACOS: Condition = _static(lambda: Constants.IS_MACOS, "IS_MACOS")
+IS_POSIX: Condition = _static(lambda: Constants.IS_POSIX, "IS_POSIX")
+
+
 class BuiltinConditions:
-    """内置条件判断函数集合."""
+    """内置条件判断函数集合.
 
+    静态条件工厂返回忽略上下文的 :class:`Condition`；上下文条件工厂返回
+    会读取依赖结果的 :class:`Condition`。
+    """
+
+    # ------------------------------------------------------------------ #
+    # 静态条件
+    # ------------------------------------------------------------------ #
     @staticmethod
-    def PYTHON_VERSION(major: int, minor: int | None = None) -> bool:
-        """检查 Python 版本是否匹配.
-
-        Parameters
-        ----------
-        major : int
-            主版本号.
-        minor : int | None
-            次版本号, 若为 None 则仅检查主版本.
-
-        Returns
-        -------
-        bool
-            版本是否匹配.
-        """
+    def PYTHON_VERSION(major: int, minor: int | None = None) -> Condition:
+        """检查 Python 版本是否匹配."""
         if minor is None:
-            return sys.version_info.major == major
-        return sys.version_info.major == major and sys.version_info.minor == minor
+            return _static(lambda: sys.version_info.major == major, f"PYTHON_VERSION({major})")
+        return _static(
+            lambda: sys.version_info.major == major and sys.version_info.minor == minor,
+            f"PYTHON_VERSION({major},{minor})",
+        )
 
     @staticmethod
-    def PYTHON_VERSION_AT_LEAST(major: int, minor: int = 0) -> bool:
-        """检查 Python 版本是否 >= 指定版本.
-
-        Parameters
-        ----------
-        major : int
-            主版本号.
-        minor : int
-            次版本号.
-
-        Returns
-        -------
-        bool
-            当前版本是否 >= 指定版本.
-        """
-        return sys.version_info >= (major, minor)
+    def PYTHON_VERSION_AT_LEAST(major: int, minor: int = 0) -> Condition:
+        """检查 Python 版本是否 >= 指定版本."""
+        return _static(lambda: sys.version_info >= (major, minor), f"PYTHON_VERSION_AT_LEAST({major},{minor})")
 
     @staticmethod
     def IS_RUNNING(app_name: str) -> Condition:
-        """检查指定应用是否正在运行.
-
-        Parameters
-        ----------
-        app_name : str
-            应用名称 (如 "explorer", "chrome", "python").
-
-        Returns
-        -------
-        Condition
-            条件判断函数.
-        """
+        """检查指定应用是否正在运行."""
 
         def _check() -> bool:
             if Constants.IS_WINDOWS:
-                # Windows: 使用 tasklist 命令
                 result = subprocess.run(
                     ["tasklist", "/nh", "/fi", f"imagename eq {app_name}"],
                     capture_output=True,
@@ -93,148 +90,119 @@ class BuiltinConditions:
                 )
                 return app_name.lower() in result.stdout.lower()
             else:
-                # Linux/macOS: 使用 pgrep 命令
-                result = subprocess.run(
-                    ["pgrep", "-x", app_name],
-                    capture_output=True,
-                    check=False,
-                )
+                result = subprocess.run(["pgrep", "-x", app_name], capture_output=True, check=False)
                 return result.returncode == 0
 
-        _check.__name__ = f"IS_RUNNING({app_name!r})"
-        return _check
+        return _static(_check, f"IS_RUNNING({app_name!r})")
 
     @staticmethod
     def HAS_INSTALLED(app_name: str) -> Condition:
-        """检查指定应用是否已安装.
-
-        Parameters
-        ----------
-        app_name : str
-            应用名称 (如 "git", "python", "pytest").
-
-        Returns
-        -------
-        Condition
-            条件判断函数.
-        """
-
-        def _check() -> bool:
-            return shutil.which(app_name) is not None
-
-        _check.__name__ = f"HAS_INSTALLED({app_name!r})"
-        return _check
+        """检查指定应用是否已安装."""
+        return _static(lambda: shutil.which(app_name) is not None, f"HAS_INSTALLED({app_name!r})")
 
     @staticmethod
-    def DIR_EXISTS(dir: Path) -> Condition:
+    def DIR_EXISTS(path: Path) -> Condition:
         """路径是否存在."""
-        return dir.exists
+        return _static(path.exists, f"DIR_EXISTS({path!r})")
 
     @staticmethod
     def ENV_VAR_EXISTS(var_name: str) -> Condition:
-        """检查环境变量是否存在.
-
-        Parameters
-        ----------
-        var_name : str
-            环境变量名.
-
-        Returns
-        -------
-        Condition
-            条件判断函数.
-        """
-
-        def _check() -> bool:
-            return var_name in os.environ
-
-        _check.__name__ = f"ENV_VAR_EXISTS({var_name!r})"
-        return _check
+        """检查环境变量是否存在."""
+        return _static(lambda: var_name in os.environ, f"ENV_VAR_EXISTS({var_name!r})")
 
     @staticmethod
     def ENV_VAR_EQUALS(var_name: str, value: str) -> Condition:
-        """检查环境变量是否等于指定值.
+        """检查环境变量是否等于指定值."""
+        return _static(
+            lambda: os.environ.get(var_name) == value,
+            f"ENV_VAR_EQUALS({var_name!r},{value!r})",
+        )
 
-        Parameters
-        ----------
-        var_name : str
-            环境变量名.
-        value : str
-            期望的值.
+    # ------------------------------------------------------------------ #
+    # 上下文条件：基于上游依赖结果
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def DEP_EQUALS(dep_name: str, value: Any) -> Condition:
+        """上游任务 ``dep_name`` 的返回值等于 ``value`` 时为真。
 
-        Returns
-        -------
-        Condition
-            条件判断函数.
+        若依赖未在上下文中（被跳过或未执行），返回 ``False``。
         """
 
-        def _check() -> bool:
-            return os.environ.get(var_name) == value
+        def _cond(ctx: Context) -> bool:
+            return dep_name in ctx and ctx[dep_name] == value
 
-        _check.__name__ = f"ENV_VAR_EQUALS({var_name!r}, {value!r})"
-        return _check
+        _cond.__name__ = f"DEP_EQUALS({dep_name!r},{value!r})"
+        return _cond
 
     @staticmethod
-    def NOT(condition: Condition) -> Condition:
-        """对条件取反.
+    def DEP_MATCHES(dep_name: str, predicate: Callable[[Any], bool]) -> Condition:
+        """上游任务 ``dep_name`` 的返回值满足 ``predicate`` 时为真。
 
-        Parameters
-        ----------
-        condition : Condition
-            原始条件.
-
-        Returns
-        -------
-        Condition
-            取反后的条件.
+        依赖不存在时返回 ``False``。
         """
 
-        def _check() -> bool:
-            return not condition()
+        def _cond(ctx: Context) -> bool:
+            if dep_name not in ctx:
+                return False
+            try:
+                return predicate(ctx[dep_name])
+            except Exception:
+                return False
 
-        _check.__name__ = f"NOT({getattr(condition, '__name__', repr(condition))})"
-        return _check
+        _cond.__name__ = f"DEP_MATCHES({dep_name!r},{getattr(predicate, '__name__', 'pred')})"
+        return _cond
+
+    @staticmethod
+    def DEP_PRESENT(dep_name: str) -> Condition:
+        """上游任务 ``dep_name`` 存在于上下文（即已成功执行）时为真。"""
+
+        def _cond(ctx: Context) -> bool:
+            return dep_name in ctx and ctx[dep_name] is not None
+
+        _cond.__name__ = f"DEP_PRESENT({dep_name!r})"
+        return _cond
+
+    @staticmethod
+    def DEP_TRUTHY(dep_name: str) -> Condition:
+        """上游任务 ``dep_name`` 的返回值为真值时为真。"""
+
+        def _cond(ctx: Context) -> bool:
+            return bool(ctx.get(dep_name))
+
+        _cond.__name__ = f"DEP_TRUTHY({dep_name!r})"
+        return _cond
+
+    # ------------------------------------------------------------------ #
+    # 逻辑组合
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def NOT(condition: Condition) -> Condition:
+        """对条件取反."""
+
+        def _cond(ctx: Context) -> bool:
+            return not condition(ctx)
+
+        _cond.__name__ = f"NOT({getattr(condition, '__name__', repr(condition))})"
+        return _cond
 
     @staticmethod
     def AND(*conditions: Condition) -> Condition:
-        """多个条件的逻辑与.
+        """多个条件的逻辑与."""
 
-        Parameters
-        ----------
-        *conditions : Condition
-            条件列表.
-
-        Returns
-        -------
-        Condition
-            组合条件.
-        """
-
-        def _check() -> bool:
-            return all(c() for c in conditions)
+        def _cond(ctx: Context) -> bool:
+            return all(c(ctx) for c in conditions)
 
         names = [getattr(c, "__name__", repr(c)) for c in conditions]
-        _check.__name__ = f"AND({', '.join(names)})"
-        return _check
+        _cond.__name__ = f"AND({', '.join(names)})"
+        return _cond
 
     @staticmethod
     def OR(*conditions: Condition) -> Condition:
-        """多个条件的逻辑或.
+        """多个条件的逻辑或."""
 
-        Parameters
-        ----------
-        *conditions : Condition
-            条件列表.
-
-        Returns
-        -------
-        Condition
-            组合条件.
-        """
-
-        def _check() -> bool:
-            return any(c() for c in conditions)
+        def _cond(ctx: Context) -> bool:
+            return any(c(ctx) for c in conditions)
 
         names = [getattr(c, "__name__", repr(c)) for c in conditions]
-        _check.__name__ = f"OR({', '.join(names)})"
-        return _check
+        _cond.__name__ = f"OR({', '.join(names)})"
+        return _cond

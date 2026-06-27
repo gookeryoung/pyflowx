@@ -21,12 +21,10 @@ PACKAGE_DIR = "packages"
 REQUIREMENTS_FILE = "requirements.txt"
 
 # 受保护的包名集合
-_PROTECTED_PACKAGES: frozenset[str] = frozenset(
-    {
-        "pyflowx",
-        "bitool",
-    }
-)
+_PROTECTED_PACKAGES: frozenset[str] = frozenset({
+    "pyflowx",
+    "bitool",
+})
 
 
 # ============================================================================
@@ -161,37 +159,33 @@ def main() -> None:
     if args.command == "i":
         graph = px.Graph.from_specs([px.TaskSpec("pip_install", cmd=["pip", "install", *args.packages], verbose=True)])
     elif args.command == "u":
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("pip_uninstall", fn=pip_uninstall, args=(args.packages,), verbose=True)]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_uninstall", fn=pip_uninstall, args=(args.packages,), verbose=True)
+        ])
     elif args.command == "r":
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "pip_reinstall",
-                    fn=pip_reinstall,
-                    args=(args.packages,),
-                    kwargs={"offline": args.offline},
-                    verbose=True,
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pip_reinstall",
+                fn=pip_reinstall,
+                args=(args.packages,),
+                kwargs={"offline": args.offline},
+                verbose=True,
+            )
+        ])
     elif args.command == "d":
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "pip_download",
-                    fn=pip_download,
-                    args=(args.packages,),
-                    kwargs={"offline": args.offline},
-                    verbose=True,
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "pip_download",
+                fn=pip_download,
+                args=(args.packages,),
+                kwargs={"offline": args.offline},
+                verbose=True,
+            )
+        ])
     elif args.command == "up":
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("pip_upgrade", cmd=["python", "-m", "pip", "install", "--upgrade", "pip"], verbose=True)]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec("pip_upgrade", cmd=["python", "-m", "pip", "install", "--upgrade", "pip"], verbose=True)
+        ])
     elif args.command == "f":
         graph = px.Graph.from_specs([px.TaskSpec("pip_freeze", fn=pip_freeze, verbose=True)])
     else:

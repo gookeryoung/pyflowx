@@ -67,7 +67,9 @@ def test_taskspec_wrap_cmd_verbose():
 
 def test_taskspec_wrap_cmd_error():
     """Test TaskSpec._wrap_cmd handles command error."""
-    spec = TaskSpec("test", cmd=["python", "-c", "import sys; sys.exit(1)"])
+    import sys
+
+    spec = TaskSpec("test", cmd=[sys.executable, "-c", "import sys; sys.exit(1)"])
     wrapped_fn = spec.effective_fn
 
     with pytest.raises(RuntimeError, match="命令执行失败"):
@@ -105,10 +107,10 @@ def test_taskspec_conditions_check():
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: True,),
+        conditions=(lambda _ctx: True,),
     )
 
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_taskspec_conditions_false():
@@ -116,10 +118,10 @@ def test_taskspec_conditions_false():
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
     )
 
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
 
 def test_taskspec_conditions_multiple():
@@ -127,10 +129,10 @@ def test_taskspec_conditions_multiple():
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: True, lambda: True, lambda: True),
+        conditions=(lambda _ctx: True, lambda _ctx: True, lambda _ctx: True),
     )
 
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_taskspec_conditions_multiple_one_false():
@@ -138,10 +140,10 @@ def test_taskspec_conditions_multiple_one_false():
     spec = px.TaskSpec(
         "test",
         fn=lambda: "result",
-        conditions=(lambda: True, lambda: False, lambda: True),
+        conditions=(lambda _ctx: True, lambda _ctx: False, lambda _ctx: True),
     )
 
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
 
 def test_taskspec_list_cmd_timeout_mocked():
@@ -218,27 +220,28 @@ def test_taskspec_shell_cmd_os_error_mocked():
 # ---------------------------------------------------------------------- #
 def test_skip_if_missing_with_available_command():
     """skip_if_missing=True 时，命令存在应返回 True."""
-    # python 命令在测试环境中一定存在
-    spec = TaskSpec("test", cmd=["python", "--version"], skip_if_missing=True)
-    assert spec.should_execute() is True
+    import sys
+
+    spec = TaskSpec("test", cmd=[sys.executable, "--version"], skip_if_missing=True)
+    assert spec.should_execute({})[0] is True
 
 
 def test_skip_if_missing_with_missing_command():
     """skip_if_missing=True 时，命令不存在应返回 False."""
     spec = TaskSpec("test", cmd=["definitely_not_installed_app_xyz"], skip_if_missing=True)
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
 
 def test_skip_if_missing_false_with_missing_command():
     """skip_if_missing=False 时，命令不存在也应返回 True（不检查）."""
     spec = TaskSpec("test", cmd=["definitely_not_installed_app_xyz"], skip_if_missing=False)
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_skip_if_missing_with_shell_cmd_not_checked():
     """skip_if_missing=True 时，shell 命令（str）不检查，应返回 True."""
     spec = TaskSpec("test", cmd="definitely_not_installed_app_xyz", skip_if_missing=True)
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_skip_if_missing_with_callable_cmd_not_checked():
@@ -248,7 +251,7 @@ def test_skip_if_missing_with_callable_cmd_not_checked():
         return 0
 
     spec = TaskSpec("test", cmd=custom_cmd, skip_if_missing=True)
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_skip_if_missing_with_fn_not_checked():
@@ -258,7 +261,7 @@ def test_skip_if_missing_with_fn_not_checked():
         return 0
 
     spec = TaskSpec("test", fn=my_fn, skip_if_missing=True)
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
 
 def test_skip_if_missing_with_empty_cmd_list():
@@ -266,37 +269,39 @@ def test_skip_if_missing_with_empty_cmd_list():
     spec = TaskSpec("test", cmd=[""], skip_if_missing=True)
     # 空字符串命令，shutil.which 返回 None
     # 但 cmd[0] 是空字符串，shutil.which("") 返回 None
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
 
 def test_skip_if_missing_combined_with_conditions():
     """skip_if_missing=True 与 conditions 组合使用."""
+    import sys
+
     # conditions 返回 False，应跳过
     spec = TaskSpec(
         "test",
-        cmd=["python", "--version"],
+        cmd=[sys.executable, "--version"],
         skip_if_missing=True,
-        conditions=(lambda: False,),
+        conditions=(lambda _ctx: False,),
     )
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
     # conditions 返回 True，命令存在，应执行
     spec = TaskSpec(
         "test",
-        cmd=["python", "--version"],
+        cmd=[sys.executable, "--version"],
         skip_if_missing=True,
-        conditions=(lambda: True,),
+        conditions=(lambda _ctx: True,),
     )
-    assert spec.should_execute() is True
+    assert spec.should_execute({})[0] is True
 
     # conditions 返回 True，命令不存在，应跳过
     spec = TaskSpec(
         "test",
         cmd=["definitely_not_installed_app_xyz"],
         skip_if_missing=True,
-        conditions=(lambda: True,),
+        conditions=(lambda _ctx: True,),
     )
-    assert spec.should_execute() is False
+    assert spec.should_execute({})[0] is False
 
 
 def test_skip_if_missing_skips_task_in_run():

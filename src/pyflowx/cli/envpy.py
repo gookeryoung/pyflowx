@@ -112,9 +112,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "mirror":
-        graph = px.Graph.from_specs(
-            [px.TaskSpec("set_pip_mirror", fn=set_pip_mirror, args=(args.name,), kwargs={"token": args.token})]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec("set_pip_mirror", fn=set_pip_mirror, args=(args.name,), kwargs={"token": args.token})
+        ])
     else:
         parser.print_help()
         return

@@ -29,24 +29,20 @@ def _echo_graph(name: str = "echo_task", msg: str = "hello") -> px.Graph:
 
 def _failing_graph() -> px.Graph:
     """构造一个必定失败的单任务图."""
-    return px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "fail",
-                cmd=["python", "-c", "import sys; sys.exit(1)"],
-            )
-        ]
-    )
+    return px.Graph.from_specs([
+        px.TaskSpec(
+            "fail",
+            cmd=["python", "-c", "import sys; sys.exit(1)"],
+        )
+    ])
 
 
 def _multi_task_graph() -> px.Graph:
     """构造一个带依赖的多任务图."""
-    return px.Graph.from_specs(
-        [
-            px.TaskSpec("a", cmd=[*ECHO_CMD, "a"]),
-            px.TaskSpec("b", cmd=[*ECHO_CMD, "b"], depends_on=("a",)),
-        ]
-    )
+    return px.Graph.from_specs([
+        px.TaskSpec("a", cmd=[*ECHO_CMD, "a"]),
+        px.TaskSpec("b", cmd=[*ECHO_CMD, "b"], depends_on=("a",)),
+    ])
 
 
 # ---------------------------------------------------------------------- #
@@ -240,12 +236,10 @@ class TestCliRunnerRunSuccess:
         def track_b() -> None:
             executed.append("b")
 
-        runner = px.CliRunner(
-            {
-                "a": px.Graph.from_specs([px.TaskSpec("a", track_a)]),
-                "b": px.Graph.from_specs([px.TaskSpec("b", track_b)]),
-            }
-        )
+        runner = px.CliRunner({
+            "a": px.Graph.from_specs([px.TaskSpec("a", track_a)]),
+            "b": px.Graph.from_specs([px.TaskSpec("b", track_b)]),
+        })
         _ = runner.run(["b"])
         assert executed == ["b"]
 
@@ -318,15 +312,13 @@ class TestCliRunnerVerbose:
 
     def test_verbose_prints_skip_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下跳过的任务应打印跳过信息."""
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "skip_me",
-                    cmd=[*ECHO_CMD, "skip"],
-                    conditions=(lambda: False,),
-                ),
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "skip_me",
+                cmd=[*ECHO_CMD, "skip"],
+                conditions=(lambda _ctx: False,),
+            ),
+        ])
         runner = px.CliRunner({"skip": graph})
         _ = runner.run(["skip"])
         captured = capsys.readouterr()
@@ -394,13 +386,11 @@ class TestCliRunnerList:
 
     def test_list_prints_all_commands(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--list 应打印所有命令."""
-        runner = px.CliRunner(
-            {
-                "clean": _echo_graph("c", "clean"),
-                "build": _echo_graph("b", "build"),
-                "test": _echo_graph("t", "test"),
-            }
-        )
+        runner = px.CliRunner({
+            "clean": _echo_graph("c", "clean"),
+            "build": _echo_graph("b", "build"),
+            "test": _echo_graph("t", "test"),
+        })
         _ = runner.run(["--list"])
         captured = capsys.readouterr()
         assert "clean" in captured.out
@@ -523,30 +513,26 @@ class TestCliRunnerIntegration:
 
     def test_condition_skipped_command_succeeds(self) -> None:
         """条件不满足时任务跳过, 整体仍成功."""
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "skip_me",
-                    cmd=[*ECHO_CMD, "should not run"],
-                    conditions=(lambda: False,),
-                ),
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "skip_me",
+                cmd=[*ECHO_CMD, "should not run"],
+                conditions=(lambda _ctx: False,),
+            ),
+        ])
         runner = px.CliRunner({"skip": graph})
         exit_code = runner.run(["skip"])
         assert exit_code == CliExitCode.SUCCESS.value
 
     def test_condition_met_command_succeeds(self) -> None:
         """条件满足时任务执行, 整体成功."""
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "run_me",
-                    cmd=[*ECHO_CMD, "should run"],
-                    conditions=(lambda: True,),
-                ),
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "run_me",
+                cmd=[*ECHO_CMD, "should run"],
+                conditions=(lambda _ctx: True,),
+            ),
+        ])
         runner = px.CliRunner({"run": graph})
         exit_code = runner.run(["run"])
         assert exit_code == CliExitCode.SUCCESS.value
@@ -562,14 +548,12 @@ class TestCliRunnerIntegration:
 
             return fn
 
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec("a", make("a")),
-                px.TaskSpec("b", make("b"), depends_on=("a",)),
-                px.TaskSpec("c", make("c"), depends_on=("a",)),
-                px.TaskSpec("d", make("d"), depends_on=("b", "c")),
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec("a", make("a")),
+            px.TaskSpec("b", make("b"), depends_on=("a",)),
+            px.TaskSpec("c", make("c"), depends_on=("a",)),
+            px.TaskSpec("d", make("d"), depends_on=("b", "c")),
+        ])
         runner = px.CliRunner({"diamond": graph})
         exit_code = runner.run(["diamond"])
         assert exit_code == CliExitCode.SUCCESS.value
@@ -577,12 +561,10 @@ class TestCliRunnerIntegration:
 
     def test_mixed_fn_and_cmd_commands(self) -> None:
         """混合 fn 和 cmd 的命令应都能执行."""
-        runner = px.CliRunner(
-            {
-                "fn_cmd": px.Graph.from_specs([px.TaskSpec("fn", fn=lambda: "fn-result")]),
-                "cmd_cmd": px.Graph.from_specs([px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]),
-            }
-        )
+        runner = px.CliRunner({
+            "fn_cmd": px.Graph.from_specs([px.TaskSpec("fn", fn=lambda: "fn-result")]),
+            "cmd_cmd": px.Graph.from_specs([px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]),
+        })
         assert runner.run(["fn_cmd"]) == CliExitCode.SUCCESS.value
         assert runner.run(["cmd_cmd"]) == CliExitCode.SUCCESS.value
 

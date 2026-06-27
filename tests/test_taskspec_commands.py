@@ -52,7 +52,7 @@ def test_taskspec_with_conditions_skip():
     """测试条件不满足时任务被跳过."""
 
     # 创建一个永远不会满足的条件
-    def never_true():
+    def never_true(_ctx):
         return False
 
     graph = px.Graph.from_specs([
@@ -73,7 +73,7 @@ def test_taskspec_with_conditions_execute():
     """测试条件满足时任务正常执行."""
 
     # 创建一个总是满足的条件
-    def always_true():
+    def always_true(_ctx):
         return True
 
     graph = px.Graph.from_specs([
@@ -103,17 +103,17 @@ def test_platform_conditions():
         px.TaskSpec(
             "win_task",
             cmd=win_cmd,
-            conditions=(lambda: Constants.IS_WINDOWS,),
+            conditions=(lambda _ctx: Constants.IS_WINDOWS,),
         ),
         px.TaskSpec(
             "linux_task",
             cmd=posix_cmd,
-            conditions=(lambda: Constants.IS_LINUX,),
+            conditions=(lambda _ctx: Constants.IS_LINUX,),
         ),
         px.TaskSpec(
             "macos_task",
             cmd=posix_cmd,
-            conditions=(lambda: Constants.IS_MACOS,),
+            conditions=(lambda _ctx: Constants.IS_MACOS,),
         ),
     ])
 
@@ -137,17 +137,15 @@ def test_platform_conditions():
 
 def test_app_installed_conditions():
     """测试应用安装条件."""
-    # 测试 python 应该总是安装的
-    if sys.platform == "win32":
-        python_cmd = ["python", "--version"]
-    else:
-        python_cmd = ["python3", "--version"]
+    # 使用 sys.executable 保证可移植
+    python_cmd = [sys.executable, "--version"]
+    py_name = "python" if sys.platform == "win32" else "python3"
 
     graph = px.Graph.from_specs([
         px.TaskSpec(
             "python_check",
             cmd=python_cmd,
-            conditions=(BuiltinConditions.HAS_INSTALLED("python"),),
+            conditions=(BuiltinConditions.HAS_INSTALLED(py_name),),
         ),
     ])
 
@@ -162,18 +160,18 @@ def test_combined_conditions():
     """测试组合条件."""
     # AND 条件
     and_condition = BuiltinConditions.AND(
-        lambda: True,
-        lambda: True,
+        lambda _ctx: True,
+        lambda _ctx: True,
     )
 
     # OR 条件
     or_condition = BuiltinConditions.OR(
-        lambda: True,
-        lambda: False,
+        lambda _ctx: True,
+        lambda _ctx: False,
     )
 
     # NOT 条件
-    not_condition = BuiltinConditions.NOT(lambda: False)
+    not_condition = BuiltinConditions.NOT(lambda _ctx: False)
 
     graph = px.Graph.from_specs([
         px.TaskSpec(
@@ -228,7 +226,7 @@ def test_taskspec_with_timeout():
         # 短时间任务应该成功
         px.TaskSpec(
             "short_task",
-            cmd=["python", "-c", "import time; time.sleep(0.1)"],
+            cmd=[sys.executable, "-c", "import time; time.sleep(0.1)"],
             timeout=1.0,
         ),
     ])
@@ -245,13 +243,13 @@ def test_taskspec_dependency_with_conditions():
         px.TaskSpec(
             "first",
             cmd=[*ECHO_CMD, "first"],
-            conditions=(lambda: True,),
+            conditions=(lambda _ctx: True,),
         ),
         px.TaskSpec(
             "second",
             cmd=[*ECHO_CMD, "second"],
             depends_on=("first",),
-            conditions=(lambda: True,),
+            conditions=(lambda _ctx: True,),
         ),
         px.TaskSpec(
             "third",
@@ -378,7 +376,7 @@ class TestTaskSpecVerbose:
         graph = px.Graph.from_specs([
             px.TaskSpec(
                 "fail",
-                cmd=["python", "-c", "import sys; sys.exit(1)"],
+                cmd=[sys.executable, "-c", "import sys; sys.exit(1)"],
                 verbose=True,
             )
         ])
@@ -414,7 +412,7 @@ class TestTaskSpecCmdErrors:
             px.TaskSpec(
                 "fail",
                 cmd=[
-                    "python",
+                    sys.executable,
                     "-c",
                     "import sys; sys.stderr.write('error-msg'); sys.exit(1)",
                 ],
@@ -437,7 +435,9 @@ class TestTaskSpecCmdErrors:
         """shell 命令失败时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs([px.TaskSpec("fail", cmd='python -c "import sys; sys.exit(1)"')])
+        graph = px.Graph.from_specs([
+            px.TaskSpec("fail", cmd=f'{sys.executable} -c "import sys; sys.exit(1)"'),
+        ])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         assert "Shell 命令执行失败" in str(exc_info.value.cause)
@@ -450,7 +450,7 @@ class TestTaskSpecCmdErrors:
         graph = px.Graph.from_specs([
             px.TaskSpec(
                 "slow",
-                cmd=["python", "-c", "import time; time.sleep(5)"],
+                cmd=[sys.executable, "-c", "import time; time.sleep(5)"],
                 timeout=0.1,
             )
         ])
@@ -463,7 +463,13 @@ class TestTaskSpecCmdErrors:
         """shell 命令超时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs([px.TaskSpec("slow", cmd='python -c "import time; time.sleep(5)"', timeout=0.1)])
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "slow",
+                cmd=f'{sys.executable} -c "import time; time.sleep(5)"',
+                timeout=0.1,
+            ),
+        ])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         assert "超时" in str(exc_info.value.cause)

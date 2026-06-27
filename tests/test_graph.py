@@ -13,13 +13,11 @@ def _fn() -> None:
 
 
 def test_from_specs_builds_graph() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-            px.TaskSpec("c", _fn, depends_on=("a", "b")),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+        px.TaskSpec("c", _fn, depends_on=("a", "b")),
+    ])
     assert set(graph.names) == {"a", "b", "c"}
     assert graph.dependencies("c") == ("a", "b")
     assert len(graph) == 3
@@ -28,23 +26,19 @@ def test_from_specs_builds_graph() -> None:
 
 def test_from_specs_allows_forward_references() -> None:
     # b depends on a, but a is declared after b — order should not matter.
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-            px.TaskSpec("a", _fn),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+        px.TaskSpec("a", _fn),
+    ])
     assert graph.layers() == [["a"], ["b"]]
 
 
 def test_duplicate_task_raises() -> None:
     with pytest.raises(DuplicateTaskError):
-        _ = px.Graph.from_specs(
-            [
-                px.TaskSpec("a", _fn),
-                px.TaskSpec("a", _fn),
-            ]
-        )
+        _ = px.Graph.from_specs([
+            px.TaskSpec("a", _fn),
+            px.TaskSpec("a", _fn),
+        ])
 
 
 def test_missing_dependency_raises() -> None:
@@ -57,24 +51,20 @@ def test_missing_dependency_raises() -> None:
 
 def test_cycle_detection() -> None:
     with pytest.raises(CycleError):
-        _ = px.Graph.from_specs(
-            [
-                px.TaskSpec("a", _fn, depends_on=("c",)),
-                px.TaskSpec("b", _fn, depends_on=("a",)),
-                px.TaskSpec("c", _fn, depends_on=("b",)),
-            ]
-        )
+        _ = px.Graph.from_specs([
+            px.TaskSpec("a", _fn, depends_on=("c",)),
+            px.TaskSpec("b", _fn, depends_on=("a",)),
+            px.TaskSpec("c", _fn, depends_on=("b",)),
+        ])
 
 
 def test_layers_grouping() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn),
-            px.TaskSpec("c", _fn, depends_on=("a", "b")),
-            px.TaskSpec("d", _fn, depends_on=("c",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn),
+        px.TaskSpec("c", _fn, depends_on=("a", "b")),
+        px.TaskSpec("d", _fn, depends_on=("c",)),
+    ])
     layers = graph.layers()
     assert layers == [["a", "b"], ["c"], ["d"]]
 
@@ -85,12 +75,10 @@ def test_self_dependency_rejected() -> None:
 
 
 def test_to_mermaid() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+    ])
     mermaid = graph.to_mermaid()
     assert mermaid.startswith("graph TD")
     assert 'a["a"]' in mermaid
@@ -104,13 +92,11 @@ def test_to_mermaid_invalid_orientation() -> None:
 
 
 def test_subgraph_by_tags() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn, tags=("ingest",)),
-            px.TaskSpec("b", _fn, depends_on=("a",), tags=("ingest",)),
-            px.TaskSpec("c", _fn, depends_on=("b",), tags=("report",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn, tags=("ingest",)),
+        px.TaskSpec("b", _fn, depends_on=("a",), tags=("ingest",)),
+        px.TaskSpec("c", _fn, depends_on=("b",), tags=("report",)),
+    ])
     sub = graph.subgraph(["ingest"])
     assert set(sub.names) == {"a", "b"}
     # Edge to dropped task c is removed; b no longer waits for anything
@@ -119,13 +105,11 @@ def test_subgraph_by_tags() -> None:
 
 
 def test_subgraph_by_names() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-            px.TaskSpec("c", _fn, depends_on=("b",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+        px.TaskSpec("c", _fn, depends_on=("b",)),
+    ])
     sub = graph.subgraph_by_names(["a", "b"])
     assert set(sub.names) == {"a", "b"}
     # c is dropped, so b's dep on c (none here) — but a->b edge preserved.
@@ -139,12 +123,10 @@ def test_subgraph_by_names_unknown() -> None:
 
 
 def test_describe() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+    ])
     desc = graph.describe()
     assert "Layer 1" in desc
     assert "Layer 2" in desc
@@ -187,12 +169,10 @@ def test_spec_accessor() -> None:
 
 
 def test_dependencies_accessor() -> None:
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn),
-            px.TaskSpec("b", _fn, depends_on=("a",)),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, depends_on=("a",)),
+    ])
     assert graph.dependencies("a") == ()
     assert graph.dependencies("b") == ("a",)
 
@@ -210,16 +190,20 @@ def test_empty_graph_layers() -> None:
 
 
 def test_subgraph_preserves_metadata() -> None:
-    """子图应保留原任务的 retries/timeout/tags 等元数据。"""
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("a", _fn, tags=("x",), retries=3, timeout=5.0),
-            px.TaskSpec("b", _fn, depends_on=("a",), tags=("y",)),
-        ]
-    )
+    """子图应保留原任务的 retry/timeout/tags 等元数据。"""
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "a",
+            _fn,
+            tags=("x",),
+            retry=px.RetryPolicy(max_attempts=3),
+            timeout=5.0,
+        ),
+        px.TaskSpec("b", _fn, depends_on=("a",), tags=("y",)),
+    ])
     sub = graph.subgraph(["x"])
     spec = sub.spec("a")
-    assert spec.retries == 3
+    assert spec.retry.max_attempts == 3
     assert spec.timeout == 5.0
     assert spec.tags == ("x",)
 

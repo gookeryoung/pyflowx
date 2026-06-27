@@ -55,7 +55,9 @@ def main() -> None:
             depends_on=("extract_customers", "extract_orders"),
             tags=("transform",),
         ),
-        px.TaskSpec("load", load, depends_on=("transform",), retries=1, tags=("load",)),
+        px.TaskSpec(
+            "load", load, depends_on=("transform",), retry=px.RetryPolicy(max_attempts=1, delay=1.0), tags=("load",)
+        ),
     ])
 
     print("=== Execution plan ===")

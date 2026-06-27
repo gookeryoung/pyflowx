@@ -141,7 +141,7 @@ class TestDescribeInjection:
 
         spec = px.TaskSpec("t", fn, depends_on=("a",))
         desc = describe_injection(spec)
-        assert "a=<result:a>" in desc
+        assert "a=<dep:a>" in desc
         assert "ctx=<Context>" in desc
         assert "flag=<default>" in desc
 

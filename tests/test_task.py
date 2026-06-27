@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from pyflowx.task import TaskResult, TaskSpec, TaskStatus
+from pyflowx.task import RetryPolicy, TaskResult, TaskSpec, TaskStatus
 
 
 def _fn() -> None:
@@ -18,9 +18,9 @@ def test_spec_empty_name_rejected() -> None:
         TaskSpec("", _fn)
 
 
-def test_spec_negative_retries_rejected() -> None:
-    with pytest.raises(ValueError, match="retries"):
-        TaskSpec("a", _fn, retries=-1)
+def test_spec_negative_max_attempts_rejected() -> None:
+    with pytest.raises(ValueError, match="max_attempts"):
+        TaskSpec("a", _fn, retry=RetryPolicy(max_attempts=0))
 
 
 def test_spec_zero_timeout_rejected() -> None:

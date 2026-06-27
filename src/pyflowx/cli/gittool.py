@@ -37,7 +37,7 @@ def init_sub_dirs() -> None:
                 px.TaskSpec(
                     "init",
                     cmd=["git", "init"],
-                    conditions=(not_has_git_repo,),
+                    conditions=(lambda _: not_has_git_repo(),),
                     cwd=subdir,
                 ),
                 px.TaskSpec("add", cmd=["git", "add", "."], depends_on=("init",)),
@@ -70,7 +70,7 @@ def main() -> None:
         graphs={
             # 添加并提交
             "a": px.Graph.from_specs([
-                px.TaskSpec("add", cmd=["git", "add", "."], conditions=(has_files,)),
+                px.TaskSpec("add", cmd=["git", "add", "."], conditions=(lambda _: has_files(),)),
                 px.TaskSpec("commit", cmd=["git", "commit", "-m", "chore: update"], depends_on=("add",)),
             ]),
             # 清理
@@ -80,10 +80,13 @@ def main() -> None:
             ]),
             # 初始化、添加并提交
             "i": px.Graph.from_specs([
-                px.TaskSpec("init", cmd=["git", "init"], conditions=(not_has_git_repo,)),
-                px.TaskSpec("add", cmd=["git", "add", "."], depends_on=("init",), conditions=(has_files,)),
+                px.TaskSpec("init", cmd=["git", "init"], conditions=(lambda _: not_has_git_repo(),)),
+                px.TaskSpec("add", cmd=["git", "add", "."], depends_on=("init",), conditions=(lambda _: has_files(),)),
                 px.TaskSpec(
-                    "commit", cmd=["git", "commit", "-m", "init commit"], depends_on=("add",), conditions=(has_files,)
+                    "commit",
+                    cmd=["git", "commit", "-m", "init commit"],
+                    depends_on=("add",),
+                    conditions=(lambda _: has_files(),),
                 ),
             ]),
             # 初始化子目录

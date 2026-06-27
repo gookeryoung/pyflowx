@@ -43,13 +43,13 @@ def main() -> None:
             px.TaskSpec(
                 "envqt_install",
                 cmd=["sudo", "apt", "install", "-y", *QT_LIBS],
-                conditions=(lambda: Constants.IS_LINUX,),
+                conditions=(lambda _: Constants.IS_LINUX,),
                 verbose=True,
             ),
             px.TaskSpec(
                 "envqt_fonts",
                 cmd=["sudo", "apt", "install", "-y", *CHINESE_FONTS],
-                conditions=(lambda: Constants.IS_LINUX,),
+                conditions=(lambda _: Constants.IS_LINUX,),
                 verbose=True,
             ),
         ],
