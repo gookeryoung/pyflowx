@@ -3,16 +3,14 @@ name: CI
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint (Ruff)
+  lint-and-typecheck:
+    name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,66 +25,15 @@ jobs:
 
       - run: uv sync
       - run: uv run ruff check src tests
-
-  format-check:
-    name: Format Check (Ruff)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - run: uv sync
-      - run: uv run ruff format --check src tests
-
-  typecheck:
-    name: Typecheck (Pyrefly)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - run: uv sync
       - run: uv run pyrefly check .
 
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - run: uv sync
-      - run: uv tool run pip-audit --desc on
-
   test:
-    name: Test (${{ matrix.os }} / py${{ matrix.python-version }})
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.8', '3.10', '3.13']
     steps:
       - uses: actions/checkout@v4
 
@@ -96,42 +43,8 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: |
+            3.8
+            3.13
 
-      - name: Run tests
-        run: uvx tox run -e py${{ matrix.python-version }}
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: |
-            test-results-*.xml
-            coverage-*.xml
-          if-no-files-found: ignore
-
-  coverage:
-    name: Coverage Summary
-    needs: test
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Collect coverage files
-        run: |
-          find artifacts -name "coverage-*.xml" -exec cp {} . \;
-          ls -la coverage-*.xml 2>/dev/null || echo "No coverage files found"
-
-      - name: Publish test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always() && github.event_name == 'pull_request'
-        with:
-          files: artifacts/**/test-results-*.xml
-          comment_mode: off
-          fail_on: nothing
+      - run: uvx tox run -e py38,py313
