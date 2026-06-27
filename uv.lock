@@ -39,9 +39,6 @@ resolution-markers = [
     "python_full_version < '3.8.1'",
 ]
 
-[options]
-prerelease-mode = "allow"
-
 [[package]]
 name = "addict"
 version = "2.4.0"
@@ -6524,7 +6521,7 @@ pycountry = [
 
 [[package]]
 name = "pyflowx"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "." }
 dependencies = [
     { name = "graphlib-backport", marker = "python_full_version < '3.9'" },
