@@ -116,6 +116,13 @@ def _check_upstream_skipped(
     return False, None  # pragma: no cover
 
 
+def _format_reason(reason: Any) -> str:
+    """将 _reason 格式化为可读字符串."""
+    if isinstance(reason, list):
+        return ", ".join(str(r) for r in reason)
+    return str(reason)
+
+
 def _evaluate_conditions(spec: TaskSpec[Any], context: Mapping[str, Any]) -> str | None:
     """求值所有条件，返回跳过原因或 ``None``。
 
@@ -132,7 +139,11 @@ def _evaluate_conditions(spec: TaskSpec[Any], context: Mapping[str, Any]) -> str
             continue
 
         if not ok:
-            failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
+            reason = getattr(condition, "_reason", None)
+            if reason is not None:
+                failed_conditions.append(_format_reason(reason))
+            else:
+                failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
 
     if failed_conditions:
         if len(failed_conditions) <= 2:
@@ -159,8 +170,6 @@ def _make_skipped_result(
         reason=reason,
     )
     _emit(on_event, result)
-    if spec.verbose:
-        print(f"[skip] 任务 '{spec.name}' 跳过: {reason}", flush=True)
     logger.info("task %r skipped (%s)", spec.name, reason)
     return result
 

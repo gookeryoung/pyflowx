@@ -327,7 +327,13 @@ class TaskSpec(Generic[T]):
                 failed_conditions.append(name)
                 continue
             if not ok:
-                failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
+                reason = getattr(condition, "_reason", None)
+                if reason is not None:
+                    failed_conditions.append(
+                        ", ".join(str(r) for r in reason) if isinstance(reason, list) else str(reason),
+                    )
+                else:
+                    failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
 
         if failed_conditions:
             return False, f"条件不满足: {', '.join(failed_conditions)}"

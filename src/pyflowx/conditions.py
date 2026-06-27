@@ -211,7 +211,13 @@ class BuiltinConditions:
         """对条件取反."""
 
         def _cond(ctx: Context) -> bool:
-            return not condition(ctx)
+            result = condition(ctx)
+            if result:
+                # inner 为 True 时 NOT 会失败，记录 inner 的具体原因
+                inner_reason = getattr(condition, "_reason", None)
+                if inner_reason is not None:
+                    _cond._reason = inner_reason  # type: ignore[attr-defined]
+            return not result
 
         _cond.__name__ = f"NOT({getattr(condition, '__name__', repr(condition))})"
         return _cond
@@ -232,7 +238,16 @@ class BuiltinConditions:
         """多个条件的逻辑或."""
 
         def _cond(ctx: Context) -> bool:
-            return any(c(ctx) for c in conditions)
+            matched: list[str] = []
+            for c in conditions:
+                if c(ctx):
+                    matched.append(
+                        getattr(c, "_reason", None) or getattr(c, "__name__", repr(c)),
+                    )
+            if matched:
+                _cond._reason = matched  # type: ignore[attr-defined]
+                return True
+            return False
 
         names = [getattr(c, "__name__", repr(c)) for c in conditions]
         _cond.__name__ = f"OR({', '.join(names)})"
