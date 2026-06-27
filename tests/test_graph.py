@@ -6,6 +6,7 @@ import pytest
 
 import pyflowx as px
 from pyflowx.errors import CycleError, DuplicateTaskError, MissingDependencyError
+from pyflowx.graph import GraphComposer, compose
 
 
 def _fn() -> None:
@@ -213,3 +214,115 @@ def test_subgraph_by_tags_no_match() -> None:
     graph = px.Graph.from_specs([px.TaskSpec("a", _fn, tags=("x",))])
     sub = graph.subgraph(["z"])
     assert len(sub) == 0
+
+
+# ---------------------------------------------------------------------- #
+# from_specs str 类型分支测试
+# ---------------------------------------------------------------------- #
+def test_from_specs_with_string_ref() -> None:
+    """from_specs 接受字符串引用并收集到 pending_refs."""
+    # 字符串引用被收集到 _pending_refs，而非尝试打开文件
+    graph = px.Graph.from_specs(["ref_cmd"])
+    assert graph._pending_refs == ["ref_cmd"]
+
+
+def test_from_specs_with_invalid_type() -> None:
+    """from_specs 接受不支持的类型时应抛 TypeError."""
+    with pytest.raises(TypeError, match="from_specs 只接受 TaskSpec 或 str"):
+        _ = px.Graph.from_specs([123])  # type: ignore[list-item]
+
+
+# ---------------------------------------------------------------------- #
+# to_mermaid 软依赖测试
+# ---------------------------------------------------------------------- #
+def test_to_mermaid_soft_depends_on() -> None:
+    """to_mermaid 应正确绘制软依赖为虚线."""
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn, soft_depends_on=("a",)),
+    ])
+    mermaid = graph.to_mermaid()
+    assert "a -.-> b" in mermaid  # 软依赖用虚线
+
+
+# ---------------------------------------------------------------------- #
+# GraphComposer 与 compose 测试
+# ---------------------------------------------------------------------- #
+def test_graph_composer_resolve_all() -> None:
+    """GraphComposer.resolve_all 应展开所有图的字符串引用."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn), px.TaskSpec("a2", _fn, depends_on=("a1",))])
+    # 创建带 _pending_refs 的图
+    graph_b = px.Graph.from_specs([px.TaskSpec("b1", _fn)])
+    graph_b._pending_refs = ["cmd_a"]  # 手动设置内部属性
+
+    composer = GraphComposer({"cmd_a": graph_a, "cmd_b": graph_b})
+    resolved = composer.resolve_all()
+
+    # graph_b 应包含 graph_a 的任务
+    assert "a1" in resolved["cmd_b"]
+    assert "a2" in resolved["cmd_b"]
+
+
+def test_graph_composer_parse_ref_self_reference() -> None:
+    """GraphComposer.parse_ref 应检测循环引用."""
+    graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
+    composer = GraphComposer({"cmd": graph})
+    with pytest.raises(ValueError, match="循环引用"):
+        _ = composer.parse_ref("cmd", "cmd")
+
+
+def test_graph_composer_parse_ref_cmd_not_found() -> None:
+    """GraphComposer.parse_ref 应检测引用的命令不存在."""
+    graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
+    composer = GraphComposer({"cmd": graph})
+    with pytest.raises(ValueError, match="引用的命令 'missing' 不存在"):
+        _ = composer.parse_ref("missing", "current")
+
+
+def test_graph_composer_parse_ref_task_not_found() -> None:
+    """GraphComposer.parse_ref 应检测任务不存在于引用的命令中."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn)])
+    graph_b = px.Graph.from_specs([px.TaskSpec("b1", _fn)])
+    composer = GraphComposer({"cmd_a": graph_a, "cmd_b": graph_b})
+    with pytest.raises(ValueError, match="任务 'missing' 不存在于命令 'cmd_a' 中"):
+        _ = composer.parse_ref("cmd_a.missing", "cmd_b")
+
+
+def test_graph_composer_expand_refs_no_pending() -> None:
+    """GraphComposer.expand_refs 无 pending_refs 时应原样返回."""
+    graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
+    composer = GraphComposer({"cmd": graph})
+    expanded = composer.expand_refs(graph, "cmd")
+    assert expanded is graph
+
+
+def test_compose_function() -> None:
+    """compose() 函数应等同于 GraphComposer().resolve_all()。"""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn)])
+    graph_b = px.Graph.from_specs([px.TaskSpec("b1", _fn)])
+    graph_b._pending_refs = ["cmd_a"]  # 手动设置内部属性
+
+    resolved = compose({"cmd_a": graph_a, "cmd_b": graph_b})
+    assert "a1" in resolved["cmd_b"]
+
+
+# ---------------------------------------------------------------------- #
+# resolved_spec defaults 测试
+# ---------------------------------------------------------------------- #
+def test_resolved_spec_applies_defaults() -> None:
+    """resolved_spec 应应用 Graph.defaults。"""
+    defaults = px.GraphDefaults(timeout=10.0, retry=px.RetryPolicy(max_attempts=2))
+    graph = px.Graph.from_specs([px.TaskSpec("a", _fn)], defaults=defaults)
+
+    resolved = graph.resolved_spec("a")
+    assert resolved.timeout == 10.0
+    assert resolved.retry.max_attempts == 2
+
+
+def test_resolved_spec_no_override() -> None:
+    """resolved_spec 不应覆盖任务已有的设置。"""
+    defaults = px.GraphDefaults(timeout=10.0)
+    graph = px.Graph.from_specs([px.TaskSpec("a", _fn, timeout=5.0)], defaults=defaults)
+
+    resolved = graph.resolved_spec("a")
+    assert resolved.timeout == 5.0  # 保持原值，不被 defaults 覆盖

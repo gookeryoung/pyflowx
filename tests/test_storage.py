@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,46 @@ def test_memory_backend_get_missing_raises() -> None:
     b = MemoryBackend()
     with pytest.raises(KeyError):
         b.get("nope")
+
+
+def test_memory_backend_ttl_expired() -> None:
+    """MemoryBackend TTL 过期后 has/get 返回 False/抛 KeyError."""
+    b = MemoryBackend(ttl=0.1)  # 0.1 秒过期
+    b.save("a", 1)
+    assert b.has("a")
+    time.sleep(0.15)
+    assert not b.has("a")
+    with pytest.raises(KeyError):
+        b.get("a")
+
+
+def test_memory_backend_ttl_load_filters_expired() -> None:
+    """MemoryBackend.load() 应过滤过期的条目."""
+    b = MemoryBackend(ttl=0.1)
+    b.save("a", 1)
+    b.save("b", 2)
+    time.sleep(0.15)
+    # a 过期，但 b 也要过期... 需要更精确控制
+    # 使用 monkeypatch 更可控
+    b._store["expired"] = ("value", time.monotonic() - 100)  # 手动设置过期时间
+    b._store["fresh"] = ("value2", time.monotonic())
+    assert "expired" not in dict(b.load())
+    assert "fresh" in dict(b.load())
+
+
+def test_memory_backend_expired_key_not_in_store() -> None:
+    """_expired 对不存在键返回 False."""
+    b = MemoryBackend(ttl=1.0)
+    assert b._expired("nonexistent") is False
+
+
+def test_memory_backend_no_ttl_never_expired() -> None:
+    """无 TTL 时永不过期."""
+    b = MemoryBackend()
+    b.save("a", 1)
+    b._store["a"] = (1, time.monotonic() - 1000)  # 手动设置很久以前的存储
+    assert b.has("a")  # 仍然存在
+    assert b.get("a") == 1
 
 
 # ---------------------------------------------------------------------- #
@@ -148,6 +189,94 @@ def test_json_backend_non_dict_content_ignored(tmp_path: Path) -> None:
     _ = path.write_text(json.dumps([1, 2, 3]))  # list 而非 dict
     b = JSONBackend(str(path))
     assert dict(b.load()) == {}
+
+
+# ---------------------------------------------------------------------- #
+# JSONBackend TTL 测试
+# ---------------------------------------------------------------------- #
+def test_json_backend_ttl_expired_has_returns_false() -> None:
+    """JSONBackend TTL 过期后 has 返回 False."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path, ttl=0.1)
+        b.save("a", 1)
+        assert b.has("a")
+        time.sleep(0.15)
+        assert not b.has("a")
+
+
+def test_json_backend_ttl_expired_get_raises_keyerror() -> None:
+    """JSONBackend TTL 过期后 get 抛 KeyError."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path, ttl=0.1)
+        b.save("a", 1)
+        time.sleep(0.15)
+        with pytest.raises(KeyError):
+            b.get("a")
+
+
+def test_json_backend_ttl_load_filters_expired() -> None:
+    """JSONBackend.load() 应过滤过期的条目."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path, ttl=0.1)
+        b.save("a", 1)
+        b.save("b", 2)
+        time.sleep(0.15)
+        # 两个都过期了
+        assert dict(b.load()) == {}
+
+
+def test_json_backend_expired_no_ttl() -> None:
+    """无 TTL 时 _expired 返回 False."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path)
+        b.save("a", 1)
+        # 手动修改 ts 为很久以前
+        b._store["a"]["ts"] = time.time() - 1000
+        assert b._expired(b._store["a"]) is False  # 无 TTL，永不过期
+
+
+def test_json_backend_expired_with_ttl() -> None:
+    """有 TTL 时 _expired 检查是否过期."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path, ttl=1.0)
+        b.save("a", 1)
+        # 手动修改 ts 为很久以前
+        b._store["a"]["ts"] = time.time() - 10  # 10 秒前，超过 TTL
+        assert b._expired(b._store["a"]) is True
+
+
+def test_json_backend_expired_missing_ts() -> None:
+    """entry 缺少 ts 时使用默认值 0."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path, ttl=1.0)
+        b._store["a"] = {"value": 1}  # 缺少 ts
+        # ts 默认为 0，已经过了很久
+        assert b._expired(b._store["a"]) is True
+
+
+def test_json_backend_save_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """save 时 json.dumps 抛 ValueError 应转为 StorageError."""
+    import json as _json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "state.json")
+        b = JSONBackend(path)
+
+        original_dumps = _json.dumps
+
+        def flaky_dumps(*_args: Any, **_kwargs: Any) -> str:
+            raise ValueError("simulated dumps failure")
+
+        monkeypatch.setattr(_json, "dumps", flaky_dumps)
+        with pytest.raises(StorageError, match="not JSON-serialisable"):
+            b.save("a", 1)
+        monkeypatch.setattr(_json, "dumps", original_dumps)
 
 
 # ---------------------------------------------------------------------- #

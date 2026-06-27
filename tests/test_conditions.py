@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pyflowx.conditions import (
     IS_LINUX,
@@ -216,3 +219,85 @@ def test_logical_combination_with_dep_conditions():
         BuiltinConditions.NOT(BuiltinConditions.DEP_TRUTHY("b")),
     )
     assert cond(ctx) is True
+
+
+# ---------------------------------------------------------------------- #
+# IS_RUNNING: 跨平台 subprocess 检测
+# ---------------------------------------------------------------------- #
+def test_is_running_windows_found(monkeypatch: pytest.MonkeyPatch):
+    """Windows 上 tasklist 检测到进程."""
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_WINDOWS", True)
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_LINUX", False)
+
+    class MockResult:
+        stdout = "explorer.exe\nother.exe"
+        returncode = 0
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **kw: MockResult(),
+    )
+    cond = BuiltinConditions.IS_RUNNING("explorer.exe")
+    assert cond({}) is True
+
+
+def test_is_running_windows_not_found(monkeypatch: pytest.MonkeyPatch):
+    """Windows 上 tasklist 未检测到进程."""
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_WINDOWS", True)
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_LINUX", False)
+
+    class MockResult:
+        stdout = "other.exe"
+        returncode = 0
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **kw: MockResult(),
+    )
+    cond = BuiltinConditions.IS_RUNNING("explorer.exe")
+    assert cond({}) is False
+
+
+def test_is_running_linux_found(monkeypatch: pytest.MonkeyPatch):
+    """Linux 上 pgrep 检测到进程."""
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_WINDOWS", False)
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_LINUX", True)
+
+    class MockResult:
+        returncode = 0
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **kw: MockResult(),
+    )
+    cond = BuiltinConditions.IS_RUNNING("nginx")
+    assert cond({}) is True
+
+
+def test_is_running_linux_not_found(monkeypatch: pytest.MonkeyPatch):
+    """Linux 上 pgrep 未检测到进程."""
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_WINDOWS", False)
+    monkeypatch.setattr("pyflowx.conditions.Constants.IS_LINUX", True)
+
+    class MockResult:
+        returncode = 1
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **kw: MockResult(),
+    )
+    cond = BuiltinConditions.IS_RUNNING("nonexistent")
+    assert cond({}) is False
+
+
+def test_dir_exists_true(tmp_path: Path):
+    """DIR_EXISTS 检测路径存在."""
+    cond = BuiltinConditions.DIR_EXISTS(tmp_path)
+    assert cond({}) is True
+
+
+def test_dir_exists_false(tmp_path: Path):
+    """DIR_EXISTS 检测路径不存在."""
+    missing = tmp_path / "nonexistent"
+    cond = BuiltinConditions.DIR_EXISTS(missing)
+    assert cond({}) is False
