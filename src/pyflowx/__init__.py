@@ -58,10 +58,6 @@
 from __future__ import annotations
 
 from .conditions import (
-    IS_LINUX,
-    IS_MACOS,
-    IS_POSIX,
-    IS_WINDOWS,
     BuiltinConditions,
     Condition,
     Constants,
@@ -87,10 +83,6 @@ from .task import TaskCmd, TaskEvent, TaskResult, TaskSpec, TaskStatus
 __version__ = "0.2.6"
 
 __all__ = [
-    "IS_LINUX",
-    "IS_MACOS",
-    "IS_POSIX",
-    "IS_WINDOWS",
     "BuiltinConditions",
     "CliExitCode",
     # CLI 运行器

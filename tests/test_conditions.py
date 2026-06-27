@@ -5,10 +5,6 @@ import sys
 from unittest.mock import patch
 
 from pyflowx.conditions import (
-    IS_LINUX,
-    IS_MACOS,
-    IS_POSIX,
-    IS_WINDOWS,
     BuiltinConditions,
     Constants,
 )
@@ -33,29 +29,6 @@ def test_constants_is_posix():
     """Test Constants.IS_POSIX is correct."""
     assert (sys.platform != "win32") == Constants.IS_POSIX
 
-
-def test_builtin_conditions_is_windows():
-    """Test BuiltinConditions.IS_WINDOWS."""
-    result = BuiltinConditions.IS_WINDOWS()
-    assert result == Constants.IS_WINDOWS
-
-
-def test_builtin_conditions_is_linux():
-    """Test BuiltinConditions.IS_LINUX."""
-    result = BuiltinConditions.IS_LINUX()
-    assert result == Constants.IS_LINUX
-
-
-def test_builtin_conditions_is_macos():
-    """Test BuiltinConditions.IS_MACOS."""
-    result = BuiltinConditions.IS_MACOS()
-    assert result == Constants.IS_MACOS
-
-
-def test_builtin_conditions_is_posix():
-    """Test BuiltinConditions.IS_POSIX."""
-    result = BuiltinConditions.IS_POSIX()
-    assert result == Constants.IS_POSIX
 
 
 def test_builtin_conditions_python_version_major_only():
@@ -167,10 +140,3 @@ def test_builtin_conditions_or_one_true():
     condition = BuiltinConditions.OR(false_condition, true_condition, false_condition)
     assert condition() is True
 
-
-def test_exported_conditions():
-    """Test exported condition functions."""
-    assert IS_WINDOWS() == Constants.IS_WINDOWS
-    assert IS_LINUX() == Constants.IS_LINUX
-    assert IS_MACOS() == Constants.IS_MACOS
-    assert IS_POSIX() == Constants.IS_POSIX

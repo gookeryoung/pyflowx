@@ -26,18 +26,20 @@ def reset_icon_cache() -> list[px.TaskSpec]:
         return []
 
     return [
-        px.TaskSpec("kill_explorer", fn=lambda: subprocess.run(["taskkill", "/f", "/im", "explorer.exe"], check=False)),
+        px.TaskSpec("kill_explorer", fn=lambda: subprocess.run(["taskkill", "/f", "/im", "explorer.exe"], check=False), verbose=True),
         px.TaskSpec(
             "delete_icon_cache",
             fn=lambda: subprocess.run(["del", "/a", "/q", r"%localappdata%\IconCache.db"], check=False),
+            verbose=True
         ),
         px.TaskSpec(
             "delete_icon_cache_all",
             fn=lambda: subprocess.run(
                 ["del", "/a", "/q", r"%localappdata%\Microsoft\Windows\Explorer\iconcache*"], check=False
             ),
+            verbose=True
         ),
-        px.TaskSpec("restart_explorer", fn=lambda: subprocess.run(["start", "explorer.exe"], check=False)),
+        px.TaskSpec("restart_explorer", fn=lambda: subprocess.run(["cmd", "/c", "start", "explorer.exe"], check=False), verbose=True),
     ]
 
 

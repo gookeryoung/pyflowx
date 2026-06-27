@@ -8,10 +8,8 @@ import pytest
 
 import pyflowx as px
 from pyflowx.conditions import (
-    IS_LINUX,
-    IS_MACOS,
-    IS_WINDOWS,
     BuiltinConditions,
+    Constants,
 )
 
 # 跨平台的 echo 命令
@@ -23,11 +21,9 @@ else:
 
 def test_taskspec_with_cmd_list():
     """测试使用命令列表的 TaskSpec."""
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("echo_test", cmd=[*ECHO_CMD, "hello"]),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("echo_test", cmd=[*ECHO_CMD, "hello"]),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -42,11 +38,9 @@ def test_taskspec_with_cmd_string():
     else:
         shell_cmd = "echo 'hello from shell'"
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("shell_test", cmd=shell_cmd),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("shell_test", cmd=shell_cmd),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -61,15 +55,13 @@ def test_taskspec_with_conditions_skip():
     def never_true():
         return False
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "should_skip",
-                cmd=[*ECHO_CMD, "this should not run"],
-                conditions=(never_true,),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "should_skip",
+            cmd=[*ECHO_CMD, "this should not run"],
+            conditions=(never_true,),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -84,15 +76,13 @@ def test_taskspec_with_conditions_execute():
     def always_true():
         return True
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "should_run",
-                cmd=[*ECHO_CMD, "this should run"],
-                conditions=(always_true,),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "should_run",
+            cmd=[*ECHO_CMD, "this should run"],
+            conditions=(always_true,),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -109,25 +99,23 @@ def test_platform_conditions():
         win_cmd = ["echo", "Windows"]
         posix_cmd = ["echo", "POSIX"]
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "win_task",
-                cmd=win_cmd,
-                conditions=(IS_WINDOWS,),
-            ),
-            px.TaskSpec(
-                "linux_task",
-                cmd=posix_cmd,
-                conditions=(IS_LINUX,),
-            ),
-            px.TaskSpec(
-                "macos_task",
-                cmd=posix_cmd,
-                conditions=(IS_MACOS,),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "win_task",
+            cmd=win_cmd,
+            conditions=(lambda: Constants.IS_WINDOWS,),
+        ),
+        px.TaskSpec(
+            "linux_task",
+            cmd=posix_cmd,
+            conditions=(lambda: Constants.IS_LINUX,),
+        ),
+        px.TaskSpec(
+            "macos_task",
+            cmd=posix_cmd,
+            conditions=(lambda: Constants.IS_MACOS,),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -155,15 +143,13 @@ def test_app_installed_conditions():
     else:
         python_cmd = ["python3", "--version"]
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "python_check",
-                cmd=python_cmd,
-                conditions=(BuiltinConditions.HAS_INSTALLED("python"),),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "python_check",
+            cmd=python_cmd,
+            conditions=(BuiltinConditions.HAS_INSTALLED("python"),),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -189,25 +175,23 @@ def test_combined_conditions():
     # NOT 条件
     not_condition = BuiltinConditions.NOT(lambda: False)
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "and_test",
-                cmd=[*ECHO_CMD, "AND"],
-                conditions=(and_condition,),
-            ),
-            px.TaskSpec(
-                "or_test",
-                cmd=[*ECHO_CMD, "OR"],
-                conditions=(or_condition,),
-            ),
-            px.TaskSpec(
-                "not_test",
-                cmd=[*ECHO_CMD, "NOT"],
-                conditions=(not_condition,),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "and_test",
+            cmd=[*ECHO_CMD, "AND"],
+            conditions=(and_condition,),
+        ),
+        px.TaskSpec(
+            "or_test",
+            cmd=[*ECHO_CMD, "OR"],
+            conditions=(or_condition,),
+        ),
+        px.TaskSpec(
+            "not_test",
+            cmd=[*ECHO_CMD, "NOT"],
+            conditions=(not_condition,),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -223,15 +207,13 @@ def test_taskspec_with_cwd():
     else:
         ls_cmd = ["ls", "-la"]
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "list_current",
-                cmd=ls_cmd,
-                cwd=Path.cwd(),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "list_current",
+            cmd=ls_cmd,
+            cwd=Path.cwd(),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -242,16 +224,14 @@ def test_taskspec_with_cwd():
 @pytest.mark.slow
 def test_taskspec_with_timeout():
     """测试超时设置."""
-    graph = px.Graph.from_specs(
-        [
-            # 短时间任务应该成功
-            px.TaskSpec(
-                "short_task",
-                cmd=["python", "-c", "import time; time.sleep(0.1)"],
-                timeout=1.0,
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        # 短时间任务应该成功
+        px.TaskSpec(
+            "short_task",
+            cmd=["python", "-c", "import time; time.sleep(0.1)"],
+            timeout=1.0,
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -261,26 +241,24 @@ def test_taskspec_with_timeout():
 
 def test_taskspec_dependency_with_conditions():
     """测试依赖和条件的组合."""
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "first",
-                cmd=[*ECHO_CMD, "first"],
-                conditions=(lambda: True,),
-            ),
-            px.TaskSpec(
-                "second",
-                cmd=[*ECHO_CMD, "second"],
-                depends_on=("first",),
-                conditions=(lambda: True,),
-            ),
-            px.TaskSpec(
-                "third",
-                cmd=[*ECHO_CMD, "third"],
-                depends_on=("second",),
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "first",
+            cmd=[*ECHO_CMD, "first"],
+            conditions=(lambda: True,),
+        ),
+        px.TaskSpec(
+            "second",
+            cmd=[*ECHO_CMD, "second"],
+            depends_on=("first",),
+            conditions=(lambda: True,),
+        ),
+        px.TaskSpec(
+            "third",
+            cmd=[*ECHO_CMD, "third"],
+            depends_on=("second",),
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -295,12 +273,10 @@ def test_taskspec_mixed_fn_and_cmd():
     def my_function():
         return "result from function"
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("fn_task", fn=my_function),
-            px.TaskSpec("cmd_task", cmd=[*ECHO_CMD, "from command"]),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("fn_task", fn=my_function),
+        px.TaskSpec("cmd_task", cmd=[*ECHO_CMD, "from command"]),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -315,15 +291,13 @@ def test_taskspec_cmd_overrides_fn():
     def my_function():
         return "should not run"
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec(
-                "cmd_priority",
-                fn=my_function,
-                cmd=[*ECHO_CMD, "cmd takes priority"],
-            ),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec(
+            "cmd_priority",
+            fn=my_function,
+            cmd=[*ECHO_CMD, "cmd takes priority"],
+        ),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -338,11 +312,9 @@ def test_taskspec_callable_cmd():
     def my_callable():
         return "callable result"
 
-    graph = px.Graph.from_specs(
-        [
-            px.TaskSpec("callable_cmd", cmd=my_callable),
-        ]
-    )
+    graph = px.Graph.from_specs([
+        px.TaskSpec("callable_cmd", cmd=my_callable),
+    ])
 
     report = px.run(graph, strategy="sequential")
     assert report.success
@@ -403,15 +375,13 @@ class TestTaskSpecVerbose:
         """verbose=True 时失败也应打印返回码."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "fail",
-                    cmd=["python", "-c", "import sys; sys.exit(1)"],
-                    verbose=True,
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "fail",
+                cmd=["python", "-c", "import sys; sys.exit(1)"],
+                verbose=True,
+            )
+        ])
         with pytest.raises(TaskFailedError):
             _ = px.run(graph, strategy="sequential")
         captured = capsys.readouterr()
@@ -440,18 +410,16 @@ class TestTaskSpecCmdErrors:
         """命令失败时错误信息应包含 stderr."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "fail",
-                    cmd=[
-                        "python",
-                        "-c",
-                        "import sys; sys.stderr.write('error-msg'); sys.exit(1)",
-                    ],
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "fail",
+                cmd=[
+                    "python",
+                    "-c",
+                    "import sys; sys.stderr.write('error-msg'); sys.exit(1)",
+                ],
+            )
+        ])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         # 非 verbose 模式下, stderr 应包含在错误信息中
@@ -479,15 +447,13 @@ class TestTaskSpecCmdErrors:
         """命令超时应抛出 RuntimeError."""
         from pyflowx.errors import TaskFailedError
 
-        graph = px.Graph.from_specs(
-            [
-                px.TaskSpec(
-                    "slow",
-                    cmd=["python", "-c", "import time; time.sleep(5)"],
-                    timeout=0.1,
-                )
-            ]
-        )
+        graph = px.Graph.from_specs([
+            px.TaskSpec(
+                "slow",
+                cmd=["python", "-c", "import time; time.sleep(5)"],
+                timeout=0.1,
+            )
+        ])
         with pytest.raises(TaskFailedError) as exc_info:
             _ = px.run(graph, strategy="sequential")
         assert "超时" in str(exc_info.value.cause)

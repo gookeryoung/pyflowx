@@ -28,26 +28,6 @@ class BuiltinConditions:
     """内置条件判断函数集合."""
 
     @staticmethod
-    def IS_WINDOWS() -> bool:
-        """是否为 Windows 平台."""
-        return Constants.IS_WINDOWS
-
-    @staticmethod
-    def IS_LINUX() -> bool:
-        bool = Constants.IS_LINUX
-        return bool
-
-    @staticmethod
-    def IS_MACOS() -> bool:
-        """是否为 macOS 平台."""
-        return Constants.IS_MACOS
-
-    @staticmethod
-    def IS_POSIX() -> bool:
-        """是否为 POSIX 系统 (Linux/macOS)."""
-        return Constants.IS_POSIX
-
-    @staticmethod
     def PYTHON_VERSION(major: int, minor: int | None = None) -> bool:
         """检查 Python 版本是否匹配.
 
@@ -214,10 +194,3 @@ class BuiltinConditions:
         names = [getattr(c, "__name__", repr(c)) for c in conditions]
         _check.__name__ = f"OR({', '.join(names)})"
         return _check
-
-
-# 导出常用条件
-IS_WINDOWS: Callable[[], bool] = BuiltinConditions.IS_WINDOWS
-IS_LINUX: Callable[[], bool] = BuiltinConditions.IS_LINUX
-IS_MACOS: Callable[[], bool] = BuiltinConditions.IS_MACOS
-IS_POSIX: Callable[[], bool] = BuiltinConditions.IS_POSIX
