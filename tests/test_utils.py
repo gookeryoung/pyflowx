@@ -39,3 +39,27 @@ class TestPerformanceTimer:
         assert _perf_metrics["test_func"]["total_time"] >= 0.1
 
         assert mock_log.call_count == 1
+
+    def test_generate_report(self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture):
+        mock_log = mocker.patch("logging.info")
+
+        from pyflowx.utils import _generate_report
+
+        @perf_timer(report=True, unit="ms", precision=3)
+        def test_func():
+            time.sleep(0.1)
+
+        @perf_timer(report=True, unit="ms", precision=3)
+        def test_func2():
+            time.sleep(0.2)
+
+        test_func()
+        test_func2()
+
+        _generate_report("ms", 3)
+
+        assert mock_log.call_count == 3
+        assert _perf_metrics["test_func"]["count"] == 1
+        assert _perf_metrics["test_func"]["total_time"] >= 0.1
+        assert _perf_metrics["test_func2"]["count"] == 1
+        assert _perf_metrics["test_func2"]["total_time"] >= 0.2
