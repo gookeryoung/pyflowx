@@ -238,6 +238,7 @@ class TestPdfInfo:
 class TestPdfOcr:
     """Test pdf_ocr function."""
 
+    @pytest.mark.slow
     def test_pdf_ocr_file(self, tmp_path: Path) -> None:
         """Should OCR PDF."""
         pytest.importorskip("fitz")

@@ -529,6 +529,7 @@ class TestDependencyDrivenScheduling:
 class TestConcurrencyLimits:
     """测试并发限制：相同 concurrency_key 的任务串行执行。"""
 
+    @pytest.mark.slow
     def test_concurrency_key_serializes_tasks(self) -> None:
         """相同 key 的任务不应并发执行。"""
         running: list[int] = []

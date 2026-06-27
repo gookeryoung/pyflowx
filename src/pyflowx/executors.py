@@ -134,7 +134,9 @@ def _evaluate_conditions(spec: TaskSpec[Any], context: Mapping[str, Any]) -> str
             failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
 
     if failed_conditions:
-        return f"条件不满足: {', '.join(failed_conditions)}"
+        if len(failed_conditions) <= 2:
+            return f"条件不满足: {', '.join(failed_conditions)}"
+        return f"条件不满足: {', '.join(failed_conditions[:2])} 等{len(failed_conditions)}个条件"
 
     if spec.skip_if_missing and not spec._is_cmd_available():
         cmd_name = spec.cmd[0] if isinstance(spec.cmd, list) and spec.cmd else "unknown"

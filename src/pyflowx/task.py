@@ -35,8 +35,6 @@ from typing import (
     Iterator,
     List,
     Mapping,
-    Optional,
-    Tuple,
     Union,
     cast,
 )
@@ -107,7 +105,7 @@ class RetryPolicy:
     delay: float = 0.0
     backoff: float = 1.0
     jitter: float = 0.0
-    retry_on: Tuple[type[BaseException], ...] = (Exception,)
+    retry_on: tuple[type[BaseException], ...] = (Exception,)
 
     def __post_init__(self) -> None:
         if self.max_attempts < 1:
@@ -151,9 +149,9 @@ class TaskHooks:
     钩子异常不会影响任务状态，仅记录日志。
     """
 
-    pre_run: Optional[Callable[[TaskSpec[Any]], None]] = None
-    post_run: Optional[Callable[[TaskSpec[Any], Any], None]] = None
-    on_failure: Optional[Callable[[TaskSpec[Any], BaseException], None]] = None
+    pre_run: Callable[[TaskSpec[Any]], None] | None = None
+    post_run: Callable[[TaskSpec[Any], Any], None] | None = None
+    on_failure: Callable[[TaskSpec[Any], BaseException], None] | None = None
 
 
 class TaskStatus(Enum):
@@ -248,27 +246,27 @@ class TaskSpec(Generic[T]):
     """
 
     name: str
-    fn: Optional[TaskFn[T]] = None
-    cmd: Optional[TaskCmd] = None
-    depends_on: Tuple[str, ...] = ()
-    soft_depends_on: Tuple[str, ...] = ()
+    fn: TaskFn[T] | None = None
+    cmd: TaskCmd | None = None
+    depends_on: tuple[str, ...] = ()
+    soft_depends_on: tuple[str, ...] = ()
     defaults: Mapping[str, Any] = field(default_factory=dict)
-    args: Tuple[Any, ...] = ()
+    args: tuple[Any, ...] = ()
     kwargs: Mapping[str, Any] = field(default_factory=dict)
     retry: RetryPolicy = field(default_factory=RetryPolicy)
-    timeout: Optional[float] = None
-    tags: Tuple[str, ...] = ()
-    conditions: Tuple[Condition, ...] = ()
-    cwd: Optional[Path] = None
-    env: Optional[Mapping[str, str]] = None
+    timeout: float | None = None
+    tags: tuple[str, ...] = ()
+    conditions: tuple[Condition, ...] = ()
+    cwd: Path | None = None
+    env: Mapping[str, str] | None = None
     verbose: bool = False
     skip_if_missing: bool = False
     allow_upstream_skip: bool = False
-    strategy: Optional[str] = None
+    strategy: str | None = None
     priority: int = 0
-    concurrency_key: Optional[str] = None
+    concurrency_key: str | None = None
     continue_on_error: bool = False
-    cache_key: Optional[CacheKeyFn] = None
+    cache_key: CacheKeyFn | None = None
     hooks: TaskHooks = field(default_factory=TaskHooks)
 
     def __post_init__(self) -> None:
@@ -310,7 +308,7 @@ class TaskSpec(Generic[T]):
         _run.__name__ = spec.name
         return _run  # type: ignore[return-value]
 
-    def should_execute(self, context: Context) -> Tuple[bool, Optional[str]]:
+    def should_execute(self, context: Context) -> tuple[bool, str | None]:
         """检查任务是否应执行。
 
         Returns
@@ -367,12 +365,12 @@ class TaskSpec(Generic[T]):
 
 @contextmanager
 def _env_and_cwd(
-    env: Optional[Mapping[str, str]],
-    cwd: Optional[Path],
+    env: Mapping[str, str] | None,
+    cwd: Path | None,
 ) -> Iterator[None]:
     """临时设置环境变量与工作目录。"""
     saved_env: dict[str, str] = {}
-    saved_cwd: Optional[str] = None
+    saved_cwd: str | None = None
     if env:
         for k, v in env.items():
             if k in os.environ:
@@ -431,7 +429,7 @@ def _run_command(spec: TaskSpec[Any]) -> Any:  # noqa: PLR0912
             print(f"[verbose] 工作目录: {cwd}", flush=True)
 
     # 合并环境变量
-    run_env: Optional[dict[str, str]] = None
+    run_env: dict[str, str] | None = None
     if env_override:
         run_env = dict(os.environ)
         run_env.update(env_override)
@@ -470,8 +468,8 @@ def _run_command(spec: TaskSpec[Any]) -> Any:  # noqa: PLR0912
 # 任务模板：批量生成相似 TaskSpec 的工厂
 # ---------------------------------------------------------------------- #
 def task_template(
-    fn: Optional[TaskFn[Any]] = None,
-    cmd: Optional[TaskCmd] = None,
+    fn: TaskFn[Any] | None = None,
+    cmd: TaskCmd | None = None,
     **defaults: Any,
 ) -> Callable[..., TaskSpec[Any]]:
     """创建任务模板工厂。
@@ -505,15 +503,15 @@ class TaskResult(Generic[T]):
 
     spec: TaskSpec[T]
     status: TaskStatus = TaskStatus.PENDING
-    value: Optional[T] = None
-    error: Optional[BaseException] = None
+    value: T | None = None
+    error: BaseException | None = None
     attempts: int = 0
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    reason: Optional[str] = None  # 跳过原因
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    reason: str | None = None  # 跳过原因
 
     @property
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         """从开始到结束的耗时（秒），未开始/未结束则为 ``None``。"""
         if self.started_at is None or self.finished_at is None:
             return None
@@ -527,6 +525,6 @@ class TaskEvent:
     task: str
     status: TaskStatus
     attempts: int = 0
-    error: Optional[str] = None
-    duration: Optional[float] = None
-    reason: Optional[str] = None
+    error: str | None = None
+    duration: float | None = None
+    reason: str | None = None

@@ -264,6 +264,7 @@ def test_skip_if_missing_with_fn_not_checked():
     assert spec.should_execute({})[0] is True
 
 
+@pytest.mark.slow
 def test_skip_if_missing_with_empty_cmd_list():
     """skip_if_missing=True 时，空命令列表应返回 True（不检查）."""
     spec = TaskSpec("test", cmd=[""], skip_if_missing=True)
