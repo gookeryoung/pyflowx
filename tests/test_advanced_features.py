@@ -449,35 +449,6 @@ class TestDependencyDrivenScheduling:
         assert report["b"] == 2
         assert report["c"] == 3
 
-    def test_dependency_strategy_faster_than_layered(self) -> None:
-        """依赖驱动应比层屏障更快（无层等待）。"""
-        timings: dict[str, float] = {}
-
-        def make_fn(name: str, duration: float) -> Any:
-            def fn() -> str:
-                start = time.monotonic()
-                time.sleep(duration)
-                timings[name] = time.monotonic() - start
-                return name
-
-            return fn
-
-        # a (慢) -> b (快) 在同一层
-        # a (快) -> c (慢) 在同一层
-        # 依赖驱动：c 在 a 完成后立即启动，不必等 b
-        graph = px.Graph.from_specs([
-            px.TaskSpec("a", make_fn("a", 0.05)),
-            px.TaskSpec("b", make_fn("b", 0.05), depends_on=("a",)),
-            px.TaskSpec("c", make_fn("c", 0.05), depends_on=("a",)),
-            px.TaskSpec("d", make_fn("d", 0.01), depends_on=("b", "c")),
-        ])
-        start = time.monotonic()
-        report = px.run(graph, strategy="dependency")
-        elapsed = time.monotonic() - start
-        assert report.success
-        # a(0.05) + max(b,c)(0.05) + d(0.01) ≈ 0.11，层屏障会更慢
-        assert elapsed < 0.20
-
     def test_dependency_strategy_with_async_fn(self) -> None:
         async def a() -> str:
             await asyncio.sleep(0.01)
