@@ -2,192 +2,60 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: '发布版本号（如 v0.1.0）'
-        required: true
-        type: string
+    tags: ['v*.*.*']
 
 permissions:
   contents: write
-  # Trusted Publishing (OIDC) 上传 PyPI 所需
   id-token: write
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # 预检：版本号校验 + 与 pyproject.toml 一致性检查
-  # ─────────────────────────────────────────────────────────────
-  pre-check:
-    name: Pre-release Check
+  build:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.meta.outputs.version }}
-      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
         with:
-          fetch-depth: 0
-
-      - name: 解析版本号
-        id: meta
-        run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          # 去除前缀 v
-          VERSION="${TAG#v}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "发布版本: $VERSION (tag: $TAG)"
-
-      - name: 校验版本号格式
-        run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
-            echo "❌ 版本号格式错误: $VERSION（应为 x.y.z 或 x.y.z-rc.n）"
-            exit 1
-          fi
-
-      - name: 校验 pyproject.toml 版本一致
-        run: |
-          # 精确提取 [project] 段的 version 字段（避免匹配到依赖的 version）
-          PY_VERSION=$(awk '/^\[project\]/{f=1} f&&/^version[[:space:]]*=/{gsub(/[" ]/,"",$3); print $3; exit}' pyproject.toml)
-          echo "pyproject.toml version: $PY_VERSION"
-          if [ "$PY_VERSION" != "${{ steps.meta.outputs.version }}" ]; then
-            echo "❌ pyproject.toml 版本($PY_VERSION) 与 tag 版本(${{ steps.meta.outputs.version }}) 不一致"
-            echo "请先更新 pyproject.toml 中的 version 字段"
-            exit 1
-          fi
-
-  # ─────────────────────────────────────────────────────────────
-  # 构建：wheel + sdist（纯 Python，单平台即可）
-  # ─────────────────────────────────────────────────────────────
-  build:
-    name: Build Artifacts
-    needs: pre-check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: 安装 uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: latest
           enable-cache: true
 
-      - name: 设置 Python 3.13
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: 安装依赖
-        run: uv sync --extra dev --frozen
+      - run: uv build
 
-      - name: 构建 wheel + sdist
-        run: uv build
+      - id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: 校验产物
-        run: |
-          echo "待上传产物："
-          ls -la dist/
-          if [ -z "$(ls -A dist/*.whl dist/*.tar.gz 2>/dev/null)" ]; then
-            echo "❌ 未找到 wheel 或 sdist 产物"
-            exit 1
-          fi
-
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
-          path: dist/*
-          retention-days: 30
+          path: dist/
 
-  # ─────────────────────────────────────────────────────────────
-  # 发布：上传到 PyPI（Trusted Publishing / OIDC）
-  # ─────────────────────────────────────────────────────────────
   publish-pypi:
-    name: Publish to PyPI
-    needs: [pre-check, build]
+    needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/pyflowx/${{ needs.pre-check.outputs.version }}
-    permissions:
-      id-token: write
+    environment: pypi
     steps:
-      - name: 下载构建产物
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
 
-      - name: 上传到 PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          attestations: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
 
-  # ─────────────────────────────────────────────────────────────
-  # 发布：创建 GitHub Release
-  # ─────────────────────────────────────────────────────────────
   release:
-    name: Publish Release
-    needs: [pre-check, build, publish-pypi]
+    needs: [build, publish-pypi]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: 下载构建产物
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
-          path: assets
+          path: dist
 
-      - name: 整理发布产物
-        run: |
-          ls -la assets/
-
-      - name: 生成 Release Notes
-        id: notes
-        run: |
-          {
-            echo "## pyflowx ${{ needs.pre-check.outputs.version }}"
-            echo ""
-            echo "### 下载"
-            echo ""
-            echo "- **Wheel**: \`pyflowx-${{ needs.pre-check.outputs.version }}-py3-none-any.whl\`"
-            echo "- **源码包**: \`pyflowx-${{ needs.pre-check.outputs.version }}.tar.gz\`"
-            echo ""
-            echo "### 安装"
-            echo ""
-            echo '```bash'
-            echo "pip install pyflowx==${{ needs.pre-check.outputs.version }}"
-            echo '```'
-            echo ""
-            echo "### 完整变更日志"
-          } > RELEASE_NOTES.md
-          {
-            echo "content<<EOF"
-            cat RELEASE_NOTES.md
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.pre-check.outputs.tag }}
-          name: pyflowx ${{ needs.pre-check.outputs.version }}
-          body: ${{ steps.notes.outputs.content }}
-          files: assets/*
-          draft: false
-          prerelease: ${{ contains(needs.pre-check.outputs.version, '-') }}
+          files: dist/*
           generate_release_notes: true
