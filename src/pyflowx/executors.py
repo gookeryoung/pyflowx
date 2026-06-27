@@ -130,6 +130,7 @@ def _evaluate_conditions(spec: TaskSpec[Any], context: Mapping[str, Any]) -> str
             name = getattr(condition, "__name__", None) or "匿名条件(执行错误)"
             failed_conditions.append(name)
             continue
+
         if not ok:
             failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
 

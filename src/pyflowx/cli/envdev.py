@@ -17,23 +17,26 @@ INSTALL_MIRROR_SCRIPT: str = "sudo bash /tmp/linuxmirrors.sh"
 # ============================================================================
 # Python 配置
 # ============================================================================
-PyMirrorType = Literal["tsinghua", "aliyun"]
+PyMirrorType = Literal["tsinghua", "aliyun", "huaweicloud", "ustc", "zju"]
 
 PIP_INDEX_URLS: dict[PyMirrorType, str] = {
     "tsinghua": "https://pypi.tuna.tsinghua.edu.cn/simple",
     "aliyun": "https://mirrors.aliyun.com/pypi/simple/",
+    "huaweicloud": "https://mirrors.huaweicloud.com/repository/pypi/simple/",
+    "ustc": "https://pypi.mirrors.ustc.edu.cn/simple/",
+    "zju": "https://mirrors.zju.edu.cn/pypi/simple/",
 }
 
 PIP_TRUSTED_HOSTS: dict[PyMirrorType, str] = {
     "tsinghua": "pypi.tuna.tsinghua.edu.cn",
     "aliyun": "mirrors.aliyun.com",
+    "huaweicloud": "mirrors.huaweicloud.com",
+    "ustc": "pypi.mirrors.ustc.edu.cn",
+    "zju": "mirrors.zju.edu.cn",
 }
 PIP_CONFIG_PATH = Path.home() / ".pip" / "pip.conf" if BuiltinConditions.IS_LINUX() else Path.home() / "pip" / "pip.ini"
 
-UV_INDEX_URLS: dict[PyMirrorType, str] = {
-    "tsinghua": "https://pypi.tuna.tsinghua.edu.cn/simple",
-    "aliyun": "https://mirrors.aliyun.com/pypi/simple/",
-}
+UV_INDEX_URLS = PIP_INDEX_URLS
 UV_PYTHON_INSTALL_MIRROR: str = "https://registry.npmmirror.com/-/binary/python-build-standalone"
 
 # ============================================================================
@@ -155,7 +158,7 @@ def main() -> None:
 
     # 使用 conditions 自动控制任务执行
     graph = px.Graph.from_specs([
-        # 系统镜像配置（仅 Linux 且未配置）
+        # 系统镜像配置（仅 Linux 且未配置国内镜像）
         px.TaskSpec(
             "download_mirror",
             cmd=DOWNLOAD_MIRROR_SCRIPT,
@@ -163,9 +166,14 @@ def main() -> None:
                 BuiltinConditions.IS_LINUX(),
                 BuiltinConditions.NOT(
                     BuiltinConditions.OR(
-                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "tsinghua"),
-                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "aliyun"),
-                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "ustc"),
+                        *[
+                            BuiltinConditions.FILE_CONTENT_EXISTS(f, m)
+                            for f in [
+                                "/etc/apt/sources.list",
+                                "/etc/apt/sources.list.d/ubuntu.sources",
+                            ]
+                            for m in get_args(PyMirrorType)
+                        ],
                     )
                 ),
             ),

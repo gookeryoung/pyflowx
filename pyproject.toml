@@ -93,7 +93,10 @@ packages = ["src/pyflowx"]
 pyflowx = { workspace = true }
 
 [dependency-groups]
-dev = ["pyflowx[dev,office,llm]"]
+dev = [
+    "pyflowx[dev,office,llm]",
+    "pysnooper>=1.2.3",
+]
 
 [tool.coverage.run]
 branch      = true

@@ -31,8 +31,8 @@ from typing import (
     Callable,
     ContextManager,
     Coroutine,
+    Generator,
     Generic,
-    Iterator,
     List,
     Mapping,
     Union,
@@ -367,7 +367,7 @@ class TaskSpec(Generic[T]):
 def _env_and_cwd(
     env: Mapping[str, str] | None,
     cwd: Path | None,
-) -> Iterator[None]:
+) -> Generator[None, None, None]:
     """临时设置环境变量与工作目录。"""
     saved_env: dict[str, str] = {}
     saved_cwd: str | None = None
