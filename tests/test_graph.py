@@ -162,6 +162,19 @@ def test_all_specs_returns_view() -> None:
     assert view is graph.all_specs() or view == graph.all_specs()
 
 
+def test_all_deps_combines_hard_and_soft() -> None:
+    """all_deps 应返回硬依赖 + 软依赖的组合。"""
+    graph = px.Graph.from_specs([
+        px.TaskSpec("a", _fn),
+        px.TaskSpec("b", _fn),
+        px.TaskSpec("c", _fn, depends_on=("a",), soft_depends_on=("b",)),
+    ])
+    all_deps = graph.all_deps("c")
+    assert set(all_deps) == {"a", "b"}
+    # 硬依赖在前，软依赖在后
+    assert all_deps == ("a", "b")
+
+
 def test_spec_accessor() -> None:
     graph = px.Graph.from_specs([px.TaskSpec("a", _fn)])
     assert graph.spec("a").name == "a"

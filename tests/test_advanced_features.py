@@ -338,6 +338,63 @@ class TestGraphDefaults:
         assert report.success
         assert calls["n"] == 3
 
+    def test_defaults_strategy_env_cwd(self) -> None:
+        """测试strategy、env、cwd字段的继承。"""
+        defaults = px.GraphDefaults(
+            strategy="thread",
+            env={"VAR": "value"},
+            cwd="/tmp",
+        )
+        graph = px.Graph(defaults=defaults)
+        graph.add(px.TaskSpec("a", lambda: "ok"))
+        resolved = graph.resolved_spec("a")
+        assert resolved.strategy == "thread"
+        assert resolved.env == {"VAR": "value"}
+        assert resolved.cwd == "/tmp"
+
+    def test_defaults_continue_on_error_concurrency_key_verbose(self) -> None:
+        """测试continue_on_error、concurrency_key、verbose字段的继承。"""
+        defaults = px.GraphDefaults(
+            continue_on_error=True,
+            concurrency_key="pool",
+            verbose=True,
+        )
+        graph = px.Graph(defaults=defaults)
+        graph.add(px.TaskSpec("a", lambda: "ok"))
+        resolved = graph.resolved_spec("a")
+        assert resolved.continue_on_error is True
+        assert resolved.concurrency_key == "pool"
+        assert resolved.verbose is True
+
+    def test_defaults_spec_excludes_non_default_values(self) -> None:
+        """测试当spec已有非默认值时，不应被defaults覆盖。"""
+        defaults = px.GraphDefaults(
+            strategy="thread",
+            continue_on_error=True,
+            verbose=True,
+            priority=5,
+        )
+        graph = px.Graph(defaults=defaults)
+        graph.add(
+            px.TaskSpec(
+                "a",
+                lambda: "ok",
+                strategy="sequential",
+                continue_on_error=True,  # True是非默认值，不会被覆盖
+                verbose=True,  # True是非默认值，不会被覆盖
+                priority=10,  # 非0值，不会被覆盖
+            )
+        )
+        resolved = graph.resolved_spec("a")
+        # strategy已有非默认值，不会被覆盖
+        assert resolved.strategy == "sequential"
+        # continue_on_error=True不会被defaults覆盖（只有False才会被覆盖）
+        assert resolved.continue_on_error is True
+        # verbose=True不会被defaults覆盖（只有False才会被覆盖）
+        assert resolved.verbose is True
+        # priority非0值不会被覆盖
+        assert resolved.priority == 10
+
 
 # ---------------------------------------------------------------------- #
 # 软依赖 soft_depends_on
