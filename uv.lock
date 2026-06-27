@@ -5607,6 +5607,8 @@ version = "0.2.10"
 source = { editable = "." }
 dependencies = [
     { name = "graphlib-backport", marker = "python_full_version < '3.9'" },
+    { name = "typing-extensions", version = "4.13.2", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
+    { name = "typing-extensions", version = "4.15.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version == '3.9.*'" },
 ]
 
 [package.optional-dependencies]
@@ -5656,7 +5658,6 @@ office = [
 [package.dev-dependencies]
 dev = [
     { name = "pyflowx", extra = ["dev", "llm", "office"] },
-    { name = "pysnooper" },
 ]
 
 [package.metadata]
@@ -5680,15 +5681,12 @@ requires-dist = [
     { name = "sglang", extras = ["all"], marker = "python_full_version >= '3.10' and sys_platform == 'linux' and extra == 'llm'", specifier = "==0.5.10rc0" },
     { name = "tox", marker = "extra == 'dev'", specifier = ">=4.25.0" },
     { name = "tox-uv", marker = "extra == 'dev'", specifier = ">=1.13.1" },
-    { name = "typing-extensions", marker = "python_full_version < '3.8'", specifier = ">=4.13.2" },
+    { name = "typing-extensions", marker = "python_full_version < '3.10'", specifier = ">=4.13.2" },
 ]
 provides-extras = ["dev", "llm", "office"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pyflowx", extras = ["dev", "office", "llm"], editable = "." },
-    { name = "pysnooper", specifier = ">=1.2.3" },
-]
+dev = [{ name = "pyflowx", extras = ["dev", "office", "llm"], editable = "." }]
 
 [[package]]
 name = "pygments"
@@ -6003,15 +6001,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/37/de/b7ee1ab2392c36945738246fba7524439810befa3cfcc03cb6157567fc10/pyrefly-1.1.1-py3-none-win32.whl", hash = "sha256:5ffd8a8ed62fe4e6bf0afe1837d1bad149bb3b9f80e928ef248c96b836db3742" },
     { url = "https://mirrors.aliyun.com/pypi/packages/a6/9c/a0f5b52934bf80e9c7eff08222e7caf318287b9aef76acb8d9ac5740581b/pyrefly-1.1.1-py3-none-win_amd64.whl", hash = "sha256:4e0430f3ef69c8ac73505fd6584db70ed504665a9f0816fef7f723de510f26cb" },
     { url = "https://mirrors.aliyun.com/pypi/packages/42/3d/4c6bcb3d456835f51445d3662a428f56c3ea5643ec798c577030ae34298c/pyrefly-1.1.1-py3-none-win_arm64.whl", hash = "sha256:83baf0db71e172665db1fca0ced50b8f7773f5192ca57e8ac6773a772b6d2fc5" },
-]
-
-[[package]]
-name = "pysnooper"
-version = "1.2.3"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/d2/4a/be3c144f58de6b78911c417cc4a3b3fe5eb6d13cae4c12daf3ca17a8d473/pysnooper-1.2.3.tar.gz", hash = "sha256:1fa1425444a7af45108aaed860b5ca8b62b25bba25b0b037c059ba353d8f1e74" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/69/87/df62c8a998216e6749b67d548dae0967906036c61457510ef49667927c49/PySnooper-1.2.3-py2.py3-none-any.whl", hash = "sha256:546372f0e72da89f8d1b89e758b7c05a478d65288569a1ca2cc1620e7b1b1944" },
 ]
 
 [[package]]
