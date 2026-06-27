@@ -127,6 +127,7 @@ def test_should_execute_condition_exception_returns_false() -> None:
     spec = TaskSpec("a", _fn, conditions=(bad_condition,))
     should_run, reason = spec.should_execute({})
     assert should_run is False
+    # pyrefly: ignore [not-iterable]
     assert "匿名条件(执行错误)" in reason
 
 
@@ -135,6 +136,7 @@ def test_should_execute_condition_lambda_name() -> None:
     spec = TaskSpec("a", _fn, conditions=(lambda _ctx: False,))
     should_run, reason = spec.should_execute({})
     assert should_run is False
+    # pyrefly: ignore [not-iterable]
     assert "<lambda>" in reason
 
 
@@ -143,6 +145,7 @@ def test_should_execute_skip_if_missing_cmd_not_found() -> None:
     spec = TaskSpec("a", cmd=["nonexistent_cmd_xyz"], skip_if_missing=True)
     should_run, reason = spec.should_execute({})
     assert should_run is False
+    # pyrefly: ignore [not-iterable]
     assert "命令不存在" in reason
 
 

@@ -26,12 +26,13 @@ def test_clr_executes_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda cmd, **kw: ran.append(cmd),
+        lambda *cmd, **__: ran.append(cmd),
     )
 
     spec = clr()
+    assert spec.fn is not None
     spec.fn()
-    assert ran == [["clear"]]
+    assert ran == [(["clear"],)]
 
 
 def test_clr_executes_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -43,12 +44,13 @@ def test_clr_executes_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda cmd, **kw: ran.append(cmd),
+        lambda *cmd, **__: ran.append(cmd),
     )
 
     spec = clr()
+    assert spec.fn is not None
     spec.fn()
-    assert ran == [["cls"]]
+    assert ran == [(["cls"],)]
 
 
 def test_reset_icon_cache_non_windows(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -83,31 +85,39 @@ def test_setenv_creates_task_spec() -> None:
 
 def test_setenv_sets_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     """setenv() 应设置环境变量。"""
-    spec = setenv("TEST_VAR", "test_value")
+    spec = setenv("PYFLOWX_TEST_VAR_1", "test_value")
+    assert spec.fn is not None
     spec.fn()
-    assert os.environ["TEST_VAR"] == "test_value"
+    assert os.environ["PYFLOWX_TEST_VAR_1"] == "test_value"
+    # Clean up
+    del os.environ["PYFLOWX_TEST_VAR_1"]
 
 
 def test_setenv_default_not_overwrite(monkeypatch: pytest.MonkeyPatch) -> None:
     """setenv(default=True) 不应覆盖已存在的环境变量。"""
-    os.environ["TEST_VAR_EXISTS"] = "original"
-    spec = setenv("TEST_VAR_EXISTS", "new_value", default=True)
+    os.environ["PYFLOWX_TEST_VAR_EXISTS"] = "original"
+    spec = setenv("PYFLOWX_TEST_VAR_EXISTS", "new_value", default=True)
+    assert spec.fn is not None
     spec.fn()
-    assert os.environ["TEST_VAR_EXISTS"] == "original"
+    assert os.environ["PYFLOWX_TEST_VAR_EXISTS"] == "original"
+    # Clean up
+    del os.environ["PYFLOWX_TEST_VAR_EXISTS"]
 
 
 def test_setenv_default_sets_when_missing() -> None:
     """setenv(default=True) 应在缺失时设置环境变量。"""
     # Ensure variable does not exist
-    if "PYFLOWX_TEST_VAR_MISSING" in os.environ:
-        del os.environ["PYFLOWX_TEST_VAR_MISSING"]
+    var_name = "PYFLOWX_TEST_VAR_MISSING"
+    if var_name in os.environ:
+        del os.environ[var_name]
 
-    spec = setenv("PYFLOWX_TEST_VAR_MISSING", "default_value", default=True)
+    spec = setenv(var_name, "default_value", default=True)
+    assert spec.fn is not None
     spec.fn()
-    assert os.environ["PYFLOWX_TEST_VAR_MISSING"] == "default_value"
+    assert os.environ[var_name] == "default_value"
 
     # Clean up after test
-    del os.environ["PYFLOWX_TEST_VAR_MISSING"]
+    del os.environ[var_name]
 
 
 def test_which_creates_task_spec() -> None:
@@ -127,10 +137,11 @@ def test_which_linux_found(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Captu
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda cmd, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
 
     spec = which("python")
+    assert spec.fn is not None
     spec.fn()
     captured = capsys.readouterr()
     assert "python ->" in captured.out
@@ -148,10 +159,11 @@ def test_which_windows_found(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Cap
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda cmd, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
 
     spec = which("python")
+    assert spec.fn is not None
     spec.fn()
     captured = capsys.readouterr()
     assert "python ->" in captured.out
@@ -169,10 +181,11 @@ def test_which_not_found(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda cmd, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
 
     spec = which("nonexistent_cmd")
+    assert spec.fn is not None
     spec.fn()
     captured = capsys.readouterr()
     assert "nonexistent_cmd -> 未找到" in captured.out

@@ -235,7 +235,7 @@ def test_is_running_windows_found(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(
         "subprocess.run",
-        lambda *a, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
     cond = BuiltinConditions.IS_RUNNING("explorer.exe")
     assert cond({}) is True
@@ -252,7 +252,7 @@ def test_is_running_windows_not_found(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(
         "subprocess.run",
-        lambda *a, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
     cond = BuiltinConditions.IS_RUNNING("explorer.exe")
     assert cond({}) is False
@@ -268,7 +268,7 @@ def test_is_running_linux_found(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(
         "subprocess.run",
-        lambda *a, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
     cond = BuiltinConditions.IS_RUNNING("nginx")
     assert cond({}) is True
@@ -284,7 +284,7 @@ def test_is_running_linux_not_found(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(
         "subprocess.run",
-        lambda *a, **kw: MockResult(),
+        lambda *_, **__: MockResult(),
     )
     cond = BuiltinConditions.IS_RUNNING("nonexistent")
     assert cond({}) is False

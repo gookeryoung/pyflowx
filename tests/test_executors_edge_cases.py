@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import sys
+from typing import Callable
 
 import pytest
 
@@ -326,7 +327,7 @@ def test_concurrency_key_thread() -> None:
 
     order = []
 
-    def make(name: str) -> callable:
+    def make(name: str) -> Callable[[], str]:
         def fn():
             order.append(f"{name}-start")
             time.sleep(0.1)
@@ -374,7 +375,7 @@ def test_dependency_strategy_basic() -> None:
     """dependency 策略应正确执行."""
     order = []
 
-    def make(name: str) -> callable:
+    def make(name: str) -> Callable[[], str]:
         def fn():
             order.append(name)
             return name
@@ -551,6 +552,7 @@ def test_unknown_strategy_raises() -> None:
     """未知 strategy 应抛 ValueError."""
     graph = px.Graph.from_specs([px.TaskSpec("a", fn=lambda: 1)])
     with pytest.raises(ValueError, match="Unknown strategy"):
+        # pyrefly: ignore [bad-argument-type]
         px.run(graph, strategy="unknown_strategy")
 
 
