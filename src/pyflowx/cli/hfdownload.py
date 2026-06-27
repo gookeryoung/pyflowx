@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import pyflowx as px
-from pyflowx.tasks.system import SETENV
+from pyflowx.tasks.system import setenv
 
 HFDownloadType = Literal["model", "dataset", "space"]
 
@@ -30,7 +30,7 @@ def main():
     download_dir.mkdir(parents=True, exist_ok=True)
 
     graph = px.Graph.from_specs([
-        SETENV("HF_ENDPOINT", "https://hf-mirror.com"),
+        setenv("HF_ENDPOINT", "https://hf-mirror.com"),
         px.TaskSpec(
             name="download",
             cmd=[

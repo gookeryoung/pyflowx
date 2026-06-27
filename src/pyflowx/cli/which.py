@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 
 import pyflowx as px
-from pyflowx.tasks.system import WHICH
+from pyflowx.tasks.system import which
 
 
 def main() -> None:
@@ -17,5 +17,5 @@ def main() -> None:
     parser.add_argument("commands", nargs="+", help="要查找的命令名称, 如: python ls ps gcc...")
     args = parser.parse_args()
 
-    graph = px.Graph.from_specs([WHICH(cmd) for cmd in args.commands])
+    graph = px.Graph.from_specs([which(cmd) for cmd in args.commands])
     px.run(graph, strategy="thread")

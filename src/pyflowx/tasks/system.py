@@ -13,13 +13,35 @@ import pyflowx as px
 from pyflowx.conditions import Constants
 
 
-def CLR():
+def clr():
     """清屏任务."""
     cmd = ["cls"] if Constants.IS_WINDOWS else ["clear"]
     return px.TaskSpec("clear_screen", fn=lambda: subprocess.run(cmd, check=False))
 
 
-def SETENV(name: str, value: str, default: bool = False):
+def reset_icon_cache() -> list[px.TaskSpec]:
+    """重置图标缓存任务."""
+    if not Constants.IS_WINDOWS:
+        print("reset_icon_cache: 仅在 Windows 上支持")
+        return []
+
+    return [
+        px.TaskSpec("kill_explorer", fn=lambda: subprocess.run(["taskkill", "/f", "/im", "explorer.exe"], check=False)),
+        px.TaskSpec(
+            "delete_icon_cache",
+            fn=lambda: subprocess.run(["del", "/a", "/q", r"%localappdata%\IconCache.db"], check=False),
+        ),
+        px.TaskSpec(
+            "delete_icon_cache_all",
+            fn=lambda: subprocess.run(
+                ["del", "/a", "/q", r"%localappdata%\Microsoft\Windows\Explorer\iconcache*"], check=False
+            ),
+        ),
+        px.TaskSpec("restart_explorer", fn=lambda: subprocess.run(["start", "explorer.exe"], check=False)),
+    ]
+
+
+def setenv(name: str, value: str, default: bool = False):
     """设置环境变量任务."""
 
     def set_env():
@@ -31,7 +53,7 @@ def SETENV(name: str, value: str, default: bool = False):
     return px.TaskSpec(f"setenv_{name.lower()}", fn=set_env, verbose=True)
 
 
-def WHICH(cmd: str):
+def which(cmd: str):
     """查找命令路径任务."""
     which_cmd = "where" if Constants.IS_WINDOWS else "which"
 
@@ -48,4 +70,4 @@ def WHICH(cmd: str):
     return px.TaskSpec(f"which_{cmd}", fn=find_command)
 
 
-__all__ = ["CLR", "SETENV", "WHICH"]
+__all__ = ["clr", "setenv", "which"]

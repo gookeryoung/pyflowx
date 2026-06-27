@@ -6,10 +6,10 @@
 from __future__ import annotations
 
 import pyflowx as px
-from pyflowx.tasks.system import CLR
+from pyflowx.tasks.system import clr
 
 
 def main() -> None:
     """清屏工具主函数."""
-    graph = px.Graph.from_specs([CLR()])
+    graph = px.Graph.from_specs([clr()])
     px.run(graph, strategy="thread")
