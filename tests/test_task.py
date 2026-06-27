@@ -345,14 +345,14 @@ def test_task_result_default_status() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# _run_command callable 命令测试
+# run_command callable 命令测试
 # ---------------------------------------------------------------------- #
 def test_run_command_callable_verbose_with_cwd(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     """callable 命令 verbose 模式应打印信息."""
-    spec = TaskSpec("a", cmd=lambda: "result", verbose=True, cwd=tmp_path)
-    import pyflowx.task as task_module
+    from pyflowx.command import run_command
 
-    result = task_module._run_command(spec)
+    spec = TaskSpec("a", cmd=lambda: "result", verbose=True, cwd=tmp_path)
+    result = run_command(spec)
     assert result == "result"
     captured = capsys.readouterr()
     assert "执行可调用命令" in captured.out
@@ -361,8 +361,8 @@ def test_run_command_callable_verbose_with_cwd(capsys: pytest.CaptureFixture[str
 
 def test_run_command_callable_exception() -> None:
     """callable 命令抛异常应转为 RuntimeError."""
-    spec = TaskSpec("a", cmd=lambda: (_ for _ in ()).throw(RuntimeError("callable error")))
-    import pyflowx.task as task_module
+    from pyflowx.command import run_command
 
+    spec = TaskSpec("a", cmd=lambda: (_ for _ in ()).throw(RuntimeError("callable error")))
     with pytest.raises(RuntimeError, match="可调用命令执行异常"):
-        task_module._run_command(spec)
+        run_command(spec)

@@ -17,9 +17,10 @@ import sys
 from dataclasses import dataclass, field, replace
 from typing import Any, Sequence, get_args
 
+from .compose import GraphComposer
 from .errors import PyFlowXError
 from .executors import Strategy, run
-from .graph import Graph, GraphComposer
+from .graph import Graph
 from .task import TaskSpec
 
 __all__ = ["CliExitCode", "CliRunner"]

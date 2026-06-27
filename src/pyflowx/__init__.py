@@ -58,6 +58,8 @@
 
 from __future__ import annotations
 
+from .command import run_command
+from .compose import GraphComposer, compose
 from .conditions import (
     IS_LINUX,
     IS_MACOS,
@@ -79,7 +81,7 @@ from .errors import (
     TaskTimeoutError,
 )
 from .executors import Strategy, run
-from .graph import Graph, GraphComposer, GraphDefaults, compose
+from .graph import Graph, GraphDefaults
 from .report import RunReport
 from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
@@ -136,5 +138,6 @@ __all__ = [
     "compose",
     "describe_injection",
     "run",
+    "run_command",
     "task_template",
 ]

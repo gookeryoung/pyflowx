@@ -18,8 +18,9 @@ import sys
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, ContextManager, Mapping
 
 if sys.version_info >= (3, 12):
     from typing import override
@@ -54,6 +55,22 @@ class StateBackend(ABC):
     @abstractmethod
     def clear(self) -> None:
         """清除所有存储状态。"""
+
+    def flush(self) -> None:  # noqa: B027
+        """将内存中暂存的状态持久化到外部介质。
+
+        默认无操作（如 :class:`MemoryBackend` 无需落盘）。
+        :class:`JSONBackend` 在 :meth:`batch` 期间会延迟落盘，需在退出时调用。
+        """
+
+    def batch(self) -> ContextManager[None]:
+        """返回一个上下文管理器，期间 :meth:`save` 可延迟 :meth:`flush`。
+
+        默认实现为 no-op（如 :class:`MemoryBackend`）。:class:`JSONBackend`
+        覆盖为：进入时标记延迟，退出时统一 flush 一次，将每任务一次落盘
+        （N 次写入）降为整次运行一次（O(N) 而非 O(N²)）。
+        """
+        return nullcontext()
 
 
 class _TTLStateBackendMixin(StateBackend):
@@ -184,6 +201,7 @@ class JSONBackend(_TTLStateBackendMixin):
         self._path: str = path
         self._ttl = ttl
         self._store: dict[str, dict[str, Any]] = {}
+        self._defer_flush: bool = False
         self._load()
 
     def _load(self) -> None:
@@ -244,7 +262,26 @@ class JSONBackend(_TTLStateBackendMixin):
         except (TypeError, ValueError) as exc:
             raise StorageError(f"result of key {key!r} is not JSON-serialisable", exc) from exc
         super().save(key, value)
+        if not self._defer_flush:
+            self._flush()
+
+    @override
+    def flush(self) -> None:
         self._flush()
+
+    @override
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """进入批量模式：``save`` 暂不落盘，退出时统一 flush 一次。
+
+        将整次运行 N 个任务的 N 次全量落盘降为 1 次。
+        """
+        self._defer_flush = True
+        try:
+            yield
+        finally:
+            self._defer_flush = False
+            self._flush()
 
     def _expired(self, entry: Mapping[str, Any]) -> bool:
         """带元数据的条目是否已过期（兼容旧测试 API）。"""

@@ -16,12 +16,31 @@ DAG 库中泛滥的样板包装器。
 from __future__ import annotations
 
 import inspect
+from functools import lru_cache
 from typing import Any, Mapping
 
 from .errors import InjectionError
 from .task import Context, TaskSpec
 
 __all__ = ["Context", "_is_context_annotation", "build_call_args", "describe_injection"]
+
+
+@lru_cache(maxsize=1024)
+def _cached_signature(fn: Any) -> inspect.Signature:
+    """缓存 ``inspect.signature`` 结果（按 fn 对象键控）。
+
+    ``fn`` 对象在 :meth:`TaskSpec.effective_fn` 缓存后稳定，签名重复内省
+    属纯开销。对不可哈希的可调用对象，调用方回退到直接内省。
+    """
+    return inspect.signature(fn)
+
+
+def _signature(fn: Any) -> inspect.Signature:
+    """获取签名，优先走缓存；``fn`` 不可哈希时回退到直接内省。"""
+    try:
+        return _cached_signature(fn)
+    except TypeError:
+        return inspect.signature(fn)
 
 
 def _is_context_annotation(annotation: Any) -> bool:
@@ -44,7 +63,7 @@ def build_call_args(
     执行器填入 :attr:`TaskSpec.defaults` 中的默认值）。
     """
     fn = spec.effective_fn
-    sig = inspect.signature(fn)
+    sig = _signature(fn)
     params = sig.parameters
 
     var_keyword = next(
@@ -115,7 +134,7 @@ def build_call_args(
 def describe_injection(spec: TaskSpec[Any]) -> str:
     """生成任务参数注入方式的人类可读描述。供 ``dry_run`` 使用。"""
     fn = spec.effective_fn
-    sig = inspect.signature(fn)
+    sig = _signature(fn)
     positional_params = [
         p
         for p, param in sig.parameters.items()

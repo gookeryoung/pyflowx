@@ -42,14 +42,6 @@ def _static(predicate: Callable[[], bool], name: str) -> Condition:
     return _cond
 
 
-def _cond_reason(cond: Condition) -> str | list[str] | None:
-    """获取条件的失败原因：优先返回 ``_reason``，否则返回 ``__name__``。"""
-    reason = getattr(cond, "_reason", None)
-    if reason is not None:
-        return reason
-    return getattr(cond, "__name__", repr(cond))
-
-
 def _cond_name(cond: Condition) -> str:
     """获取条件的可读名称。"""
     return getattr(cond, "__name__", repr(cond))
@@ -228,13 +220,7 @@ class BuiltinConditions:
         """对条件取反."""
 
         def _cond(ctx: Context) -> bool:
-            result = condition(ctx)
-            if result:
-                # inner 为 True 时 NOT 会失败，记录 inner 的具体原因
-                inner_reason = _cond_reason(condition)
-                if inner_reason is not None:
-                    _cond._reason = inner_reason  # type: ignore[attr-defined]
-            return not result
+            return not condition(ctx)
 
         _cond.__name__ = f"NOT({_cond_name(condition)})"
         return _cond
@@ -254,15 +240,7 @@ class BuiltinConditions:
         """多个条件的逻辑或."""
 
         def _cond(ctx: Context) -> bool:
-            matched: list[str] = []
-            for c in conditions:
-                if c(ctx):
-                    reason = _cond_reason(c)
-                    matched.append(reason if isinstance(reason, str) else str(reason))
-            if matched:
-                _cond._reason = matched  # type: ignore[attr-defined]
-                return True
-            return False
+            return any(c(ctx) for c in conditions)
 
         _cond.__name__ = f"OR({', '.join(_cond_name(c) for c in conditions)})"
         return _cond

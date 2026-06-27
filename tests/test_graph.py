@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 import pyflowx as px
+from pyflowx.compose import GraphComposer, compose
 from pyflowx.errors import CycleError, DuplicateTaskError, MissingDependencyError
-from pyflowx.graph import GraphComposer, compose
 
 
 def _fn() -> None:

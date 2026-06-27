@@ -12,14 +12,17 @@
 
 架构
 ----
-本模块通过 **Mixin** 组合消除同步/异步与各层执行器之间的重复代码：
+本模块通过 **Mixin** 组合消除同步/异步任务执行器之间的重复代码：
 
 * :class:`_TaskSkipMixin`  —— 上游跳过 / 条件跳过的预检逻辑。
 * :class:`_TaskRetryMixin` —— 重试决策、成功/失败后处理、finalize。
-* :class:`_LayerMixin`     —— 缓存过滤、优先级排序、信号量构建、结果存储。
 * :class:`SyncTaskRunner` / :class:`AsyncTaskRunner` —— 任务级执行器，组合上述 Mixin。
+* 模块级共享辅助（:func:`_filter_and_sort` / :func:`_store_result` /
+  :func:`_build_semaphores` / :func:`_get_sem`）—— 缓存过滤、优先级排序、
+  信号量构建、结果存储。
 * :class:`SequentialLayerRunner` / :class:`ThreadedLayerRunner` /
-  :class:`AsyncLayerRunner` / :class:`DependencyRunner` —— 层级执行器，组合 :class:`_LayerMixin`。
+  :class:`AsyncLayerRunner` —— 层级执行器，调用上述模块级辅助。
+* :class:`DependencyRunner` —— 依赖驱动调度（非层模型），同样调用模块级辅助。
 
 所有策略共享统一异步内核，支持：
 * :class:`RetryPolicy`（max_attempts/delay/backoff/jitter/retry_on）
@@ -388,81 +391,75 @@ async def _execute_async_task(
 
 
 # ---------------------------------------------------------------------- #
-# Mixin：层执行共享逻辑
+# 共享辅助：缓存过滤、优先级排序、信号量构建、结果存储
 # ---------------------------------------------------------------------- #
-class _LayerMixin:
-    """层执行共享逻辑：缓存过滤、优先级排序、信号量构建、结果存储。
+def _filter_and_sort(
+    layer: list[str],
+    graph: Graph,
+    context: dict[str, Any],
+    report: RunReport,
+    backend: StateBackend,
+    on_event: EventCallback | None,
+) -> list[str]:
+    """过滤掉已命中缓存的任务，按优先级排序返回待运行列表。"""
+    to_run: list[str] = []
+    for name in layer:
+        spec = graph.resolved_spec(name)
+        if not _apply_cached(name, spec, context, report, backend, on_event):
+            to_run.append(name)
+    return _sort_by_priority(to_run, graph)
 
-    四个层执行器（sequential/threaded/async/dependency）通过组合此 Mixin
-    消除"过滤缓存→排序→运行→存结果"的样板代码。
+
+def _store_result(
+    name: str,
+    result: TaskResult[Any],
+    spec: TaskSpec[Any],
+    task_ctx: dict[str, Any],
+    context: dict[str, Any],
+    report: RunReport,
+    backend: StateBackend,
+    on_event: EventCallback | None,
+) -> None:
+    """存储任务结果到 context/report/backend 并触发事件。
+
+    ``spec`` 与 ``task_ctx`` 由调用方在执行前已构建，直接复用避免重复
+    ``resolved_spec`` / ``_build_context`` 调用。
     """
+    context[name] = result.value
+    if result.status == TaskStatus.SUCCESS:
+        backend.save(spec.storage_key(task_ctx), result.value)
+    report.results[name] = result
+    _emit(on_event, result)
 
-    @staticmethod
-    def _filter_and_sort(
-        layer: list[str],
-        graph: Graph,
-        context: dict[str, Any],
-        report: RunReport,
-        backend: StateBackend,
-        on_event: EventCallback | None,
-    ) -> list[str]:
-        """过滤掉已命中缓存的任务，按优先级排序返回待运行列表。"""
-        to_run: list[str] = []
-        for name in layer:
-            spec = graph.resolved_spec(name)
-            if not _apply_cached(name, spec, context, report, backend, on_event):
-                to_run.append(name)
-        return _sort_by_priority(to_run, graph)
 
-    @staticmethod
-    def _store_result(
-        name: str,
-        result: TaskResult[Any],
-        graph: Graph,
-        context: dict[str, Any],
-        report: RunReport,
-        backend: StateBackend,
-        on_event: EventCallback | None,
-        context_snapshot: Mapping[str, Any] | None = None,
-    ) -> None:
-        """存储任务结果到 context/report/backend 并触发事件。"""
-        context[name] = result.value
-        if result.status == TaskStatus.SUCCESS:
-            spec = graph.resolved_spec(name)
-            task_ctx = _build_context(spec, context_snapshot if context_snapshot is not None else context, report)
-            backend.save(spec.storage_key(task_ctx), result.value)
-        report.results[name] = result
-        _emit(on_event, result)
+def _build_semaphores(
+    to_run: list[str],
+    graph: Graph,
+    sem_factory: Callable[[int], Any],
+    concurrency_limits: Mapping[str, int],
+) -> dict[str, Any]:
+    """为每个 ``concurrency_key`` 创建一个信号量。"""
+    semaphores: dict[str, Any] = {}
+    for name in to_run:
+        spec = graph.resolved_spec(name)
+        key = spec.concurrency_key
+        if key is not None and key not in semaphores:
+            limit = concurrency_limits.get(key, 1)
+            semaphores[key] = sem_factory(limit)
+    return semaphores
 
-    @staticmethod
-    def _build_semaphores(
-        to_run: list[str],
-        graph: Graph,
-        sem_factory: Callable[[int], Any],
-        concurrency_limits: Mapping[str, int],
-    ) -> dict[str, Any]:
-        """为每个 ``concurrency_key`` 创建一个信号量。"""
-        semaphores: dict[str, Any] = {}
-        for name in to_run:
-            spec = graph.resolved_spec(name)
-            key = spec.concurrency_key
-            if key is not None and key not in semaphores:
-                limit = concurrency_limits.get(key, 1)
-                semaphores[key] = sem_factory(limit)
-        return semaphores
 
-    @staticmethod
-    def _get_sem(semaphores: Mapping[str, Any], spec: TaskSpec[Any]) -> Any | None:
-        """获取任务对应的信号量（无 concurrency_key 则返回 None）。"""
-        if spec.concurrency_key is None:
-            return None
-        return semaphores.get(spec.concurrency_key)
+def _get_sem(semaphores: Mapping[str, Any], spec: TaskSpec[Any]) -> Any | None:
+    """获取任务对应的信号量（无 concurrency_key 则返回 None）。"""
+    if spec.concurrency_key is None:
+        return None
+    return semaphores.get(spec.concurrency_key)
 
 
 # ---------------------------------------------------------------------- #
 # 层执行器
 # ---------------------------------------------------------------------- #
-class SequentialLayerRunner(_LayerMixin):
+class SequentialLayerRunner:
     """逐个运行某层的任务（按优先级排序）。"""
 
     @staticmethod
@@ -475,14 +472,14 @@ class SequentialLayerRunner(_LayerMixin):
         layer_idx: int,
         on_event: EventCallback | None,
     ) -> None:
-        for name in SequentialLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event):
+        for name in _filter_and_sort(layer, graph, context, report, backend, on_event):
             spec = graph.resolved_spec(name)
             task_ctx = _build_context(spec, context, report)
             result = SyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report)
-            SequentialLayerRunner._store_result(name, result, graph, context, report, backend, on_event)
+            _store_result(name, result, spec, task_ctx, context, report, backend, on_event)
 
 
-class ThreadedLayerRunner(_LayerMixin):
+class ThreadedLayerRunner:
     """在线程池中并发运行某层的任务。"""
 
     @staticmethod
@@ -497,43 +494,43 @@ class ThreadedLayerRunner(_LayerMixin):
         max_workers: int,
         concurrency_limits: Mapping[str, int],
     ) -> None:
-        to_run = ThreadedLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event)
+        to_run = _filter_and_sort(layer, graph, context, report, backend, on_event)
         if not to_run:
             return
-        semaphores = ThreadedLayerRunner._build_semaphores(to_run, graph, threading.Semaphore, concurrency_limits)
+        semaphores = _build_semaphores(to_run, graph, threading.Semaphore, concurrency_limits)
         context_snapshot = dict(context)
         lock = threading.Lock()
 
-        def _run_threaded_task(name: str) -> TaskResult[Any]:
+        def _run_threaded_task(name: str) -> tuple[dict[str, Any], TaskResult[Any]]:
             spec = graph.resolved_spec(name)
             task_ctx = _build_context(spec, context_snapshot, report)
-            sem = ThreadedLayerRunner._get_sem(semaphores, spec)
+            sem = _get_sem(semaphores, spec)
             if sem is not None:
                 sem.acquire()
             try:
-                return SyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report)
+                return task_ctx, SyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report)
             finally:
                 if sem is not None:
                     sem.release()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-            future_to_name: dict[concurrent.futures.Future[TaskResult[Any]], str] = {
+            future_to_name: dict[concurrent.futures.Future[tuple[dict[str, Any], TaskResult[Any]]], str] = {
                 pool.submit(_run_threaded_task, name): name for name in to_run
             }
-            completed: dict[str, TaskResult[Any]] = {}
+            completed: dict[str, tuple[dict[str, Any], TaskResult[Any]]] = {}
             try:
                 for fut in concurrent.futures.as_completed(future_to_name):
                     name = future_to_name[fut]
                     completed[name] = fut.result()
             finally:
                 with lock:
-                    for name, result in completed.items():
-                        ThreadedLayerRunner._store_result(
-                            name, result, graph, context, report, backend, on_event, context_snapshot
+                    for name, (task_ctx, result) in completed.items():
+                        _store_result(
+                            name, result, graph.resolved_spec(name), task_ctx, context, report, backend, on_event
                         )
 
 
-class AsyncLayerRunner(_LayerMixin):
+class AsyncLayerRunner:
     """在事件循环上并发运行某层的任务。"""
 
     @staticmethod
@@ -547,27 +544,32 @@ class AsyncLayerRunner(_LayerMixin):
         on_event: EventCallback | None,
         concurrency_limits: Mapping[str, int],
     ) -> None:
-        to_run = AsyncLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event)
+        to_run = _filter_and_sort(layer, graph, context, report, backend, on_event)
         if not to_run:
             return
-        semaphores = AsyncLayerRunner._build_semaphores(to_run, graph, asyncio.Semaphore, concurrency_limits)
+        semaphores = _build_semaphores(to_run, graph, asyncio.Semaphore, concurrency_limits)
         context_snapshot = dict(context)
 
-        async def _run_async_task(name: str) -> TaskResult[Any]:
+        async def _run_async_task(name: str) -> tuple[dict[str, Any], TaskResult[Any]]:
             spec = graph.resolved_spec(name)
             task_ctx = _build_context(spec, context_snapshot, report)
-            sem = AsyncLayerRunner._get_sem(semaphores, spec)
-            return await AsyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report, sem)
+            sem = _get_sem(semaphores, spec)
+            result = await AsyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report, sem)
+            return task_ctx, result
 
         results = await asyncio.gather(*[_run_async_task(name) for name in to_run])
-        for name, result in zip(to_run, results):
-            AsyncLayerRunner._store_result(name, result, graph, context, report, backend, on_event, context_snapshot)
+        for name, (task_ctx, result) in zip(to_run, results):
+            _store_result(name, result, graph.resolved_spec(name), task_ctx, context, report, backend, on_event)
 
 
-class DependencyRunner(_LayerMixin):
+class DependencyRunner:
     """依赖驱动调度：任务在硬/软依赖完成后立即启动，无层屏障。
 
     所有任务通过 asyncio 并发调度。同步任务卸载到线程池。
+
+    本类不继承层 Mixin：依赖驱动调度不是层模型，直接调用模块级共享辅助
+    函数（:func:`_build_semaphores` / :func:`_get_sem` / :func:`_store_result`），
+    职责更清晰。
     """
 
     @staticmethod
@@ -580,7 +582,7 @@ class DependencyRunner(_LayerMixin):
         concurrency_limits: Mapping[str, int],
     ) -> None:
         all_names = list(graph.all_specs().keys())
-        semaphores = DependencyRunner._build_semaphores(all_names, graph, asyncio.Semaphore, concurrency_limits)
+        semaphores = _build_semaphores(all_names, graph, asyncio.Semaphore, concurrency_limits)
         futures: dict[str, asyncio.Future[TaskResult[Any]]] = {}
 
         async def _run_task(name: str) -> TaskResult[Any]:
@@ -598,9 +600,9 @@ class DependencyRunner(_LayerMixin):
             if _apply_cached(name, spec, context, report, backend, on_event):
                 return report.results[name]
 
-            sem = DependencyRunner._get_sem(semaphores, spec)
+            sem = _get_sem(semaphores, spec)
             result = await AsyncTaskRunner.run(spec, task_ctx, None, on_event, report, sem)
-            DependencyRunner._store_result(name, result, graph, context, report, backend, on_event)
+            _store_result(name, result, spec, task_ctx, context, report, backend, on_event)
             return result
 
         loop = asyncio.get_event_loop()
@@ -677,10 +679,8 @@ def run(
     TaskFailedError
         任何任务耗尽重试后仍失败时（除非 ``continue_on_error=True``）。
     """
-    graph.validate()
-    layers = graph.layers()
-
     if dry_run:
+        layers = graph.layers()
         _print_dry_run(graph, layers)
         return RunReport(success=True)
 
@@ -690,20 +690,28 @@ def run(
     context: dict[str, Any] = {}
     limits = concurrency_limits or {}
 
-    try:
-        if strategy == "sequential":
-            _drive_sequential(graph, layers, context, report, backend, effective_callback)
-        elif strategy == "thread":
-            _drive_threaded(graph, layers, context, report, backend, effective_callback, max_workers, limits)
-        elif strategy == "async":
-            asyncio.run(_async_drive(graph, layers, context, report, backend, effective_callback, limits))
-        elif strategy == "dependency":
-            asyncio.run(DependencyRunner.execute(graph, context, report, backend, effective_callback, limits))
-        else:
-            raise ValueError(f"Unknown strategy: {strategy!r}")
-    except TaskFailedError:
-        report.success = False
-        raise
+    # backend.batch()：将每任务一次落盘降为整次运行一次（JSONBackend）；
+    # MemoryBackend 为 no-op。即使中途抛出 TaskFailedError，batch 退出时
+    # 仍会 flush 一次，保留已成功任务的结果以便断点续跑。
+    with backend.batch():
+        try:
+            if strategy == "sequential":
+                layers = graph.layers()
+                _drive_sequential(graph, layers, context, report, backend, effective_callback)
+            elif strategy == "thread":
+                layers = graph.layers()
+                _drive_threaded(graph, layers, context, report, backend, effective_callback, max_workers, limits)
+            elif strategy == "async":
+                layers = graph.layers()
+                asyncio.run(_async_drive(graph, layers, context, report, backend, effective_callback, limits))
+            elif strategy == "dependency":
+                graph.validate()
+                asyncio.run(DependencyRunner.execute(graph, context, report, backend, effective_callback, limits))
+            else:
+                raise ValueError(f"Unknown strategy: {strategy!r}")
+        except TaskFailedError:
+            report.success = False
+            raise
 
     return report
 

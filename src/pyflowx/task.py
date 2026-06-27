@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import sys
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import (
     Any,
@@ -291,13 +292,16 @@ class TaskSpec(Generic[T]):
         if self.fn is None and self.cmd is None:
             raise ValueError(f"TaskSpec '{self.name}': 必须提供 fn 或 cmd 参数。")
 
-    @property
+    @cached_property
     def effective_fn(self) -> TaskFn[T]:
         """获取有效的执行函数。
 
         若提供 ``cmd``，返回包装后的命令执行函数；否则返回 ``fn``。
         包装函数在每次调用时从 ``self`` 读取 ``verbose``/``cwd``/``env``/
         ``timeout``，避免闭包捕获运行期参数，使翻转字段无需重建 spec。
+
+        结果按实例缓存（:func:`functools.cached_property`）：frozen dataclass
+        字段不可变，``_wrap_cmd`` 生成的闭包稳定，无需每次访问重建。
         """
         if self.cmd is not None:
             return self._wrap_cmd()
@@ -306,11 +310,17 @@ class TaskSpec(Generic[T]):
         raise ValueError(f"TaskSpec '{self.name}': 没有可执行的函数或命令。")  # pragma: no cover
 
     def _wrap_cmd(self) -> TaskFn[Any]:
-        """将 cmd 包装为可执行函数。"""
+        """将 cmd 包装为可执行函数。
+
+        实际执行逻辑位于 :mod:`pyflowx.command`，避免 :class:`TaskSpec`
+        作为纯数据结构混入命令执行逻辑。
+        """
+        from .command import run_command
+
         spec = self
 
         def _run() -> T:
-            return cast(T, _run_command(spec))
+            return cast(T, run_command(spec))
 
         _run.__name__ = spec.name
         return _run  # type: ignore[return-value]
@@ -376,105 +386,51 @@ class TaskSpec(Generic[T]):
         return self.name
 
 
+# 全局锁：序列化对进程级状态（os.environ / os.chdir）的临时修改。
+# ``fn`` 任务在 thread/async 策略下并发执行时，若各自配置了不同的
+# ``cwd``/``env``，会相互覆盖（os.chdir 与 os.environ 均为进程全局）。
+# 该锁仅包裹"切换→执行→恢复"区间，保证正确性；不使用 cwd/env 的任务不受影响。
+_env_cwd_lock = threading.RLock()
+
+
 @contextmanager
 def _env_and_cwd(
     env: Mapping[str, str] | None,
     cwd: Path | None,
 ) -> Generator[None, None, None]:
-    """临时设置环境变量与工作目录。"""
-    saved_env: dict[str, str] = {}
-    saved_cwd: str | None = None
-    if env:
-        for k, v in env.items():
-            if k in os.environ:
-                saved_env[k] = os.environ[k]
-            os.environ[k] = v
-    if cwd is not None:
-        saved_cwd = str(Path.cwd())
-        os.chdir(cwd)
-    try:
+    """临时设置环境变量与工作目录。
+
+    ``os.environ`` 与 ``os.chdir`` 是进程级全局状态，在 thread/async 策略下
+    并发执行多个带 ``env``/``cwd`` 的 ``fn`` 任务时会相互覆盖。本函数通过
+    模块级 :data:`_env_cwd_lock` 串行化"切换→执行→恢复"区间，确保正确性。
+    无 ``env`` 且无 ``cwd`` 时直接 yield，不获取锁。
+    """
+    if not env and cwd is None:
         yield
-    finally:
-        if saved_cwd is not None:
-            os.chdir(saved_cwd)
-        # 恢复环境变量
+        return
+    with _env_cwd_lock:
+        saved_env: dict[str, str] = {}
+        saved_cwd: str | None = None
         if env:
-            for k in env:
-                if k in saved_env:
-                    os.environ[k] = saved_env[k]
-                else:
-                    os.environ.pop(k, None)
-
-
-def _run_command(spec: TaskSpec[Any]) -> Any:  # noqa: PLR0912
-    """执行 ``spec.cmd`` 指定的命令（list / shell 字符串 / 可调用对象）。"""
-    cmd = spec.cmd
-    verbose = spec.verbose
-    cwd = spec.cwd
-    timeout = spec.timeout
-    env_override = spec.env
-
-    # 可调用对象：直接调用，返回其结果。
-    if callable(cmd) and not isinstance(cmd, (list, str)):
-        name = getattr(cmd, "__name__", "callable")
-        if verbose:
-            print(f"[verbose] 执行可调用命令: {name}", flush=True)
-            if cwd is not None:
-                print(f"[verbose] 工作目录: {cwd}", flush=True)
-        try:
-            return cmd()
-        except Exception as e:
-            raise RuntimeError(f"可调用命令执行异常: {name}: {e}") from e
-
-    is_list = isinstance(cmd, list)
-    if is_list:
-        cmd_str = " ".join(arg for arg in cmd)  # type: ignore[union-attr]
-        verb = "执行命令"
-        label = "命令"
-    else:
-        cmd_str = cast(str, cmd)
-        verb = "执行 Shell"
-        label = "Shell 命令"
-
-    if verbose:
-        print(f"[verbose] {verb}: {cmd_str}", flush=True)
+            for k, v in env.items():
+                if k in os.environ:
+                    saved_env[k] = os.environ[k]
+                os.environ[k] = v
         if cwd is not None:
-            print(f"[verbose] 工作目录: {cwd}", flush=True)
-
-    # 合并环境变量
-    run_env: dict[str, str] | None = None
-    if env_override:
-        run_env = dict(os.environ)
-        run_env.update(env_override)
-
-    try:
-        result = subprocess.run(
-            cast(Union[str, List[str]], cmd),
-            shell=not is_list,
-            cwd=cwd,
-            env=run_env,
-            timeout=timeout,
-            capture_output=not verbose,
-            text=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        raise RuntimeError(f"{label}未找到: {cmd_str}") from None
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"{label}执行超时: {cmd_str} ({timeout}s)") from None
-    except OSError as e:
-        raise RuntimeError(f"{label}执行异常: {cmd_str}: {e}") from e
-
-    if verbose:
-        print(f"[verbose] 返回码: {result.returncode}", flush=True)
-
-    if result.returncode == 0:
-        return None
-
-    err_msg = f"{label}执行失败: `{cmd_str}`, 返回码: {result.returncode}"
-    if not verbose and result.stderr.strip():
-        err_msg += f"\n{result.stderr.strip()}"
-    raise RuntimeError(err_msg)
+            saved_cwd = str(Path.cwd())
+            os.chdir(cwd)
+        try:
+            yield
+        finally:
+            if saved_cwd is not None:
+                os.chdir(saved_cwd)
+            # 恢复环境变量
+            if env:
+                for k in env:
+                    if k in saved_env:
+                        os.environ[k] = saved_env[k]
+                    else:
+                        os.environ.pop(k, None)
 
 
 # ---------------------------------------------------------------------- #
