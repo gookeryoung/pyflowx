@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+from pathlib import Path
 from typing import Callable
 
 # 条件判断函数类型
@@ -85,6 +86,11 @@ class BuiltinConditions:
 
         _check.__name__ = f"HAS_INSTALLED({app_name!r})"
         return _check
+
+    @staticmethod
+    def DIR_EXISTS(dir: Path) -> Condition:
+        """路径是否存在."""
+        return dir.exists
 
     @staticmethod
     def ENV_VAR_EXISTS(var_name: str) -> Condition:

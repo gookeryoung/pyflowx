@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 
 import pyflowx as px
+from pyflowx import BuiltinConditions
 from pyflowx.conditions import Constants
 
 
@@ -34,6 +36,7 @@ def reset_icon_cache() -> list[px.TaskSpec]:
         px.TaskSpec(
             "delete_icon_cache",
             fn=lambda: subprocess.run(["del", "/a", "/q", r"%localappdata%\IconCache.db"], check=False),
+            conditions=(BuiltinConditions.DIR_EXISTS(Path(r"%localappdata%\IconCache.db")),),
             verbose=True,
         ),
         px.TaskSpec(
@@ -41,11 +44,13 @@ def reset_icon_cache() -> list[px.TaskSpec]:
             fn=lambda: subprocess.run(
                 ["del", "/a", "/q", r"%localappdata%\Microsoft\Windows\Explorer\iconcache*"], check=False
             ),
+            conditions=(BuiltinConditions.DIR_EXISTS(Path(r"%localappdata%\Microsoft\Windows\Explorer")),),
             verbose=True,
         ),
         px.TaskSpec(
             "restart_explorer",
-            fn=lambda: subprocess.run(["cmd", "/c", "start", "explorer.exe"], check=False),
+            fn=lambda: subprocess.run(["explorer.exe"], check=False),
+            conditions=(BuiltinConditions.HAS_INSTALLED("explorer.exe"),),
             verbose=True,
         ),
     ]
