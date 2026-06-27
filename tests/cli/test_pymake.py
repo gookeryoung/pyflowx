@@ -77,25 +77,25 @@ class TestTaskSpecDefinitions:
         """uv_build spec should be properly defined."""
         assert pymake.uv_build.name == "uv_build"
         assert pymake.uv_build.cmd == ["uv", "build"]
-        assert pymake.uv_build.skip_if_missing is True
+        assert pymake.uv_build.skip_if_missing is False
 
     def test_maturin_build_spec(self) -> None:
         """maturin_build spec should be properly defined."""
         assert pymake.maturin_build.name == "maturin_build"
         assert isinstance(pymake.maturin_build.cmd, list)
-        assert pymake.maturin_build.skip_if_missing is True
+        assert pymake.maturin_build.skip_if_missing is False
 
     def test_uv_sync_spec(self) -> None:
         """uv_sync spec should be properly defined."""
         assert pymake.uv_sync.name == "uv_sync"
         assert pymake.uv_sync.cmd == ["uv", "sync"]
-        assert pymake.uv_sync.skip_if_missing is True
+        assert pymake.uv_sync.skip_if_missing is False
 
     def test_git_clean_spec(self) -> None:
         """git_clean spec should be properly defined."""
         assert pymake.git_clean.name == "git_clean"
         assert pymake.git_clean.cmd == ["gitt", "c"]
-        assert pymake.git_clean.skip_if_missing is True
+        assert pymake.git_clean.skip_if_missing is False
 
     def test_test_spec(self) -> None:
         """test spec should be properly defined."""
@@ -135,13 +135,13 @@ class TestTaskSpecDefinitions:
         assert pymake.doc.name == "doc"
         assert isinstance(pymake.doc.cmd, list)
         assert "sphinx-build" in pymake.doc.cmd
-        assert pymake.doc.skip_if_missing is True
+        assert pymake.doc.skip_if_missing is False
 
     def test_hatch_publish_spec(self) -> None:
         """hatch_publish spec should be properly defined."""
         assert pymake.hatch_publish.name == "publish_python"
         assert pymake.hatch_publish.cmd == ["hatch", "publish"]
-        assert pymake.hatch_publish.skip_if_missing is True
+        assert pymake.hatch_publish.skip_if_missing is False
 
     def test_twine_publish_spec(self) -> None:
         """twine_publish spec should be properly defined."""
@@ -149,13 +149,13 @@ class TestTaskSpecDefinitions:
         assert isinstance(pymake.twine_publish.cmd, list)
         assert "twine" in pymake.twine_publish.cmd
         assert "upload" in pymake.twine_publish.cmd
-        assert pymake.twine_publish.skip_if_missing is True
+        assert pymake.twine_publish.skip_if_missing is False
 
     def test_tox_spec(self) -> None:
         """tox spec should be properly defined."""
         assert pymake.tox.name == "tox"
         assert pymake.tox.cmd == ["tox", "-p", "auto"]
-        assert pymake.tox.skip_if_missing is True
+        assert pymake.tox.skip_if_missing is False
 
 
 # ---------------------------------------------------------------------- #

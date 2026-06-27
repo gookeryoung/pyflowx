@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Callable
@@ -65,6 +66,43 @@ class BuiltinConditions:
             当前版本是否 >= 指定版本.
         """
         return sys.version_info >= (major, minor)
+
+    @staticmethod
+    def IS_RUNNING(app_name: str) -> Condition:
+        """检查指定应用是否正在运行.
+
+        Parameters
+        ----------
+        app_name : str
+            应用名称 (如 "explorer", "chrome", "python").
+
+        Returns
+        -------
+        Condition
+            条件判断函数.
+        """
+
+        def _check() -> bool:
+            if Constants.IS_WINDOWS:
+                # Windows: 使用 tasklist 命令
+                result = subprocess.run(
+                    ["tasklist", "/nh", "/fi", f"imagename eq {app_name}"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                return app_name.lower() in result.stdout.lower()
+            else:
+                # Linux/macOS: 使用 pgrep 命令
+                result = subprocess.run(
+                    ["pgrep", "-x", app_name],
+                    capture_output=True,
+                    check=False,
+                )
+                return result.returncode == 0
+
+        _check.__name__ = f"IS_RUNNING({app_name!r})"
+        return _check
 
     @staticmethod
     def HAS_INSTALLED(app_name: str) -> Condition:

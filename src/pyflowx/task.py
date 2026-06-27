@@ -123,6 +123,10 @@ class TaskSpec(Generic[T]):
         （标记为 SKIPPED）而非失败。适用于构建工具场景，避免因未安装
         某些工具（如 maturin、tox）而导致整个图执行失败。
         对于 ``str`` (shell) 和 ``Callable`` 类型的 ``cmd``，此参数无效。
+    allow_upstream_skip:
+        若为 ``True``，当上游任务因条件不满足被跳过时，本任务仍会执行
+        （而非跟随跳过）。适用于清理类任务：即使某些删除操作因目标不存在
+        而跳过，后续操作（如重启服务）仍应执行。默认为 ``False``。
     """
 
     name: str
@@ -137,7 +141,8 @@ class TaskSpec(Generic[T]):
     conditions: Tuple[Condition, ...] = ()
     cwd: Optional[Path] = None
     verbose: bool = False
-    skip_if_missing: bool = True
+    skip_if_missing: bool = False
+    allow_upstream_skip: bool = False
 
     def __post_init__(self) -> None:
         if not self.name:

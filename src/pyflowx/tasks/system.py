@@ -27,30 +27,40 @@ def reset_icon_cache() -> list[px.TaskSpec]:
         print("reset_icon_cache: 仅在 Windows 上支持")
         return []
 
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    icon_cache_db = Path(local_app_data) / "IconCache.db"
+    explorer_cache_dir = Path(local_app_data) / "Microsoft" / "Windows" / "Explorer"
+
     return [
         px.TaskSpec(
             "kill_explorer",
-            fn=lambda: subprocess.run(["taskkill", "/f", "/im", "explorer.exe"], check=False),
+            cmd=["taskkill", "/f", "/im", "explorer.exe"],
+            conditions=(BuiltinConditions.IS_RUNNING("explorer.exe"),),
             verbose=True,
         ),
         px.TaskSpec(
             "delete_icon_cache",
-            fn=lambda: subprocess.run(["del", "/a", "/q", r"%localappdata%\IconCache.db"], check=False),
-            conditions=(BuiltinConditions.DIR_EXISTS(Path(r"%localappdata%\IconCache.db")),),
+            cmd=["cmd", "/c", "del", "/a", "/q", str(icon_cache_db)],
+            conditions=(BuiltinConditions.DIR_EXISTS(icon_cache_db),),
+            depends_on=("kill_explorer",),
             verbose=True,
         ),
         px.TaskSpec(
             "delete_icon_cache_all",
-            fn=lambda: subprocess.run(
-                ["del", "/a", "/q", r"%localappdata%\Microsoft\Windows\Explorer\iconcache*"], check=False
-            ),
-            conditions=(BuiltinConditions.DIR_EXISTS(Path(r"%localappdata%\Microsoft\Windows\Explorer")),),
+            cmd=["cmd", "/c", "del", "/a", "/q", str(explorer_cache_dir / "iconcache*")],
+            conditions=(BuiltinConditions.DIR_EXISTS(explorer_cache_dir),),
+            depends_on=("kill_explorer",),
             verbose=True,
         ),
         px.TaskSpec(
             "restart_explorer",
-            fn=lambda: subprocess.run(["explorer.exe"], check=False),
-            conditions=(BuiltinConditions.HAS_INSTALLED("explorer.exe"),),
+            cmd=["cmd", "/c", "start", "explorer.exe"],
+            conditions=(
+                BuiltinConditions.HAS_INSTALLED("explorer.exe"),
+                BuiltinConditions.NOT(BuiltinConditions.IS_RUNNING("explorer.exe")),
+            ),
+            depends_on=("delete_icon_cache", "delete_icon_cache_all"),
+            allow_upstream_skip=True,
             verbose=True,
         ),
     ]

@@ -101,6 +101,10 @@ def _check_upstream_skipped(
     if report is None:
         return False, None
 
+    # 若任务允许上游跳过，则不检查上游状态
+    if spec.allow_upstream_skip:
+        return False, None
+
     for dep in spec.depends_on:
         if dep in report.results and report.results[dep].status == TaskStatus.SKIPPED:
             return True, f"上游任务 '{dep}' 被跳过"
@@ -155,6 +159,9 @@ def _run_sync_with_retry(
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         result.reason = skip_reason
+        _emit(on_event, result)
+        if spec.verbose:
+            print(f"[skip] 任务 '{spec.name}' 跳过: {skip_reason}", flush=True)
         logger.info("task %r skipped (上游任务被跳过)", spec.name)
         return result
 
@@ -164,6 +171,9 @@ def _run_sync_with_retry(
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         result.reason = skip_reason
+        _emit(on_event, result)
+        if spec.verbose:
+            print(f"[skip] 任务 '{spec.name}' 跳过: {skip_reason}", flush=True)
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
@@ -232,6 +242,9 @@ async def _run_async_with_retry(
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         result.reason = skip_reason
+        _emit(on_event, result)
+        if spec.verbose:
+            print(f"[skip] 任务 '{spec.name}' 跳过: {skip_reason}", flush=True)
         logger.info("task %r skipped (上游任务被跳过)", spec.name)
         return result
 
@@ -241,6 +254,9 @@ async def _run_async_with_retry(
         result.status = TaskStatus.SKIPPED
         result.finished_at = datetime.now()
         result.reason = skip_reason
+        _emit(on_event, result)
+        if spec.verbose:
+            print(f"[skip] 任务 '{spec.name}' 跳过: {skip_reason}", flush=True)
         logger.info("task %r skipped (条件不满足)", spec.name)
         return result
 
