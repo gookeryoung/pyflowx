@@ -6,6 +6,15 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "clr",
+    "reset_icon_cache",
+    "setenv",
+    "setenv_group",
+    "which",
+    "write_file",
+]
+
 import os
 import subprocess
 from pathlib import Path
@@ -111,6 +120,3 @@ def write_file(path: str, content: str, encoding: str = "utf-8") -> px.TaskSpec:
             print(f"写入文件 {path} 失败: {e}")
 
     return px.TaskSpec(f"write_file_{path}", fn=write, verbose=True)
-
-
-__all__ = ["clr", "reset_icon_cache", "setenv", "setenv_group", "which", "write_file"]

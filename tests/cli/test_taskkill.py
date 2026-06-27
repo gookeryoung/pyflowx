@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 import pyflowx as px
-from pyflowx.cli import taskkill
+from pyflowx.cli.system import taskkill
 from pyflowx.conditions import Constants
 
 

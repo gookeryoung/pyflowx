@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pyflowx as px
-from pyflowx.cli import clearscreen
+from pyflowx.cli.system import clearscreen
 
 
 # ---------------------------------------------------------------------- #

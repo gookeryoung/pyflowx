@@ -26,9 +26,7 @@ version = "0.2.10"
 [project.scripts]
 autofmt     = "pyflowx.cli.autofmt:main"
 bumpversion = "pyflowx.cli.bumpversion:main"
-clr         = "pyflowx.cli.clearscreen:main"
 emlman      = "pyflowx.cli.emlmanager:main"
-envdev      = "pyflowx.cli.envdev:main"
 filedate    = "pyflowx.cli.filedate:main"
 filelvl     = "pyflowx.cli.filelevel:main"
 foldback    = "pyflowx.cli.folderback:main"
@@ -44,8 +42,12 @@ reseticon   = "pyflowx.cli.reseticoncache:main"
 scrcap      = "pyflowx.cli.screenshot:main"
 sglang      = "pyflowx.cli.llm.sglang:main"
 sshcopy     = "pyflowx.cli.sshcopyid:main"
-taskk       = "pyflowx.cli.taskkill:main"
-wch         = "pyflowx.cli.which:main"
+# dev
+envdev = "pyflowx.cli.dev.envdev:main"
+# system
+clr   = "pyflowx.cli.system.clearscreen:main"
+taskk = "pyflowx.cli.system.taskkill:main"
+wch   = "pyflowx.cli.system.which:main"
 
 [project.optional-dependencies]
 dev = [
