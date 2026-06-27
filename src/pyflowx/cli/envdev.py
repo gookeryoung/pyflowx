@@ -49,11 +49,49 @@ CONDA_MIRROR_URLS: dict[str, list[str]] = {
 }
 
 
+QT_LIBS: list[str] = [
+    "build-essential",
+    "libgl1",
+    "libegl1",
+    "libglib2.0-0",
+    "libfontconfig1",
+    "libfreetype6",
+    "libxkbcommon0",
+    "libdbus-1-3",
+    "libxcb-xinerama0",
+    "libxcb-icccm4",
+    "libxcb-image0",
+    "libxcb-keysyms1",
+    "libxcb-randr0",
+    "libxcb-render-util0",
+    "libxcb-shape0",
+    "libxcb-xfixes0",
+    "libxcb-cursor0",
+]
+
+CHINESE_FONTS: list[str] = [
+    "fonts-noto-cjk",
+    "fonts-wqy-microhei",
+    "fonts-wqy-zenhei",
+    "fonts-noto-color-emoji",
+]
+
+
 def main() -> None:
     """主函数."""
     # 使用更安全的分步执行方式，便于调试和捕获错误
     graph = px.Graph.from_specs([
+        # 下载镜像
         px.TaskSpec("download", cmd="curl -sSL https://linuxmirrors.cn/main.sh -o /tmp/linuxmirrors.sh", verbose=True),
+        # 安装镜像
         px.TaskSpec("install", cmd="sudo bash /tmp/linuxmirrors.sh", verbose=True, depends_on=("download",)),
+        # 安装 PyQt 相关依赖
+        px.TaskSpec(
+            "envqt_install", cmd=["sudo", "apt", "install", "-y", *QT_LIBS], verbose=True, depends_on=("install",)
+        ),
+        # 安装中文字体
+        px.TaskSpec(
+            "envqt_fonts", cmd=["sudo", "apt", "install", "-y", *CHINESE_FONTS], verbose=True, depends_on=("install",)
+        ),
     ])
-    px.run(graph, strategy="thread")
+    px.run(graph, strategy="thread", verbose=True)
