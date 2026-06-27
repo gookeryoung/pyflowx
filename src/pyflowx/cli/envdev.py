@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import pyflowx as px
-from pyflowx.tasks.system import Constants, setenv_group, write_file
+from pyflowx.conditions import BuiltinConditions
+from pyflowx.tasks.system import setenv_group, write_file
 
 # ============================================================================
 # Mirror 配置
@@ -27,7 +28,7 @@ PIP_TRUSTED_HOSTS: dict[PyMirrorType, str] = {
     "tsinghua": "pypi.tuna.tsinghua.edu.cn",
     "aliyun": "mirrors.aliyun.com",
 }
-PIP_CONFIG_PATH = Path.home() / ".pip" / "pip.conf" if not Constants.IS_WINDOWS else Path.home() / "pip" / "pip.ini"
+PIP_CONFIG_PATH = Path.home() / ".pip" / "pip.conf" if BuiltinConditions.IS_LINUX() else Path.home() / "pip" / "pip.ini"
 
 UV_INDEX_URLS: dict[PyMirrorType, str] = {
     "tsinghua": "https://pypi.tuna.tsinghua.edu.cn/simple",
@@ -146,52 +147,72 @@ def main() -> None:
     args = parser.parse_args()
 
     python_mirror = args.python_mirror
-    python_envs: dict[str, str] = {
-        "PIP_INDEX_URL": PIP_INDEX_URLS[python_mirror],
-        "PIP_TRUSTED_HOSTS": PIP_TRUSTED_HOSTS[python_mirror],
-        "UV_INDEX_URL": UV_INDEX_URLS[python_mirror],
-        "UV_PYTHON_INSTALL_MIRROR": UV_PYTHON_INSTALL_MIRROR,
-        "UV_HTTP_TIMEOUT": "600",
-        "UV_LINK_MODE": "copy",
-    }
-
     conda_mirror_urls = CONDA_MIRROR_URLS[args.conda_mirror]
 
     # 确保配置文件目录存在
     PIP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONDA_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # 使用更安全的分步执行方式，便于调试和捕获错误
+    # 使用 conditions 自动控制任务执行
     graph = px.Graph.from_specs([
-        # 下载镜像
-        px.TaskSpec("download_mirror", cmd=DOWNLOAD_MIRROR_SCRIPT, verbose=True),
-        # 安装镜像
-        px.TaskSpec("install_mirror", cmd=INSTALL_MIRROR_SCRIPT, verbose=True, depends_on=("download_mirror",)),
-        # 安装 PyQt 相关依赖
+        # 系统镜像配置（仅 Linux 且未配置）
+        px.TaskSpec(
+            "download_mirror",
+            cmd=DOWNLOAD_MIRROR_SCRIPT,
+            conditions=(
+                BuiltinConditions.IS_LINUX(),
+                BuiltinConditions.NOT(
+                    BuiltinConditions.OR(
+                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "tsinghua"),
+                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "aliyun"),
+                        BuiltinConditions.FILE_CONTENT_EXISTS("/etc/apt/sources.list", "ustc"),
+                    )
+                ),
+            ),
+            verbose=True,
+        ),
+        px.TaskSpec(
+            "install_mirror",
+            cmd=INSTALL_MIRROR_SCRIPT,
+            depends_on=("download_mirror",),
+            verbose=True,
+        ),
+        # 安装 Qt 依赖（仅 Linux）
         px.TaskSpec(
             "install_qt_libs",
             cmd=["sudo", "apt", "install", "-y", *QT_LIBS],
-            verbose=True,
+            conditions=(BuiltinConditions.IS_LINUX(),),
             depends_on=("install_mirror",),
+            allow_upstream_skip=True,
+            verbose=True,
         ),
-        # 安装中文字体
+        # 安装中文字体（仅 Linux）
         px.TaskSpec(
             "install_fonts",
             cmd=["sudo", "apt", "install", "-y", *CHINESE_FONTS],
-            verbose=True,
+            conditions=(BuiltinConditions.IS_LINUX(),),
             depends_on=("install_mirror",),
+            allow_upstream_skip=True,
+            verbose=True,
         ),
         # 设置 Python 环境变量
-        *setenv_group(python_envs),
-        # 写入 Python 配置
+        *setenv_group({
+            "PIP_INDEX_URL": PIP_INDEX_URLS[python_mirror],
+            "PIP_TRUSTED_HOSTS": PIP_TRUSTED_HOSTS[python_mirror],
+            "UV_INDEX_URL": UV_INDEX_URLS[python_mirror],
+            "UV_PYTHON_INSTALL_MIRROR": UV_PYTHON_INSTALL_MIRROR,
+            "UV_HTTP_TIMEOUT": "600",
+            "UV_LINK_MODE": "copy",
+        }),
+        # 写入 Python 配置（仅当未配置）
         write_file(
             str(PIP_CONFIG_PATH),
             f"[global]\nindex-url = {PIP_INDEX_URLS[python_mirror]}\ntrusted-host = {PIP_TRUSTED_HOSTS[python_mirror]}",
         ),
-        # 写入 Conda 配置
+        # 写入 Conda 配置（仅当未配置）
         write_file(
             str(CONDA_CONFIG_PATH),
-            "show_channel_urls: true\nchannels:" + "\n".join(conda_mirror_urls) + "\n - defaults",
+            "show_channel_urls: true\nchannels:\n  - " + "\n  - ".join(conda_mirror_urls) + "\n  - defaults",
         ),
     ])
     px.run(graph, strategy="thread", verbose=True)

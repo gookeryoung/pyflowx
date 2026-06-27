@@ -61,6 +61,22 @@ class BuiltinConditions:
     # ------------------------------------------------------------------ #
     # 静态条件
     # ------------------------------------------------------------------ #
+    def IS_WINDOWS() -> Condition:
+        """检查是否为 Windows 平台."""
+        return _static(lambda: Constants.IS_WINDOWS, "IS_WINDOWS")
+
+    def IS_LINUX() -> Condition:
+        """检查是否为 Linux 平台."""
+        return _static(lambda: Constants.IS_LINUX, "IS_LINUX")
+
+    def IS_MACOS() -> Condition:
+        """检查是否为 macOS 平台."""
+        return _static(lambda: Constants.IS_MACOS, "IS_MACOS")
+
+    def IS_POSIX() -> Condition:
+        """检查是否为 POSIX 平台."""
+        return _static(lambda: Constants.IS_POSIX, "IS_POSIX")
+
     @staticmethod
     def PYTHON_VERSION(major: int, minor: int | None = None) -> Condition:
         """检查 Python 版本是否匹配."""
@@ -117,6 +133,21 @@ class BuiltinConditions:
             lambda: os.environ.get(var_name) == value,
             f"ENV_VAR_EQUALS({var_name!r},{value!r})",
         )
+
+    @staticmethod
+    def FILE_CONTENT_EXISTS(path: Path | str, content: str) -> Condition:
+        """检查文件是否包含指定内容."""
+
+        def _check() -> bool:
+            p = Path(path)
+            if not p.exists():
+                return False
+            try:
+                return content in p.read_text(encoding="utf-8")
+            except Exception:
+                return False
+
+        return _static(_check, f"FILE_CONTENT_EXISTS({path!r},{content!r})")
 
     # ------------------------------------------------------------------ #
     # 上下文条件：基于上游依赖结果
