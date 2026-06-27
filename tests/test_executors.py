@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import tempfile
 import threading
 import time
@@ -91,6 +92,46 @@ def test_retries_then_succeeds() -> None:
     assert report.success
     assert report["flaky"] == "ok"
     assert attempts["n"] == 3
+
+
+def test_retries_with_delay() -> None:
+    """测试带delay的重试会实际等待。"""
+    attempts = {"n": 0}
+    start_time = time.time()
+
+    def flaky() -> str:
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            raise RuntimeError("not yet")
+        return "ok"
+
+    graph = px.Graph.from_specs([
+        px.TaskSpec("flaky", flaky, retry=px.RetryPolicy(max_attempts=2, delay=0.1)),
+    ])
+    report = px.run(graph, strategy="sequential")
+    elapsed = time.time() - start_time
+    assert report.success
+    assert elapsed >= 0.1  # 应有至少0.1秒的等待时间
+    assert attempts["n"] == 2
+
+
+def test_timeout_then_retry_async(caplog: pytest.LogCaptureFixture) -> None:
+    """测试超时后可以重试，并记录warning日志。"""
+
+    async def slow_task() -> str:
+        await asyncio.sleep(10)  # 会触发超时
+        return "ok"
+
+    graph = px.Graph.from_specs([
+        px.TaskSpec("slow", slow_task, timeout=0.2, retry=px.RetryPolicy(max_attempts=2)),
+    ])
+    with caplog.at_level(logging.WARNING, logger="pyflowx"):
+        with pytest.raises(px.TaskFailedError) as exc_info:
+            _ = px.run(graph, strategy="async")
+        assert exc_info.value.attempts == 2
+        assert "timed out" in str(exc_info.value.cause)
+    # 应有超时重试的warning日志
+    assert any("timed out" in r.message for r in caplog.records)
 
 
 def test_retries_exhausted() -> None:

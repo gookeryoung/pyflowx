@@ -42,7 +42,7 @@ from typing import (
 if sys.version_info >= (3, 13):
     from typing import TypeVar
 else:
-    from typing_extensions import TypeVar
+    from typing_extensions import TypeVar  # pragma: no cover
 
 T = TypeVar("T", default=Any)
 

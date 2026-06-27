@@ -23,7 +23,7 @@ from typing import Any, Mapping
 if sys.version_info >= (3, 12):
     from typing import override
 else:
-    from typing_extensions import override
+    from typing_extensions import override  # pragma: no cover
 
 from .errors import StorageError
 
@@ -131,7 +131,6 @@ class JSONBackend(StateBackend):
                     if isinstance(v, dict) and "value" in v and "ts" in v:
                         self._store[k] = v
                     else:
-                        # 旧格式：纯值
                         self._store[k] = {"value": v, "ts": time.time()}
         except (OSError, json.JSONDecodeError) as exc:
             raise StorageError(f"cannot read state file {self._path!r}", exc) from exc

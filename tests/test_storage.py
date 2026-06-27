@@ -191,6 +191,21 @@ def test_json_backend_non_dict_content_ignored(tmp_path: Path) -> None:
     assert dict(b.load()) == {}
 
 
+def test_json_backend_old_format_migration(tmp_path: Path) -> None:
+    """旧格式JSON（纯值）应被迁移为新格式（带ts）。"""
+    path = tmp_path / "state.json"
+    # 写入旧格式：纯值
+    old_data = {"a": 1, "b": "value"}
+    _ = path.write_text(json.dumps(old_data))
+
+    b = JSONBackend(str(path))
+    # 读取后应有ts字段
+    assert "a" in b._store
+    assert "value" in b._store["a"]
+    assert "ts" in b._store["a"]
+    assert b._store["a"]["value"] == 1
+
+
 # ---------------------------------------------------------------------- #
 # JSONBackend TTL 测试
 # ---------------------------------------------------------------------- #

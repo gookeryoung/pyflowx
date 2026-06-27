@@ -37,6 +37,12 @@ def test_spec_zero_timeout_rejected() -> None:
         TaskSpec("a", _fn, timeout=0)
 
 
+def test_spec_negative_timeout_rejected() -> None:
+    """负数timeout应被拒绝。"""
+    with pytest.raises(ValueError, match="timeout"):
+        TaskSpec("a", _fn, timeout=-1.0)
+
+
 def test_spec_self_dependency_rejected() -> None:
     with pytest.raises(ValueError, match="depend on itself"):
         TaskSpec("a", _fn, depends_on=("a",))
