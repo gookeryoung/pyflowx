@@ -15,6 +15,8 @@
 * ``TaskStatus`` 是封闭枚举；执行器绝不发明临时字符串。
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
@@ -149,9 +151,9 @@ class TaskHooks:
     钩子异常不会影响任务状态，仅记录日志。
     """
 
-    pre_run: Optional[Callable[["TaskSpec[Any]"], None]] = None
-    post_run: Optional[Callable[["TaskSpec[Any]", Any], None]] = None
-    on_failure: Optional[Callable[["TaskSpec[Any]", BaseException], None]] = None
+    pre_run: Optional[Callable[[TaskSpec[Any]], None]] = None
+    post_run: Optional[Callable[[TaskSpec[Any], Any], None]] = None
+    on_failure: Optional[Callable[[TaskSpec[Any], BaseException], None]] = None
 
 
 class TaskStatus(Enum):
@@ -393,7 +395,7 @@ def _env_and_cwd(
                     os.environ.pop(k, None)
 
 
-def _run_command(spec: "TaskSpec[Any]") -> Any:  # noqa: PLR0912
+def _run_command(spec: TaskSpec[Any]) -> Any:  # noqa: PLR0912
     """执行 ``spec.cmd`` 指定的命令（list / shell 字符串 / 可调用对象）。"""
     cmd = spec.cmd
     verbose = spec.verbose
