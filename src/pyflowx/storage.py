@@ -17,6 +17,7 @@ import json
 import sys
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -55,7 +56,74 @@ class StateBackend(ABC):
         """清除所有存储状态。"""
 
 
-class MemoryBackend(StateBackend):
+class _TTLStateBackendMixin(StateBackend):
+    """TTL 状态后端共享逻辑。
+
+    将 ``has`` / ``get`` / ``load`` / ``save`` / ``clear`` 的统一实现
+    委托给四个原始存取原语：:meth:`_get_raw`、:meth:`_put_raw`、
+    :meth:`_iter_raw`、:meth:`_clear_raw`，并基于 :meth:`_now` 与
+    ``self._ttl`` 提供统一的过期判断 :meth:`_is_expired`。
+
+    子类需设置 ``self._ttl`` 并实现上述四个原语；如需自定义时间源
+    （如 ``time.monotonic``）可覆盖 :meth:`_now`。
+    """
+
+    _ttl: float | None
+
+    # ---- 原语：由子类实现 ---- #
+    @abstractmethod
+    def _get_raw(self, key: str) -> tuple[Any, float] | None:
+        """返回 ``(value, ts)``；键不存在时返回 ``None``。"""
+
+    @abstractmethod
+    def _put_raw(self, key: str, value: Any, ts: float) -> None:
+        """写入一条记录。"""
+
+    @abstractmethod
+    def _iter_raw(self) -> Iterator[tuple[str, Any, float]]:
+        """迭代所有记录（不做过期过滤），yield ``(key, value, ts)``。"""
+
+    @abstractmethod
+    def _clear_raw(self) -> None:
+        """清空所有记录。"""
+
+    # ---- 共享实现 ---- #
+    def _now(self) -> float:
+        """当前时间戳，默认为 wall-clock 秒。"""
+        return time.time()
+
+    def _is_expired(self, ts: float) -> bool:
+        """时间戳 ``ts`` 是否已过期。"""
+        if self._ttl is None:
+            return False
+        return (self._now() - ts) > self._ttl
+
+    @override
+    def load(self) -> Mapping[str, Any]:
+        return {k: v for k, v, ts in self._iter_raw() if not self._is_expired(ts)}
+
+    @override
+    def save(self, key: str, value: Any) -> None:
+        self._put_raw(key, value, self._now())
+
+    @override
+    def has(self, key: str) -> bool:
+        entry = self._get_raw(key)
+        return entry is not None and not self._is_expired(entry[1])
+
+    @override
+    def get(self, key: str) -> Any:
+        entry = self._get_raw(key)
+        if entry is None or self._is_expired(entry[1]):
+            raise KeyError(key)
+        return entry[0]
+
+    @override
+    def clear(self) -> None:
+        self._clear_raw()
+
+
+class MemoryBackend(_TTLStateBackendMixin):
     """进程内 dict 后端。进程退出即丢失。
 
     Parameters
@@ -70,35 +138,35 @@ class MemoryBackend(StateBackend):
         self._ttl = ttl
 
     @override
-    def load(self) -> Mapping[str, Any]:
-        return {k: v for k, (v, _ts) in self._store.items() if not self._expired(k)}
+    def _now(self) -> float:
+        return time.monotonic()
 
     @override
-    def save(self, key: str, value: Any) -> None:
-        self._store[key] = (value, time.monotonic())
+    def _get_raw(self, key: str) -> tuple[Any, float] | None:
+        return self._store.get(key)
 
     @override
-    def has(self, key: str) -> bool:
-        return key in self._store and not self._expired(key)
+    def _put_raw(self, key: str, value: Any, ts: float) -> None:
+        self._store[key] = (value, ts)
 
     @override
-    def get(self, key: str) -> Any:
-        if key not in self._store or self._expired(key):
-            raise KeyError(key)
-        return self._store[key][0]
+    def _iter_raw(self) -> Iterator[tuple[str, Any, float]]:
+        for k, (v, ts) in self._store.items():
+            yield k, v, ts
 
     @override
-    def clear(self) -> None:
+    def _clear_raw(self) -> None:
         self._store.clear()
 
     def _expired(self, key: str) -> bool:
-        if self._ttl is None or key not in self._store:
+        """键是否已过期（兼容旧测试 API）。"""
+        entry = self._get_raw(key)
+        if entry is None:
             return False
-        _value, ts = self._store[key]
-        return (time.monotonic() - ts) > self._ttl
+        return self._is_expired(entry[1])
 
 
-class JSONBackend(StateBackend):
+class JSONBackend(_TTLStateBackendMixin):
     """基于文件的 JSON 存储，用于跨进程续跑。
 
     存储格式：``{key: {"value": v, "ts": epoch_seconds}}``。
@@ -144,17 +212,30 @@ class JSONBackend(StateBackend):
         except (OSError, TypeError) as exc:
             raise StorageError(f"cannot write state file {self._path!r}", exc) from exc
 
-    def _now(self) -> float:
-        return time.time()
-
-    def _expired(self, entry: dict[str, Any]) -> bool:
-        if self._ttl is None:
-            return False
-        return (self._now() - float(entry.get("ts", 0))) > self._ttl
+    @override
+    def _get_raw(self, key: str) -> tuple[Any, float] | None:
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        return entry["value"], float(entry.get("ts", 0))
 
     @override
-    def load(self) -> Mapping[str, Any]:
-        return {k: v["value"] for k, v in self._store.items() if not self._expired(v)}
+    def _put_raw(self, key: str, value: Any, ts: float) -> None:
+        self._store[key] = {"value": value, "ts": ts}
+
+    @override
+    def _iter_raw(self) -> Iterator[tuple[str, Any, float]]:
+        for k, entry in self._store.items():
+            yield k, entry["value"], float(entry.get("ts", 0))
+
+    @override
+    def _clear_raw(self) -> None:
+        self._store.clear()
+
+    @override
+    def clear(self) -> None:
+        super().clear()
+        self._flush()
 
     @override
     def save(self, key: str, value: Any) -> None:
@@ -162,23 +243,12 @@ class JSONBackend(StateBackend):
             _ = json.dumps(value)
         except (TypeError, ValueError) as exc:
             raise StorageError(f"result of key {key!r} is not JSON-serialisable", exc) from exc
-        self._store[key] = {"value": value, "ts": self._now()}
+        super().save(key, value)
         self._flush()
 
-    @override
-    def has(self, key: str) -> bool:
-        return key in self._store and not self._expired(self._store[key])
-
-    @override
-    def get(self, key: str) -> Any:
-        if key not in self._store or self._expired(self._store[key]):
-            raise KeyError(key)
-        return self._store[key]["value"]
-
-    @override
-    def clear(self) -> None:
-        self._store.clear()
-        self._flush()
+    def _expired(self, entry: Mapping[str, Any]) -> bool:
+        """带元数据的条目是否已过期（兼容旧测试 API）。"""
+        return self._is_expired(float(entry.get("ts", 0)))
 
 
 def resolve_backend(backend: StateBackend | None) -> StateBackend:

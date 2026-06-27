@@ -74,6 +74,13 @@ Condition = Callable[[Context], bool]
 CacheKeyFn = Callable[[Context], str]
 
 
+def _format_skip_reason(failed_conditions: list[str]) -> str:
+    """格式化跳过原因：≤2 个全展示，>2 个仅展示前 2 个并附总数。"""
+    if len(failed_conditions) <= 2:
+        return f"条件不满足: {', '.join(failed_conditions)}"
+    return f"条件不满足: {', '.join(failed_conditions[:2])} 等{len(failed_conditions)}个条件"
+
+
 # ---------------------------------------------------------------------- #
 # 重试策略
 # ---------------------------------------------------------------------- #
@@ -315,6 +322,7 @@ class TaskSpec(Generic[T]):
         -------
         (should_run, skip_reason)
             ``should_run`` 为 False 时 ``skip_reason`` 描述跳过原因。
+            失败条件超过 2 个时仅展示前 2 个并附总数。
         """
         # 逐个求值条件，记录失败项。
         failed_conditions: list[str] = []
@@ -323,8 +331,7 @@ class TaskSpec(Generic[T]):
                 ok = condition(context)
             except Exception:
                 ok = False
-                name = getattr(condition, "__name__", None) or "匿名条件(执行错误)"
-                failed_conditions.append(name)
+                failed_conditions.append("匿名条件(执行错误)")
                 continue
             if not ok:
                 reason = getattr(condition, "_reason", None)
@@ -336,7 +343,7 @@ class TaskSpec(Generic[T]):
                     failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
 
         if failed_conditions:
-            return False, f"条件不满足: {', '.join(failed_conditions)}"
+            return False, _format_skip_reason(failed_conditions)
 
         if self.skip_if_missing and not self._is_cmd_available():
             cmd_name = self.cmd[0] if isinstance(self.cmd, list) and self.cmd else "unknown"

@@ -49,6 +49,15 @@ class GraphDefaults:
     verbose: bool = False
 
 
+def _prune_deps(spec: TaskSpec[Any], keep: Callable[[str], bool]) -> TaskSpec[Any]:
+    """返回新 spec，其 ``depends_on`` / ``soft_depends_on`` 仅保留 ``keep(dep)`` 为真的依赖。"""
+    return replace(
+        spec,
+        depends_on=tuple(d for d in spec.depends_on if keep(d)),
+        soft_depends_on=tuple(d for d in spec.soft_depends_on if keep(d)),
+    )
+
+
 @dataclass
 class Graph:
     """校验后的有向无环任务图。
@@ -225,16 +234,13 @@ class Graph:
     def subgraph(self, tags: Iterable[str]) -> Graph:
         """返回仅包含匹配任意标签的任务的新图。依赖边被修剪。"""
         wanted: set[str] = set(tags)
-        kept: list[TaskSpec[Any]] = []
-        for spec in self.specs.values():
-            if wanted & set(spec.tags):
-                pruned_deps = tuple(
-                    d for d in spec.depends_on if d in self.specs and (wanted & set(self.specs[d].tags))
-                )
-                pruned_soft = tuple(
-                    d for d in spec.soft_depends_on if d in self.specs and (wanted & set(self.specs[d].tags))
-                )
-                kept.append(replace(spec, depends_on=pruned_deps, soft_depends_on=pruned_soft))
+
+        def _dep_kept(dep: str) -> bool:
+            return dep in self.specs and bool(wanted & set(self.specs[dep].tags))
+
+        kept: list[TaskSpec[Any]] = [
+            _prune_deps(spec, _dep_kept) for spec in self.specs.values() if wanted & set(spec.tags)
+        ]
         return Graph.from_specs(kept, defaults=self.defaults)
 
     def subgraph_by_names(self, names: Iterable[str]) -> Graph:
@@ -243,12 +249,9 @@ class Graph:
         for n in wanted:
             if n not in self.specs:
                 raise KeyError(f"Unknown task name: {n!r}")
-        kept: list[TaskSpec[Any]] = []
-        for spec in self.specs.values():
-            if spec.name in wanted:
-                pruned_deps = tuple(d for d in spec.depends_on if d in wanted)
-                pruned_soft = tuple(d for d in spec.soft_depends_on if d in wanted)
-                kept.append(replace(spec, depends_on=pruned_deps, soft_depends_on=pruned_soft))
+        kept: list[TaskSpec[Any]] = [
+            _prune_deps(spec, lambda d: d in wanted) for spec in self.specs.values() if spec.name in wanted
+        ]
         return Graph.from_specs(kept, defaults=self.defaults)
 
     # ------------------------------------------------------------------ #

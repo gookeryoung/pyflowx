@@ -42,6 +42,19 @@ def _static(predicate: Callable[[], bool], name: str) -> Condition:
     return _cond
 
 
+def _cond_reason(cond: Condition) -> str | list[str] | None:
+    """获取条件的失败原因：优先返回 ``_reason``，否则返回 ``__name__``。"""
+    reason = getattr(cond, "_reason", None)
+    if reason is not None:
+        return reason
+    return getattr(cond, "__name__", repr(cond))
+
+
+def _cond_name(cond: Condition) -> str:
+    """获取条件的可读名称。"""
+    return getattr(cond, "__name__", repr(cond))
+
+
 # ---------------------------------------------------------------------- #
 # 模块级静态条件常量
 # ---------------------------------------------------------------------- #
@@ -61,21 +74,25 @@ class BuiltinConditions:
     # ------------------------------------------------------------------ #
     # 静态条件
     # ------------------------------------------------------------------ #
+    @staticmethod
     def IS_WINDOWS() -> Condition:
         """检查是否为 Windows 平台."""
-        return _static(lambda: Constants.IS_WINDOWS, "IS_WINDOWS")
+        return IS_WINDOWS
 
+    @staticmethod
     def IS_LINUX() -> Condition:
         """检查是否为 Linux 平台."""
-        return _static(lambda: Constants.IS_LINUX, "IS_LINUX")
+        return IS_LINUX
 
+    @staticmethod
     def IS_MACOS() -> Condition:
         """检查是否为 macOS 平台."""
-        return _static(lambda: Constants.IS_MACOS, "IS_MACOS")
+        return IS_MACOS
 
+    @staticmethod
     def IS_POSIX() -> Condition:
         """检查是否为 POSIX 平台."""
-        return _static(lambda: Constants.IS_POSIX, "IS_POSIX")
+        return IS_POSIX
 
     @staticmethod
     def PYTHON_VERSION(major: int, minor: int | None = None) -> Condition:
@@ -214,12 +231,12 @@ class BuiltinConditions:
             result = condition(ctx)
             if result:
                 # inner 为 True 时 NOT 会失败，记录 inner 的具体原因
-                inner_reason = getattr(condition, "_reason", None)
+                inner_reason = _cond_reason(condition)
                 if inner_reason is not None:
                     _cond._reason = inner_reason  # type: ignore[attr-defined]
             return not result
 
-        _cond.__name__ = f"NOT({getattr(condition, '__name__', repr(condition))})"
+        _cond.__name__ = f"NOT({_cond_name(condition)})"
         return _cond
 
     @staticmethod
@@ -229,8 +246,7 @@ class BuiltinConditions:
         def _cond(ctx: Context) -> bool:
             return all(c(ctx) for c in conditions)
 
-        names = [getattr(c, "__name__", repr(c)) for c in conditions]
-        _cond.__name__ = f"AND({', '.join(names)})"
+        _cond.__name__ = f"AND({', '.join(_cond_name(c) for c in conditions)})"
         return _cond
 
     @staticmethod
@@ -241,14 +257,12 @@ class BuiltinConditions:
             matched: list[str] = []
             for c in conditions:
                 if c(ctx):
-                    matched.append(
-                        getattr(c, "_reason", None) or getattr(c, "__name__", repr(c)),
-                    )
+                    reason = _cond_reason(c)
+                    matched.append(reason if isinstance(reason, str) else str(reason))
             if matched:
                 _cond._reason = matched  # type: ignore[attr-defined]
                 return True
             return False
 
-        names = [getattr(c, "__name__", repr(c)) for c in conditions]
-        _cond.__name__ = f"OR({', '.join(names)})"
+        _cond.__name__ = f"OR({', '.join(_cond_name(c) for c in conditions)})"
         return _cond

@@ -10,6 +10,17 @@
 * ``dependency`` —— 依赖驱动调度：任务在其所有硬依赖完成后立即启动，
                     无需等待同层其他任务。最大化并行度。
 
+架构
+----
+本模块通过 **Mixin** 组合消除同步/异步与各层执行器之间的重复代码：
+
+* :class:`_TaskSkipMixin`  —— 上游跳过 / 条件跳过的预检逻辑。
+* :class:`_TaskRetryMixin` —— 重试决策、成功/失败后处理、finalize。
+* :class:`_LayerMixin`     —— 缓存过滤、优先级排序、信号量构建、结果存储。
+* :class:`SyncTaskRunner` / :class:`AsyncTaskRunner` —— 任务级执行器，组合上述 Mixin。
+* :class:`SequentialLayerRunner` / :class:`ThreadedLayerRunner` /
+  :class:`AsyncLayerRunner` / :class:`DependencyRunner` —— 层级执行器，组合 :class:`_LayerMixin`。
+
 所有策略共享统一异步内核，支持：
 * :class:`RetryPolicy`（max_attempts/delay/backoff/jitter/retry_on）
 * 软依赖注入与默认值
@@ -30,6 +41,7 @@ import concurrent.futures
 import inspect
 import logging
 import threading
+import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Literal, Mapping, cast
 
@@ -48,7 +60,7 @@ Strategy = Literal["sequential", "thread", "async", "dependency"]
 
 
 # ---------------------------------------------------------------------- #
-# 辅助
+# 无状态公共辅助
 # ---------------------------------------------------------------------- #
 def _is_async_fn(spec: TaskSpec[Any]) -> bool:
     """判断 ``spec.effective_fn`` 是否为协程函数。"""
@@ -71,17 +83,6 @@ def _emit(on_event: EventCallback | None, result: TaskResult[Any]) -> None:
     )
 
 
-def _log_retry(spec: TaskSpec[Any], attempt: int, max_attempts: int, exc: BaseException) -> None:
-    """记录重试日志。"""
-    logger.warning(
-        "task %r failed (attempt %d/%d): %r; retrying",
-        spec.name,
-        attempt,
-        max_attempts,
-        exc,
-    )
-
-
 def _run_hooks(hooks: TaskHooks, fn_name: str, *args: Any) -> None:
     """安全调用钩子（异常仅记录，不影响任务状态）。"""
     hook: Callable[..., None] | None = getattr(hooks, fn_name, None)
@@ -91,87 +92,6 @@ def _run_hooks(hooks: TaskHooks, fn_name: str, *args: Any) -> None:
         hook(*args)
     except Exception as exc:
         logger.warning("hook %s raised: %r", fn_name, exc)
-
-
-def _check_upstream_skipped(
-    spec: TaskSpec[Any],
-    report: RunReport | None,
-) -> tuple[bool, str | None]:
-    """检查硬依赖上游任务是否被 SKIPPED 或 FAILED。
-
-    软依赖不影响本检查——软依赖被跳过时注入默认值。
-    """
-    if report is None:  # pragma: no cover
-        return False, None  # pragma: no cover
-
-    if spec.allow_upstream_skip:  # pragma: no cover
-        return False, None  # pragma: no cover
-
-    for dep in spec.depends_on:
-        if dep not in report.results:  # pragma: no cover
-            continue  # pragma: no cover
-        dep_status = report.results[dep].status
-        if dep_status in (TaskStatus.SKIPPED, TaskStatus.FAILED):
-            return True, f"上游任务 '{dep}' 状态为 {dep_status.value}"
-    return False, None  # pragma: no cover
-
-
-def _format_reason(reason: Any) -> str:
-    """将 _reason 格式化为可读字符串."""
-    if isinstance(reason, list):
-        return ", ".join(str(r) for r in reason)
-    return str(reason)
-
-
-def _evaluate_conditions(spec: TaskSpec[Any], context: Mapping[str, Any]) -> str | None:
-    """求值所有条件，返回跳过原因或 ``None``。
-
-    条件接收上下文映射（硬依赖 + 软依赖结果）。
-    """
-    failed_conditions: list[str] = []
-    for condition in spec.conditions:
-        try:
-            ok = condition(context)
-        except Exception:
-            ok = False
-            name = getattr(condition, "__name__", None) or "匿名条件(执行错误)"
-            failed_conditions.append(name)
-            continue
-
-        if not ok:
-            reason = getattr(condition, "_reason", None)
-            if reason is not None:
-                failed_conditions.append(_format_reason(reason))
-            else:
-                failed_conditions.append(getattr(condition, "__name__", None) or "匿名条件")
-
-    if failed_conditions:
-        if len(failed_conditions) <= 2:
-            return f"条件不满足: {', '.join(failed_conditions)}"
-        return f"条件不满足: {', '.join(failed_conditions[:2])} 等{len(failed_conditions)}个条件"
-
-    if spec.skip_if_missing and not spec._is_cmd_available():
-        cmd_name = spec.cmd[0] if isinstance(spec.cmd, list) and spec.cmd else "unknown"
-        return f"命令不存在: {cmd_name}"
-
-    return None
-
-
-def _make_skipped_result(
-    spec: TaskSpec[Any],
-    reason: str,
-    on_event: EventCallback | None,
-) -> TaskResult[Any]:
-    """构造 SKIPPED 的 TaskResult。"""
-    result: TaskResult[Any] = TaskResult(
-        spec=spec,
-        status=TaskStatus.SKIPPED,
-        finished_at=datetime.now(),
-        reason=reason,
-    )
-    _emit(on_event, result)
-    logger.info("task %r skipped (%s)", spec.name, reason)
-    return result
 
 
 def _build_context(
@@ -185,19 +105,16 @@ def _build_context(
     软依赖：上游成功则注入其值；否则注入 ``spec.defaults`` 中的默认值（或 ``None``）。
     """
     ctx: dict[str, Any] = {}
-
     for dep in spec.depends_on:
         if dep in global_context:
             ctx[dep] = global_context[dep]
-
     for dep in spec.soft_depends_on:
         if dep in global_context:
             ctx[dep] = global_context[dep]
-        elif dep in spec.defaults:  # pragma: no cover
-            ctx[dep] = spec.defaults[dep]  # pragma: no cover
+        elif dep in spec.defaults:
+            ctx[dep] = spec.defaults[dep]
         else:
             ctx[dep] = None
-
     return ctx
 
 
@@ -222,112 +139,232 @@ def _apply_cached(
     return True
 
 
-def _prepare_for_execution(
-    spec: TaskSpec[Any],
-    context: Mapping[str, Any],
-    report: RunReport | None,
-    on_event: EventCallback | None,
-) -> TaskResult[Any] | None:
-    """执行前预检：上游跳过 / 条件跳过。
+def _sort_by_priority(layer: list[str], graph: Graph) -> list[str]:
+    """按优先级降序排序（稳定排序）。"""
+    return sorted(layer, key=lambda n: -graph.resolved_spec(n).priority)
 
-    返回 SKIPPED TaskResult 或 ``None``（继续执行）。
+
+# ---------------------------------------------------------------------- #
+# Mixin：任务级跳过 / 重试 / 成功处理
+# ---------------------------------------------------------------------- #
+class _TaskSkipMixin:
+    """任务级跳过预检共享逻辑。
+
+    将"上游被跳过/失败"与"条件不满足"两类跳过判断统一为单一入口，
+    被 :class:`SyncTaskRunner` 与 :class:`AsyncTaskRunner` 复用。
     """
-    should_skip, skip_reason = _check_upstream_skipped(spec, report)
-    if should_skip:
-        return _make_skipped_result(spec, skip_reason or "上游任务被跳过", on_event)
 
-    skip_reason = _evaluate_conditions(spec, context)
-    if skip_reason is not None:
-        return _make_skipped_result(spec, skip_reason, on_event)
+    @staticmethod
+    def _upstream_skip_reason(spec: TaskSpec[Any], report: RunReport | None) -> str | None:
+        """硬依赖被 SKIPPED/FAILED 时返回原因字符串，否则 ``None``。
 
-    return None
+        软依赖不影响本检查——软依赖被跳过时注入默认值。
+        """
+        if report is None or spec.allow_upstream_skip:
+            return None
+        for dep in spec.depends_on:
+            if dep not in report.results:
+                continue
+            dep_status = report.results[dep].status
+            if dep_status in (TaskStatus.SKIPPED, TaskStatus.FAILED):
+                return f"上游任务 '{dep}' 状态为 {dep_status.value}"
+        return None
 
+    @staticmethod
+    def _prepare_for_execution(
+        spec: TaskSpec[Any],
+        context: Mapping[str, Any],
+        report: RunReport | None,
+        on_event: EventCallback | None,
+    ) -> TaskResult[Any] | None:
+        """执行前预检：上游跳过 / 条件跳过。
 
-def _finalize_failure(
-    result: TaskResult[Any],
-    layer_idx: int | None,
-    on_event: EventCallback | None = None,
-    continue_on_error: bool = False,
-) -> None:
-    """标记任务为 FAILED。若 ``continue_on_error`` 为真则不抛出异常。"""
-    result.status = TaskStatus.FAILED
-    result.finished_at = datetime.now()
-    _emit(on_event, result)
-    if continue_on_error:
-        logger.warning(
-            "task %r failed but continue_on_error=True; continuing.",
-            result.spec.name,
+        返回 SKIPPED TaskResult 或 ``None``（继续执行）。
+        条件判断委托给 :meth:`TaskSpec.should_execute`，避免重复实现。
+        """
+        # 1. 上游被跳过/失败
+        skip_reason = _TaskSkipMixin._upstream_skip_reason(spec, report)
+        # 2. 条件 / skip_if_missing（单一来源：TaskSpec.should_execute）
+        if skip_reason is None:
+            should_run, cond_reason = spec.should_execute(context)
+            if not should_run:
+                skip_reason = cond_reason or "条件不满足"
+        if skip_reason is None:
+            return None
+        # 构造 SKIPPED 结果
+        result: TaskResult[Any] = TaskResult(
+            spec=spec,
+            status=TaskStatus.SKIPPED,
+            finished_at=datetime.now(),
+            reason=skip_reason,
         )
-        return
-    raise TaskFailedError(
-        task=result.spec.name,
-        cause=result.error if result.error is not None else RuntimeError("unknown"),
-        attempts=result.attempts,
-        layer=layer_idx,
-    )
+        _emit(on_event, result)
+        logger.info("task %r skipped (%s)", spec.name, skip_reason)
+        return result
 
 
-def _sleep_for_retry(spec: TaskSpec[Any], attempt: int) -> None:
-    """重试前的同步等待。"""
-    wait = spec.retry.wait_seconds(attempt)
-    if wait > 0:
-        import time
+class _TaskRetryMixin:
+    """任务级重试决策与失败/成功后处理共享逻辑。"""
 
-        time.sleep(wait)
+    @staticmethod
+    def _should_retry(spec: TaskSpec[Any], attempts: int, exc: BaseException) -> bool:
+        """是否应继续重试。"""
+        return attempts < spec.retry.max_attempts and spec.retry.should_retry(exc)
 
+    @staticmethod
+    def _mark_success(spec: TaskSpec[Any], result: TaskResult[Any], value: Any) -> None:
+        """标记任务成功并触发 post_run 钩子。"""
+        result.value = value
+        result.status = TaskStatus.SUCCESS
+        result.finished_at = datetime.now()
+        _run_hooks(spec.hooks, "post_run", spec, value)
 
-async def _async_sleep_for_retry(spec: TaskSpec[Any], attempt: int) -> None:
-    """重试前的异步等待。"""
-    wait = spec.retry.wait_seconds(attempt)
-    if wait > 0:
-        await asyncio.sleep(wait)
+    @staticmethod
+    def _finalize_failure(
+        result: TaskResult[Any],
+        layer_idx: int | None,
+        on_event: EventCallback | None,
+        continue_on_error: bool,
+    ) -> None:
+        """标记任务为 FAILED。若 ``continue_on_error`` 为真则不抛出异常。"""
+        result.status = TaskStatus.FAILED
+        result.finished_at = datetime.now()
+        _emit(on_event, result)
+        if continue_on_error:
+            logger.warning(
+                "task %r failed but continue_on_error=True; continuing.",
+                result.spec.name,
+            )
+            return
+        raise TaskFailedError(
+            task=result.spec.name,
+            cause=result.error if result.error is not None else RuntimeError("unknown"),
+            attempts=result.attempts,
+            layer=layer_idx,
+        )
+
+    @staticmethod
+    def _handle_failure(
+        spec: TaskSpec[Any],
+        result: TaskResult[Any],
+        exc: BaseException,
+        layer_idx: int | None,
+        on_event: EventCallback | None,
+    ) -> bool:
+        """统一处理失败：超时转换、重试决策、finalize。
+
+        Returns
+        -------
+        bool
+            ``True`` 表示已 finalize（不再重试）；``False`` 表示应继续重试。
+        """
+        # asyncio.TimeoutError → TaskTimeoutError（统一异常类型）
+        if isinstance(exc, asyncio.TimeoutError):
+            exc = TaskTimeoutError(spec.name, spec.timeout or 0.0)
+            logger.warning(
+                "task %r timed out (attempt %d/%d); retrying",
+                spec.name,
+                result.attempts,
+                spec.retry.max_attempts,
+            )
+        else:
+            logger.warning(
+                "task %r failed (attempt %d/%d): %r; retrying",
+                spec.name,
+                result.attempts,
+                spec.retry.max_attempts,
+                exc,
+            )
+        result.error = exc
+        if _TaskRetryMixin._should_retry(spec, result.attempts, exc):
+            return False
+        _run_hooks(spec.hooks, "on_failure", spec, exc)
+        _TaskRetryMixin._finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
+        return True
 
 
 # ---------------------------------------------------------------------- #
-# 同步执行内核
+# 任务执行器：同步 / 异步（复用 _TaskSkipMixin + _TaskRetryMixin）
 # ---------------------------------------------------------------------- #
-def _run_sync_with_retry(
-    spec: TaskSpec[Any],
-    context: Mapping[str, Any],
-    layer_idx: int | None,
-    on_event: EventCallback | None = None,
-    report: RunReport | None = None,
-) -> TaskResult[Any]:
-    """执行同步任务并带重试；返回填充好的 TaskResult。"""
-    skipped = _prepare_for_execution(spec, context, report, on_event)
-    if skipped is not None:
-        return skipped
+class SyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
+    """同步任务执行器：带重试与跳过预检。"""
 
-    result: TaskResult[Any] = TaskResult(spec=spec)
-    result.started_at = datetime.now()
-    max_attempts = spec.retry.max_attempts
-    args, kwargs = build_call_args(spec, context)
+    @staticmethod
+    def run(
+        spec: TaskSpec[Any],
+        context: Mapping[str, Any],
+        layer_idx: int | None,
+        on_event: EventCallback | None = None,
+        report: RunReport | None = None,
+    ) -> TaskResult[Any]:
+        skipped = _TaskSkipMixin._prepare_for_execution(spec, context, report, on_event)
+        if skipped is not None:
+            return skipped
 
-    _run_hooks(spec.hooks, "pre_run", spec)
+        result: TaskResult[Any] = TaskResult(spec=spec)
+        result.started_at = datetime.now()
+        args, kwargs = build_call_args(spec, context)
 
-    while True:
-        result.attempts += 1
-        try:
-            with spec.env_context():
-                result.value = spec.effective_fn(*args, **kwargs)
-            result.status = TaskStatus.SUCCESS
-            result.finished_at = datetime.now()
-            _run_hooks(spec.hooks, "post_run", spec, result.value)
-            return result
-        except Exception as exc:
-            result.error = exc
-            if result.attempts >= max_attempts or not spec.retry.should_retry(exc):
-                _run_hooks(spec.hooks, "on_failure", spec, exc)
-                _finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
+        _run_hooks(spec.hooks, "pre_run", spec)
+
+        while True:
+            result.attempts += 1
+            try:
+                with spec.env_context():
+                    value = spec.effective_fn(*args, **kwargs)
+                _TaskRetryMixin._mark_success(spec, result, value)
                 return result
-            _log_retry(spec, result.attempts, max_attempts, exc)
-            _sleep_for_retry(spec, result.attempts)
-    # pragma: no cover
+            except Exception as exc:
+                if _TaskRetryMixin._handle_failure(spec, result, exc, layer_idx, on_event):
+                    return result
+                wait = spec.retry.wait_seconds(result.attempts)
+                if wait > 0:
+                    time.sleep(wait)
 
 
-# ---------------------------------------------------------------------- #
-# 异步执行内核
-# ---------------------------------------------------------------------- #
+class AsyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
+    """异步任务执行器：在事件循环上运行同步或异步任务，带重试与跳过预检。"""
+
+    @staticmethod
+    async def run(
+        spec: TaskSpec[Any],
+        context: Mapping[str, Any],
+        layer_idx: int | None,
+        on_event: EventCallback | None = None,
+        report: RunReport | None = None,
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> TaskResult[Any]:
+        skipped = _TaskSkipMixin._prepare_for_execution(spec, context, report, on_event)
+        if skipped is not None:
+            return skipped
+
+        async def _inner() -> TaskResult[Any]:
+            result: TaskResult[Any] = TaskResult(spec=spec)
+            result.started_at = datetime.now()
+            args, kwargs = build_call_args(spec, context)
+            loop = asyncio.get_event_loop()
+
+            _run_hooks(spec.hooks, "pre_run", spec)
+
+            while True:
+                result.attempts += 1
+                try:
+                    value = await _execute_async_task(spec, args, kwargs, loop)
+                    _TaskRetryMixin._mark_success(spec, result, value)
+                    return result
+                except Exception as exc:
+                    if _TaskRetryMixin._handle_failure(spec, result, exc, layer_idx, on_event):
+                        return result
+                    wait = spec.retry.wait_seconds(result.attempts)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+
+        if semaphore is not None:
+            async with semaphore:
+                return await _inner()
+        return await _inner()
+
+
 async def _execute_async_task(
     spec: TaskSpec[Any],
     args: tuple[Any, ...],
@@ -339,307 +376,237 @@ async def _execute_async_task(
         coro = cast(Awaitable[Any], spec.effective_fn(*args, **kwargs))
         if spec.timeout is not None:
             return await asyncio.wait_for(coro, timeout=spec.timeout)
-        else:
-            return await coro
-    else:
+        return await coro
 
-        def fn_call() -> Any:
-            with spec.env_context():
-                return spec.effective_fn(*args, **kwargs)
+    def fn_call() -> Any:
+        with spec.env_context():
+            return spec.effective_fn(*args, **kwargs)
 
-        if spec.timeout is not None:
-            return await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
-        else:
-            return await loop.run_in_executor(None, fn_call)
+    if spec.timeout is not None:
+        return await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
+    return await loop.run_in_executor(None, fn_call)
 
 
-async def _run_async_with_retry(
-    spec: TaskSpec[Any],
-    context: Mapping[str, Any],
-    layer_idx: int | None,
-    on_event: EventCallback | None = None,
-    report: RunReport | None = None,
-    semaphore: asyncio.Semaphore | None = None,
-) -> TaskResult[Any]:
-    """在事件循环上执行任务（同步或异步）并带重试。"""
-    skipped = _prepare_for_execution(spec, context, report, on_event)
-    if skipped is not None:
-        return skipped
+# ---------------------------------------------------------------------- #
+# Mixin：层执行共享逻辑
+# ---------------------------------------------------------------------- #
+class _LayerMixin:
+    """层执行共享逻辑：缓存过滤、优先级排序、信号量构建、结果存储。
 
-    if semaphore is not None:
-        async with semaphore:
-            return await _run_async_inner(spec, context, layer_idx, on_event, report)
-    return await _run_async_inner(spec, context, layer_idx, on_event, report)
+    四个层执行器（sequential/threaded/async/dependency）通过组合此 Mixin
+    消除"过滤缓存→排序→运行→存结果"的样板代码。
+    """
 
+    @staticmethod
+    def _filter_and_sort(
+        layer: list[str],
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        on_event: EventCallback | None,
+    ) -> list[str]:
+        """过滤掉已命中缓存的任务，按优先级排序返回待运行列表。"""
+        to_run: list[str] = []
+        for name in layer:
+            spec = graph.resolved_spec(name)
+            if not _apply_cached(name, spec, context, report, backend, on_event):
+                to_run.append(name)
+        return _sort_by_priority(to_run, graph)
 
-async def _run_async_inner(
-    spec: TaskSpec[Any],
-    context: Mapping[str, Any],
-    layer_idx: int | None,
-    on_event: EventCallback | None = None,
-    report: RunReport | None = None,  # noqa: ARG001
-) -> TaskResult[Any]:
-    """异步执行内核的内部实现（已获取 semaphore 后）。"""
-    result: TaskResult[Any] = TaskResult(spec=spec)
-    result.started_at = datetime.now()
-    max_attempts = spec.retry.max_attempts
-    args, kwargs = build_call_args(spec, context)
-    loop = asyncio.get_event_loop()
+    @staticmethod
+    def _store_result(
+        name: str,
+        result: TaskResult[Any],
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        on_event: EventCallback | None,
+        context_snapshot: Mapping[str, Any] | None = None,
+    ) -> None:
+        """存储任务结果到 context/report/backend 并触发事件。"""
+        context[name] = result.value
+        if result.status == TaskStatus.SUCCESS:
+            spec = graph.resolved_spec(name)
+            task_ctx = _build_context(spec, context_snapshot if context_snapshot is not None else context, report)
+            backend.save(spec.storage_key(task_ctx), result.value)
+        report.results[name] = result
+        _emit(on_event, result)
 
-    _run_hooks(spec.hooks, "pre_run", spec)
+    @staticmethod
+    def _build_semaphores(
+        to_run: list[str],
+        graph: Graph,
+        sem_factory: Callable[[int], Any],
+        concurrency_limits: Mapping[str, int],
+    ) -> dict[str, Any]:
+        """为每个 ``concurrency_key`` 创建一个信号量。"""
+        semaphores: dict[str, Any] = {}
+        for name in to_run:
+            spec = graph.resolved_spec(name)
+            key = spec.concurrency_key
+            if key is not None and key not in semaphores:
+                limit = concurrency_limits.get(key, 1)
+                semaphores[key] = sem_factory(limit)
+        return semaphores
 
-    while True:
-        result.attempts += 1
-        try:
-            result.value = await _execute_async_task(spec, args, kwargs, loop)
-            result.status = TaskStatus.SUCCESS
-            result.finished_at = datetime.now()
-            _run_hooks(spec.hooks, "post_run", spec, result.value)
-            return result
-        except asyncio.TimeoutError:
-            exc: BaseException = TaskTimeoutError(spec.name, spec.timeout or 0.0)
-            result.error = exc
-            if result.attempts >= max_attempts or not spec.retry.should_retry(exc):
-                _run_hooks(spec.hooks, "on_failure", spec, exc)
-                _finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
-                return result
-            logger.warning(
-                "task %r timed out (attempt %d/%d); retrying",
-                spec.name,
-                result.attempts,
-                max_attempts,
-            )
-            await _async_sleep_for_retry(spec, result.attempts)
-        except Exception as exc:
-            result.error = exc
-            if result.attempts >= max_attempts or not spec.retry.should_retry(exc):
-                _run_hooks(spec.hooks, "on_failure", spec, exc)
-                _finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
-                return result
-            _log_retry(spec, result.attempts, max_attempts, exc)
-            await _async_sleep_for_retry(spec, result.attempts)
-    # pragma: no cover
+    @staticmethod
+    def _get_sem(semaphores: Mapping[str, Any], spec: TaskSpec[Any]) -> Any | None:
+        """获取任务对应的信号量（无 concurrency_key 则返回 None）。"""
+        if spec.concurrency_key is None:
+            return None
+        return semaphores.get(spec.concurrency_key)
 
 
 # ---------------------------------------------------------------------- #
 # 层执行器
 # ---------------------------------------------------------------------- #
-def _sort_by_priority(layer: list[str], graph: Graph) -> list[str]:
-    """按优先级降序排序（稳定排序）。"""
-    return sorted(layer, key=lambda n: -graph.resolved_spec(n).priority)
-
-
-def _execute_layer_sequential(
-    layer: list[str],
-    graph: Graph,
-    context: dict[str, Any],
-    report: RunReport,
-    backend: StateBackend,
-    layer_idx: int,
-    on_event: EventCallback | None,
-) -> None:
+class SequentialLayerRunner(_LayerMixin):
     """逐个运行某层的任务（按优先级排序）。"""
-    for name in _sort_by_priority(layer, graph):
-        spec = graph.resolved_spec(name)
-        if _apply_cached(name, spec, context, report, backend, on_event):
-            continue
-        task_ctx = _build_context(spec, context, report)
-        result = _run_sync_with_retry(spec, task_ctx, layer_idx, on_event, report)
-        context[name] = result.value
-        if result.status == TaskStatus.SUCCESS:
-            backend.save(spec.storage_key(task_ctx), result.value)
-        report.results[name] = result
-        _emit(on_event, result)
+
+    @staticmethod
+    def execute(
+        layer: list[str],
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        layer_idx: int,
+        on_event: EventCallback | None,
+    ) -> None:
+        for name in SequentialLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event):
+            spec = graph.resolved_spec(name)
+            task_ctx = _build_context(spec, context, report)
+            result = SyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report)
+            SequentialLayerRunner._store_result(name, result, graph, context, report, backend, on_event)
 
 
-def _execute_layer_threaded(
-    layer: list[str],
-    graph: Graph,
-    context: dict[str, Any],
-    report: RunReport,
-    backend: StateBackend,
-    layer_idx: int,
-    on_event: EventCallback | None,
-    max_workers: int,
-    concurrency_limits: Mapping[str, int],
-) -> None:
+class ThreadedLayerRunner(_LayerMixin):
     """在线程池中并发运行某层的任务。"""
-    to_run: list[str] = []
-    for name in layer:
-        spec = graph.resolved_spec(name)
-        task_ctx = _build_context(spec, context, report)
-        if _apply_cached(name, spec, context, report, backend, on_event):
-            continue
-        to_run.append(name)
 
-    if not to_run:
-        return
+    @staticmethod
+    def execute(
+        layer: list[str],
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        layer_idx: int,
+        on_event: EventCallback | None,
+        max_workers: int,
+        concurrency_limits: Mapping[str, int],
+    ) -> None:
+        to_run = ThreadedLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event)
+        if not to_run:
+            return
+        semaphores = ThreadedLayerRunner._build_semaphores(to_run, graph, threading.Semaphore, concurrency_limits)
+        context_snapshot = dict(context)
+        lock = threading.Lock()
 
-    to_run = _sort_by_priority(to_run, graph)
-
-    # 为每个 concurrency_key 创建线程信号量
-    semaphores: dict[str, threading.Semaphore] = {}
-    for name in to_run:
-        spec = graph.resolved_spec(name)
-        key = spec.concurrency_key
-        if key is not None and key not in semaphores:
-            limit = concurrency_limits.get(key, 1)
-            semaphores[key] = threading.Semaphore(limit)
-
-    context_snapshot = dict(context)
-    lock = threading.Lock()
-
-    def _run_threaded_task(name: str) -> TaskResult[Any]:
-        spec = graph.resolved_spec(name)
-        task_ctx = _build_context(spec, context_snapshot, report)
-        sem = semaphores.get(spec.concurrency_key) if spec.concurrency_key else None
-        if sem is not None:
-            sem.acquire()
-        try:
-            return _run_sync_with_retry(spec, task_ctx, layer_idx, on_event, report)
-        finally:
-            if sem is not None:
-                sem.release()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_name: dict[concurrent.futures.Future[TaskResult[Any]], str] = {}
-        for name in to_run:
-            fut = pool.submit(_run_threaded_task, name)
-            future_to_name[fut] = name
-
-        completed: dict[str, TaskResult[Any]] = {}
-        try:
-            for fut in concurrent.futures.as_completed(future_to_name):
-                name = future_to_name[fut]
-                result = fut.result()
-                completed[name] = result
-        finally:
-            with lock:
-                for name, result in completed.items():
-                    context[name] = result.value
-                    if result.status == TaskStatus.SUCCESS:
-                        spec = graph.resolved_spec(name)
-                        task_ctx = _build_context(spec, context_snapshot, report)
-                        backend.save(spec.storage_key(task_ctx), result.value)
-                    report.results[name] = result
-                    _emit(on_event, result)
-
-
-async def _execute_layer_async(
-    layer: list[str],
-    graph: Graph,
-    context: dict[str, Any],
-    report: RunReport,
-    backend: StateBackend,
-    layer_idx: int,
-    on_event: EventCallback | None,
-    concurrency_limits: Mapping[str, int],
-) -> None:
-    """在事件循环上并发运行某层的任务。"""
-    to_run: list[str] = []
-    for name in layer:
-        spec = graph.resolved_spec(name)
-        if _apply_cached(name, spec, context, report, backend, on_event):
-            continue
-        to_run.append(name)
-
-    if not to_run:
-        return
-
-    to_run = _sort_by_priority(to_run, graph)
-
-    # 为每个 concurrency_key 创建异步信号量
-    semaphores: dict[str, asyncio.Semaphore] = {}
-    for name in to_run:
-        spec = graph.resolved_spec(name)
-        key = spec.concurrency_key
-        if key is not None and key not in semaphores:
-            limit = concurrency_limits.get(key, 1)
-            semaphores[key] = asyncio.Semaphore(limit)
-
-    context_snapshot = dict(context)
-
-    async def _run_async_task_wrapped(name: str) -> TaskResult[Any]:
-        spec = graph.resolved_spec(name)
-        task_ctx = _build_context(spec, context_snapshot, report)
-        sem = semaphores.get(spec.concurrency_key) if spec.concurrency_key else None
-        if sem is not None:
-            async with sem:
-                return await _run_async_with_retry(spec, task_ctx, layer_idx, on_event, report)
-        return await _run_async_with_retry(spec, task_ctx, layer_idx, on_event, report)
-
-    coros = [_run_async_task_wrapped(name) for name in to_run]
-    results = await asyncio.gather(*coros)
-    for name, result in zip(to_run, results):
-        context[name] = result.value
-        if result.status == TaskStatus.SUCCESS:
+        def _run_threaded_task(name: str) -> TaskResult[Any]:
             spec = graph.resolved_spec(name)
             task_ctx = _build_context(spec, context_snapshot, report)
-            backend.save(spec.storage_key(task_ctx), result.value)
-        report.results[name] = result
-        _emit(on_event, result)
+            sem = ThreadedLayerRunner._get_sem(semaphores, spec)
+            if sem is not None:
+                sem.acquire()
+            try:
+                return SyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report)
+            finally:
+                if sem is not None:
+                    sem.release()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_to_name: dict[concurrent.futures.Future[TaskResult[Any]], str] = {
+                pool.submit(_run_threaded_task, name): name for name in to_run
+            }
+            completed: dict[str, TaskResult[Any]] = {}
+            try:
+                for fut in concurrent.futures.as_completed(future_to_name):
+                    name = future_to_name[fut]
+                    completed[name] = fut.result()
+            finally:
+                with lock:
+                    for name, result in completed.items():
+                        ThreadedLayerRunner._store_result(
+                            name, result, graph, context, report, backend, on_event, context_snapshot
+                        )
 
 
-# ---------------------------------------------------------------------- #
-# 依赖驱动调度
-# ---------------------------------------------------------------------- #
-async def _drive_dependency_async(
-    graph: Graph,
-    context: dict[str, Any],
-    report: RunReport,
-    backend: StateBackend,
-    on_event: EventCallback | None,
-    concurrency_limits: Mapping[str, int],
-) -> None:
-    """依赖驱动调度：任务在硬依赖完成后立即启动，无层屏障。
+class AsyncLayerRunner(_LayerMixin):
+    """在事件循环上并发运行某层的任务。"""
+
+    @staticmethod
+    async def execute(
+        layer: list[str],
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        layer_idx: int,
+        on_event: EventCallback | None,
+        concurrency_limits: Mapping[str, int],
+    ) -> None:
+        to_run = AsyncLayerRunner._filter_and_sort(layer, graph, context, report, backend, on_event)
+        if not to_run:
+            return
+        semaphores = AsyncLayerRunner._build_semaphores(to_run, graph, asyncio.Semaphore, concurrency_limits)
+        context_snapshot = dict(context)
+
+        async def _run_async_task(name: str) -> TaskResult[Any]:
+            spec = graph.resolved_spec(name)
+            task_ctx = _build_context(spec, context_snapshot, report)
+            sem = AsyncLayerRunner._get_sem(semaphores, spec)
+            return await AsyncTaskRunner.run(spec, task_ctx, layer_idx, on_event, report, sem)
+
+        results = await asyncio.gather(*[_run_async_task(name) for name in to_run])
+        for name, result in zip(to_run, results):
+            AsyncLayerRunner._store_result(name, result, graph, context, report, backend, on_event, context_snapshot)
+
+
+class DependencyRunner(_LayerMixin):
+    """依赖驱动调度：任务在硬/软依赖完成后立即启动，无层屏障。
 
     所有任务通过 asyncio 并发调度。同步任务卸载到线程池。
     """
-    all_names = set(graph.all_specs().keys())
-    semaphores: dict[str, asyncio.Semaphore] = {}
-    for name in all_names:
-        spec = graph.resolved_spec(name)
-        key = spec.concurrency_key
-        if key is not None and key not in semaphores:
-            limit = concurrency_limits.get(key, 1)
-            semaphores[key] = asyncio.Semaphore(limit)
 
-    futures: dict[str, asyncio.Future[TaskResult[Any]]] = {}
+    @staticmethod
+    async def execute(
+        graph: Graph,
+        context: dict[str, Any],
+        report: RunReport,
+        backend: StateBackend,
+        on_event: EventCallback | None,
+        concurrency_limits: Mapping[str, int],
+    ) -> None:
+        all_names = list(graph.all_specs().keys())
+        semaphores = DependencyRunner._build_semaphores(all_names, graph, asyncio.Semaphore, concurrency_limits)
+        futures: dict[str, asyncio.Future[TaskResult[Any]]] = {}
 
-    async def _run_task(name: str) -> TaskResult[Any]:
-        spec = graph.resolved_spec(name)
-        # 等待所有硬依赖完成
-        for dep in spec.depends_on:
-            if dep in futures:
-                await futures[dep]
-        # 等待所有软依赖完成（但不检查其状态）
-        for dep in spec.soft_depends_on:
-            if dep in futures:
-                await futures[dep]
+        async def _run_task(name: str) -> TaskResult[Any]:
+            spec = graph.resolved_spec(name)
+            # 等待所有硬依赖完成
+            for dep in spec.depends_on:
+                if dep in futures:
+                    await futures[dep]
+            # 等待所有软依赖完成（但不检查其状态）
+            for dep in spec.soft_depends_on:
+                if dep in futures:
+                    await futures[dep]
 
-        task_ctx = _build_context(spec, context, report)
-        if _apply_cached(name, spec, context, report, backend, on_event):
-            return report.results[name]
+            task_ctx = _build_context(spec, context, report)
+            if _apply_cached(name, spec, context, report, backend, on_event):
+                return report.results[name]
 
-        sem = semaphores.get(spec.concurrency_key) if spec.concurrency_key else None
-        if sem is not None:
-            async with sem:
-                result = await _run_async_with_retry(spec, task_ctx, None, on_event, report)
-        else:
-            result = await _run_async_with_retry(spec, task_ctx, None, on_event, report)
+            sem = DependencyRunner._get_sem(semaphores, spec)
+            result = await AsyncTaskRunner.run(spec, task_ctx, None, on_event, report, sem)
+            DependencyRunner._store_result(name, result, graph, context, report, backend, on_event)
+            return result
 
-        context[name] = result.value
-        if result.status == TaskStatus.SUCCESS:
-            backend.save(spec.storage_key(task_ctx), result.value)
-        report.results[name] = result
-        _emit(on_event, result)
-        return result
-
-    loop = asyncio.get_event_loop()
-    for name in all_names:
-        futures[name] = loop.create_task(_run_task(name))
-
-    await asyncio.gather(*futures.values())
+        loop = asyncio.get_event_loop()
+        for name in all_names:
+            futures[name] = loop.create_task(_run_task(name))
+        await asyncio.gather(*futures.values())
 
 
 # ---------------------------------------------------------------------- #
@@ -729,9 +696,9 @@ def run(
         elif strategy == "thread":
             _drive_threaded(graph, layers, context, report, backend, effective_callback, max_workers, limits)
         elif strategy == "async":
-            _drive_async(graph, layers, context, report, backend, effective_callback, limits)
+            asyncio.run(_async_drive(graph, layers, context, report, backend, effective_callback, limits))
         elif strategy == "dependency":
-            asyncio.run(_drive_dependency_async(graph, context, report, backend, effective_callback, limits))
+            asyncio.run(DependencyRunner.execute(graph, context, report, backend, effective_callback, limits))
         else:
             raise ValueError(f"Unknown strategy: {strategy!r}")
     except TaskFailedError:
@@ -759,7 +726,7 @@ def _drive_sequential(
     on_event: EventCallback | None,
 ) -> None:
     for idx, layer in enumerate(layers, 1):
-        _execute_layer_sequential(layer, graph, context, report, backend, idx, on_event)
+        SequentialLayerRunner.execute(layer, graph, context, report, backend, idx, on_event)
 
 
 def _drive_threaded(
@@ -774,19 +741,7 @@ def _drive_threaded(
 ) -> None:
     for idx, layer in enumerate(layers, 1):
         workers = max_workers or max(1, min(32, len(layer)))
-        _execute_layer_threaded(layer, graph, context, report, backend, idx, on_event, workers, concurrency_limits)
-
-
-def _drive_async(
-    graph: Graph,
-    layers: list[list[str]],
-    context: dict[str, Any],
-    report: RunReport,
-    backend: StateBackend,
-    on_event: EventCallback | None,
-    concurrency_limits: Mapping[str, int],
-) -> None:
-    asyncio.run(_async_drive(graph, layers, context, report, backend, on_event, concurrency_limits))
+        ThreadedLayerRunner.execute(layer, graph, context, report, backend, idx, on_event, workers, concurrency_limits)
 
 
 async def _async_drive(
@@ -799,4 +754,4 @@ async def _async_drive(
     concurrency_limits: Mapping[str, int],
 ) -> None:
     for idx, layer in enumerate(layers, 1):
-        await _execute_layer_async(layer, graph, context, report, backend, idx, on_event, concurrency_limits)
+        await AsyncLayerRunner.execute(layer, graph, context, report, backend, idx, on_event, concurrency_limits)
