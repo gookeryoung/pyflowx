@@ -15,6 +15,8 @@
 * ``TaskStatus`` 是封闭枚举；执行器绝不发明临时字符串。
 """
 
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -162,6 +164,13 @@ class TaskSpec(Generic[T]):
 
         若提供了 ``cmd`` 参数，则返回包装后的命令执行函数；
         否则返回 ``fn`` 参数。
+
+        Note
+        -----
+        命令执行逻辑已抽到模块级 :func:`_run_command`，此处仅返回轻量
+        转发闭包。``verbose`` / ``cwd`` / ``timeout`` 不再在创建时闭包
+        捕获，而是在每次调用时从 ``self`` 读取——这使得翻转 ``verbose``
+        无需重建 spec（见 :func:`pyflowx.runner._apply_verbose_to_graph`）。
         """
         if self.cmd is not None:
             return self._wrap_cmd()
@@ -173,100 +182,36 @@ class TaskSpec(Generic[T]):
     def _wrap_cmd(self) -> TaskFn[Any]:
         """将 cmd 包装为可执行函数.
 
+        返回的闭包仅持有 ``self`` 引用，每次调用时从 spec 读取
+        ``verbose``/``cwd``/``timeout``，避免闭包捕获运行期参数。
+
         Returns
         -------
         TaskFn[Any]
             包装后的执行函数.
         """
-        cmd = self.cmd
-        cwd = self.cwd
-        timeout = self.timeout
-        verbose = self.verbose
+        spec = self
 
-        if isinstance(cmd, list):
+        if isinstance(spec.cmd, list):
 
             def _run_list() -> T:
-                import subprocess
+                return cast(T, _run_command(spec))
 
-                cmd_str = " ".join(arg for arg in cmd)
-                if verbose:
-                    print(f"[verbose] 执行命令: {cmd_str}", flush=True)
-                    if cwd is not None:
-                        print(f"[verbose] 工作目录: {cwd}", flush=True)
-                try:
-                    result = subprocess.run(
-                        cmd,
-                        cwd=cwd,
-                        timeout=timeout,
-                        capture_output=not verbose,
-                        text=True,
-                        check=False,
-                    )
-                except FileNotFoundError:
-                    raise RuntimeError(f"命令未找到: {cmd_str}") from None
-                except subprocess.TimeoutExpired:
-                    raise RuntimeError(f"命令执行超时: {cmd_str} ({timeout}s)") from None
-                except OSError as e:
-                    raise RuntimeError(f"命令执行异常: {cmd_str}: {e}") from e
-
-                if verbose:
-                    print(f"[verbose] 返回码: {result.returncode}", flush=True)
-
-                if result.returncode == 0:
-                    return cast(T, None)  # type: ignore[return-value]
-
-                err_msg = f"命令执行失败: `{cmd_str}`, 返回码: {result.returncode}"
-                if not verbose and result.stderr.strip():
-                    err_msg += f"\n{result.stderr.strip()}"
-                raise RuntimeError(err_msg)
-
-            _run_list.__name__ = self.name
+            _run_list.__name__ = spec.name
             return _run_list  # type: ignore[return-value]
 
-        if isinstance(cmd, str):
+        if isinstance(spec.cmd, str):
 
             def _run_shell() -> T:
-                import subprocess
+                return cast(T, _run_command(spec))
 
-                if verbose:
-                    print(f"[verbose] 执行 Shell: {cmd}", flush=True)
-                    if cwd is not None:
-                        print(f"[verbose] 工作目录: {cwd}", flush=True)
-                try:
-                    result = subprocess.run(
-                        cmd,
-                        shell=True,
-                        cwd=cwd,
-                        timeout=timeout,
-                        capture_output=not verbose,
-                        text=True,
-                        check=False,
-                    )
-                except FileNotFoundError:
-                    raise RuntimeError(f"Shell 命令未找到: {cmd}") from None
-                except subprocess.TimeoutExpired:
-                    raise RuntimeError(f"Shell 命令执行超时: {cmd} ({timeout}s)") from None
-                except OSError as e:
-                    raise RuntimeError(f"Shell 命令执行异常: {cmd}: {e}") from e
-
-                if verbose:
-                    print(f"[verbose] 返回码: {result.returncode}", flush=True)
-
-                if result.returncode == 0:
-                    return cast(T, None)  # type: ignore[return-value]
-
-                err_msg = f"Shell 命令执行失败: `{cmd}`, 返回码: {result.returncode}"
-                if not verbose and result.stderr.strip():
-                    err_msg += f"\n{result.stderr.strip()}"
-                raise RuntimeError(err_msg)
-
-            _run_shell.__name__ = self.name
+            _run_shell.__name__ = spec.name
             return _run_shell  # type: ignore[return-value]
 
-        if callable(cmd):
-            return cmd  # type: ignore[return-value]
+        if callable(spec.cmd):
+            return spec.cmd  # type: ignore[return-value]
 
-        raise TypeError(f"TaskSpec '{self.name}': 不支持的 cmd 类型 {type(cmd).__name__}")  # pragma: no cover
+        raise TypeError(f"TaskSpec '{spec.name}': 不支持的 cmd 类型 {type(spec.cmd).__name__}")  # pragma: no cover
 
     def should_execute(self) -> bool:
         """检查任务是否应该执行.
@@ -293,13 +238,77 @@ class TaskSpec(Generic[T]):
         bool
             命令可用返回 ``True``，否则返回 ``False``。
         """
-        import shutil
 
         cmd = self.cmd
         if isinstance(cmd, list) and cmd:
             first_arg = cmd[0]
             return shutil.which(first_arg) is not None
         return True
+
+
+def _run_command(spec: "TaskSpec[Any]") -> Any:
+    """执行 ``spec.cmd`` 指定的命令（list 或 shell 字符串）。
+
+    list 与 shell 两条路径的异常处理、输出捕获、返回码判断完全一致，
+    合并于此消除重复。``verbose``/``cwd``/``timeout`` 在调用时从
+    ``spec`` 读取，而非闭包捕获——这是 ``_wrap_cmd`` 不再捕获运行期
+    参数的关键。
+
+    成功返回 ``None``；失败抛 ``RuntimeError``，错误信息包含命令、
+    返回码与（非 verbose 模式下的）stderr。
+    """
+    cmd = spec.cmd
+    is_list = isinstance(cmd, list)
+    verbose = spec.verbose
+    cwd = spec.cwd
+    timeout = spec.timeout
+
+    # 统一展示用的命令字符串与标签。保持 "执行命令" / "执行 Shell" 连续，
+    # 以兼容既有输出格式与测试断言。
+    if is_list:
+        cmd_str = " ".join(arg for arg in cmd)  # type: ignore[union-attr]
+        verb = "执行命令"
+        label = "命令"
+    else:
+        cmd_str = cast(str, cmd)
+        verb = "执行 Shell"
+        label = "Shell 命令"
+
+    if verbose:
+        print(f"[verbose] {verb}: {cmd_str}", flush=True)
+        if cwd is not None:
+            print(f"[verbose] 工作目录: {cwd}", flush=True)
+
+    try:
+        # cmd 此处必为 list[str] 或 str（_wrap_cmd 的 isinstance 守卫已排除
+        # None 与 Callable），但类型检查器无法跨函数推断，故 cast 收窄到
+        # subprocess.run 接受的 Union[str, Sequence[str]]。
+        result = subprocess.run(
+            cast(Union[str, List[str]], cmd),
+            shell=not is_list,
+            cwd=cwd,
+            timeout=timeout,
+            capture_output=not verbose,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(f"{label}未找到: {cmd_str}") from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{label}执行超时: {cmd_str} ({timeout}s)") from None
+    except OSError as e:
+        raise RuntimeError(f"{label}执行异常: {cmd_str}: {e}") from e
+
+    if verbose:
+        print(f"[verbose] 返回码: {result.returncode}", flush=True)
+
+    if result.returncode == 0:
+        return None
+
+    err_msg = f"{label}执行失败: `{cmd_str}`, 返回码: {result.returncode}"
+    if not verbose and result.stderr.strip():
+        err_msg += f"\n{result.stderr.strip()}"
+    raise RuntimeError(err_msg)
 
 
 @dataclass

@@ -74,7 +74,7 @@ from .errors import (
     TaskTimeoutError,
 )
 from .executors import Strategy, run
-from .graph import Graph
+from .graph import Graph, GraphComposer
 from .report import RunReport
 from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
@@ -94,6 +94,7 @@ __all__ = [
     "CycleError",
     "DuplicateTaskError",
     "Graph",
+    "GraphComposer",
     "InjectionError",
     "JSONBackend",
     "MemoryBackend",

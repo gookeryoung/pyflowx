@@ -104,7 +104,7 @@ class TestTaskSpecDefinitions:
         assert "pytest" in pymake.test.cmd
         assert "-m" in pymake.test.cmd
         assert "not slow" in pymake.test.cmd
-        assert pymake.test.skip_if_missing is True
+        assert pymake.test.skip_if_missing is False
 
     def test_test_fast_spec(self) -> None:
         """test_fast spec should be properly defined."""
@@ -112,7 +112,7 @@ class TestTaskSpecDefinitions:
         assert isinstance(pymake.test_fast.cmd, list)
         assert "pytest" in pymake.test_fast.cmd
         assert "-n" not in pymake.test_fast.cmd  # test_fast doesn't use parallel
-        assert pymake.test_fast.skip_if_missing is True
+        assert pymake.test_fast.skip_if_missing is False
 
     def test_test_coverage_spec(self) -> None:
         """test_coverage spec should be properly defined."""
@@ -120,7 +120,7 @@ class TestTaskSpecDefinitions:
         assert isinstance(pymake.test_coverage.cmd, list)
         assert "pytest" in pymake.test_coverage.cmd
         assert "--cov" in pymake.test_coverage.cmd
-        assert pymake.test_coverage.skip_if_missing is True
+        assert pymake.test_coverage.skip_if_missing is False
 
     def test_ruff_lint_spec(self) -> None:
         """ruff_lint spec should be properly defined."""
@@ -128,7 +128,7 @@ class TestTaskSpecDefinitions:
         assert isinstance(pymake.ruff_lint.cmd, list)
         assert "ruff" in pymake.ruff_lint.cmd
         assert "check" in pymake.ruff_lint.cmd
-        assert pymake.ruff_lint.skip_if_missing is True
+        assert pymake.ruff_lint.skip_if_missing is False
 
     def test_doc_spec(self) -> None:
         """doc spec should be properly defined."""

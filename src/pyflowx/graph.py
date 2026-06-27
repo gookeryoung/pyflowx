@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Mapping, Sequence
 
 from .errors import CycleError, DuplicateTaskError, MissingDependencyError
@@ -24,9 +24,9 @@ else:  # pragma: no cover
     _TopologicalSorter = graphlib.TopologicalSorter  # pragma: no cover
 
 
-@dataclass(frozen=True)
+@dataclass
 class Graph:
-    """校验后不可变的有向无环任务图。
+    """校验后的有向无环任务图。
 
     通过添加 :class:`~pyflowx.task.TaskSpec` 实例构建。每次 ``add`` 都
     执行即时校验（重名、缺失依赖），:meth:`validate` / :meth:`layers`
@@ -34,10 +34,18 @@ class Graph:
 
     图仅持有*配置*；运行时状态存于 :class:`~pyflowx.report.RunReport`。
     这使图可安全重复运行并在线程间共享。
+
+    Note
+    -----
+    Graph 不再使用 ``frozen=True``：内部 ``specs``/``deps`` 本就是可变 dict，
+    frozen 既无法真正保证不可变，又迫使 ``_pending_refs`` 等场景用
+    ``object.__setattr__`` 绕过。改为普通 dataclass，让赋值显式且可审计。
     """
 
     specs: dict[str, TaskSpec[Any]] = field(default_factory=dict)
     deps: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # 待解析的字符串引用列表（由 GraphComposer 消费）；为空表示无引用。
+    _pending_refs: list[str] = field(default_factory=list)
 
     # ------------------------------------------------------------------ #
     # 构建
@@ -104,11 +112,10 @@ class Graph:
             else:
                 raise TypeError(f"from_specs只接受TaskSpec或str，收到: {type(spec)}")
 
-        # 存储待解析的引用
+        # 存储待解析的引用，稍后由 GraphComposer 解析展开。
+        # Graph 不再 frozen，可直接赋值；保留属性名以保持向后兼容。
         if pending_refs:
-            # 使用特殊属性存储引用，稍后在CliRunner中解析
-            # 由于Graph是frozen dataclass，我们需要特殊处理
-            object.__setattr__(graph, "_pending_refs", pending_refs)
+            graph._pending_refs = pending_refs
 
         graph._validate_references()
         graph.validate()
@@ -199,21 +206,9 @@ class Graph:
                 pruned_deps = tuple(
                     d for d in spec.depends_on if d in self.specs and (wanted & set(self.specs[d].tags))
                 )
-                kept.append(
-                    TaskSpec[Any](
-                        name=spec.name,
-                        fn=spec.fn,
-                        cmd=spec.cmd,
-                        depends_on=pruned_deps,
-                        args=spec.args,
-                        kwargs=spec.kwargs,
-                        retries=spec.retries,
-                        timeout=spec.timeout,
-                        tags=spec.tags,
-                        conditions=spec.conditions,
-                        cwd=spec.cwd,
-                    )
-                )
+                # 使用 replace 保留所有字段（verbose/skip_if_missing/allow_upstream_skip 等），
+                # 避免手动逐字段重建时遗漏新增字段。
+                kept.append(replace(spec, depends_on=pruned_deps))
         return Graph.from_specs(kept)
 
     def subgraph_by_names(self, names: Iterable[str]) -> Graph:
@@ -226,21 +221,7 @@ class Graph:
         for spec in self.specs.values():
             if spec.name in wanted:
                 pruned_deps = tuple(d for d in spec.depends_on if d in wanted)
-                kept.append(
-                    TaskSpec[Any](
-                        name=spec.name,
-                        fn=spec.fn,
-                        cmd=spec.cmd,
-                        depends_on=pruned_deps,
-                        args=spec.args,
-                        kwargs=spec.kwargs,
-                        retries=spec.retries,
-                        timeout=spec.timeout,
-                        tags=spec.tags,
-                        conditions=spec.conditions,
-                        cwd=spec.cwd,
-                    )
-                )
+                kept.append(replace(spec, depends_on=pruned_deps))
         return Graph.from_specs(kept)
 
     # ------------------------------------------------------------------ #
@@ -282,3 +263,123 @@ class Graph:
 
     def __contains__(self, name: Any) -> bool:
         return name in self.specs
+
+
+class GraphComposer:
+    """将带字符串引用的图展开为纯 :class:`TaskSpec` 图。
+
+    从 ``CliRunner`` 抽出，使 ``Graph``（数据）与引用解析（组合逻辑）
+    职责分离。引用按顺序展开，后续引用的任务依赖前面引用的最后一个任务；
+    原始 ``TaskSpec`` 之间也按出现顺序串行依赖。
+
+    引用格式
+    --------
+    * ``"command_name"`` —— 引用整个命令图。
+    * ``"command_name.task_name"`` —— 引用特定任务。
+
+    Parameters
+    ----------
+    graphs : dict[str, Graph]
+        命令名到图的映射，引用据此解析。
+    """
+
+    def __init__(self, graphs: dict[str, Graph]) -> None:
+        self.graphs = graphs
+
+    def resolve_all(self) -> dict[str, Graph]:
+        """解析所有图的字符串引用，返回展开后的新图映射。"""
+        resolved: dict[str, Graph] = {}
+        for cmd_name, graph in self.graphs.items():
+            resolved[cmd_name] = self.expand_refs(graph, cmd_name)
+        return resolved
+
+    def expand_refs(self, graph: Graph, current_cmd: str) -> Graph:
+        """展开图中的字符串引用。
+
+        若图无 ``_pending_refs``，原样返回。
+
+        Note
+        -----
+        引用按顺序展开，后续引用的任务依赖于前面引用的任务完成。
+        例如 ``["c", "tc", bump]`` 展开为：
+        - c 的所有任务（无依赖）
+        - tc 的所有任务（依赖于 c 的最后一个任务）
+        - bump 任务（依赖于 tc 的最后一个任务）
+        """
+        pending_refs = graph._pending_refs
+        if not pending_refs:
+            return graph
+
+        all_specs: list[TaskSpec[Any]] = []
+        previous_ref_last_task: str | None = None
+
+        # 先解析每个引用，并建立依赖链。
+        for ref in pending_refs:
+            expanded_specs = self.parse_ref(ref, current_cmd)
+
+            # 若有前一个引用，让当前引用的任务依赖其最后一个任务。
+            if previous_ref_last_task and expanded_specs:
+                for i, task in enumerate(expanded_specs):
+                    # 只为没有依赖的任务（或第一个任务）添加依赖。
+                    if i == 0 or not task.depends_on:
+                        expanded_specs[i] = replace(task, depends_on=tuple({*task.depends_on, previous_ref_last_task}))
+
+            if expanded_specs:
+                previous_ref_last_task = expanded_specs[-1].name
+
+            all_specs.extend(expanded_specs)
+
+        # 然后添加原始 TaskSpec，按出现顺序串行依赖。
+        original_specs = list(graph.all_specs().values())
+        if original_specs:
+            if previous_ref_last_task:
+                first = original_specs[0]
+                all_specs.append(replace(first, depends_on=tuple({*first.depends_on, previous_ref_last_task})))
+            else:
+                all_specs.append(original_specs[0])
+
+            for i in range(1, len(original_specs)):
+                current_task = original_specs[i]
+                previous_task_name = original_specs[i - 1].name
+                all_specs.append(
+                    replace(
+                        current_task,
+                        depends_on=tuple({*current_task.depends_on, previous_task_name}),
+                    )
+                )
+
+        return Graph.from_specs(all_specs)
+
+    def parse_ref(self, ref: str, current_cmd: str) -> list[TaskSpec[Any]]:
+        """解析单个字符串引用，返回对应的 TaskSpec 列表。
+
+        Raises
+        ------
+        ValueError
+            引用无效、目标命令/任务不存在，或检测到循环引用。
+        """
+        # 避免循环引用。
+        if ref == current_cmd:
+            raise ValueError(f"循环引用: 命令 '{current_cmd}' 引用了自己")
+
+        if "." in ref:
+            # 特定任务引用: "command_name.task_name"
+            cmd_name, task_name = ref.split(".", 1)
+            if cmd_name not in self.graphs:
+                raise ValueError(f"引用的命令 '{cmd_name}' 不存在")
+
+            ref_graph = self.graphs[cmd_name]
+            if task_name not in ref_graph.all_specs():
+                raise ValueError(f"任务 '{task_name}' 不存在于命令 '{cmd_name}' 中")
+
+            return [ref_graph.all_specs()[task_name]]
+        else:
+            # 整个命令图引用: "command_name"
+            cmd_name = ref
+            if cmd_name not in self.graphs:
+                raise ValueError(f"引用的命令 '{cmd_name}' 不存在")
+
+            ref_graph = self.graphs[cmd_name]
+            # 递归展开（若引用的图自身也含引用）。
+            ref_graph = self.expand_refs(ref_graph, cmd_name)
+            return list(ref_graph.all_specs().values())
