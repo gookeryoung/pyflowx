@@ -127,6 +127,37 @@ CHINESE_FONTS: list[str] = [
     "fonts-noto-color-emoji",
 ]
 
+# ============================================================================
+# Rust 配置
+# ============================================================================
+RustMirrorType = Literal["tsinghua", "ustc", "aliyun"]
+RustVersionType = Literal["stable", "nightly", "beta"]
+DEFAULT_RUST_VERSION: RustVersionType = "stable"
+DEFAULT_MIRROR: RustMirrorType = "tsinghua"
+
+RUSTUP_MIRRORS: dict[RustMirrorType, dict[str, str]] = {
+    "tsinghua": {
+        "RUSTUP_DIST_SERVER": "https://mirrors.tuna.tsinghua.edu.cn/rustup",
+        "RUSTUP_UPDATE_ROOT": "https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup",
+        "TOML_REGISTRY": "https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/",
+    },
+    "aliyun": {
+        "RUSTUP_DIST_SERVER": "https://mirrors.aliyun.com/rustup",
+        "RUSTUP_UPDATE_ROOT": "https://mirrors.aliyun.com/rustup/rustup",
+        "TOML_REGISTRY": "https://mirrors.aliyun.com/crates.io-index/",
+    },
+    "ustc": {
+        "RUSTUP_DIST_SERVER": "https://mirrors.ustc.edu.cn/rust-static",
+        "RUSTUP_UPDATE_ROOT": "https://mirrors.ustc.edu.cn/rust-static/rustup",
+        "TOML_REGISTRY": "https://mirrors.ustc.edu.cn/crates.io-index/",
+    },
+}
+RUSTUP_DOWNLOAD_URL_LINUX = "https://mirrors.aliyun.com/repo/rust/rustup-init.sh"
+RUSTUP_DOWNLOAD_URL_WINDOWS = "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe"
+RUST_CONFIG_PATH = Path.home() / ".cargo" / "config.toml"
+RUST_SCCACHE_DIR: Path = Path.home() / ".cargo" / "sccache"
+RUST_SCCACHE_CACHE_SIZE: str = "20G"
+
 
 def main() -> None:
     """主函数."""
@@ -147,14 +178,34 @@ def main() -> None:
         choices=get_args(CondaMirrorType),
         help="Conda 镜镜像源",
     )
+    parser.add_argument(
+        "--rust-mirror",
+        nargs="?",
+        type=str,
+        default=DEFAULT_MIRROR,
+        choices=get_args(RustMirrorType),
+        help="Rust 镜像源",
+    )
+    parser.add_argument(
+        "--rust-version",
+        nargs="?",
+        type=str,
+        default=DEFAULT_RUST_VERSION,
+        choices=get_args(RustVersionType),
+        help=f"Rust 版本, 推荐: {get_args(RustVersionType)}",
+    )
     args = parser.parse_args()
 
     python_mirror = args.python_mirror
     conda_mirror_urls = CONDA_MIRROR_URLS[args.conda_mirror]
+    rust_mirror = args.rust_mirror
+    rust_version = args.rust_version
 
     # 确保配置文件目录存在
     PIP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONDA_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUST_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUST_SCCACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     # 使用 conditions 自动控制任务执行
     graph = px.Graph.from_specs([
@@ -221,6 +272,60 @@ def main() -> None:
         write_file(
             str(CONDA_CONFIG_PATH),
             "show_channel_urls: true\nchannels:\n  - " + "\n  - ".join(conda_mirror_urls) + "\n  - defaults",
+        ),
+        # 设置 Rust 镜像源
+        *setenv_group({
+            "RUSTUP_DIST_SERVER": RUSTUP_MIRRORS[rust_mirror]["RUSTUP_DIST_SERVER"],
+            "RUSTUP_UPDATE_ROOT": RUSTUP_MIRRORS[rust_mirror]["RUSTUP_UPDATE_ROOT"],
+            "RUST_SCCACHE_DIR": str(RUST_SCCACHE_DIR),
+            "RUST_SCCACHE_CACHE_SIZE": RUST_SCCACHE_CACHE_SIZE,
+        }),
+        # 写入 Rust 配置（仅当未配置）
+        write_file(
+            str(RUST_CONFIG_PATH),
+            f"""
+[source.crates-io]
+replace-with = '{rust_mirror}'
+
+[source.{rust_mirror}]
+registry = "sparse+{RUSTUP_MIRRORS[rust_mirror]["TOML_REGISTRY"]}"
+
+[registries.{rust_mirror}]
+index = "sparse+{RUSTUP_MIRRORS[rust_mirror]["TOML_REGISTRY"]}"
+""",
+        ),
+        # 下载 Rustup 安装脚本
+        px.TaskSpec(
+            "download_rustup",
+            cmd=["curl", "-fsSL", RUSTUP_DOWNLOAD_URL_LINUX, "-o", "rustup-init.sh"],
+            conditions=(BuiltinConditions.IS_LINUX(), BuiltinConditions.NOT(BuiltinConditions.HAS_INSTALLED("rustup"))),
+            verbose=True,
+        ),
+        px.TaskSpec(
+            "download_rustup_win",
+            cmd=[
+                "powershell",
+                "-Command",
+                "Invoke-WebRequest",
+                "-Uri",
+                RUSTUP_DOWNLOAD_URL_WINDOWS,
+                "-OutFile",
+                "rustup-init.exe",
+            ],
+            conditions=(
+                BuiltinConditions.IS_WINDOWS(),
+                BuiltinConditions.NOT(BuiltinConditions.HAS_INSTALLED("rustup")),
+            ),
+            verbose=True,
+        ),
+        # 安装 Rust 工具链
+        px.TaskSpec(
+            "install_rust",
+            cmd=["rustup", "toolchain", "install", rust_version],
+            conditions=(BuiltinConditions.HAS_INSTALLED("rustup"),),
+            depends_on=("setenv_rustup_dist_server",),
+            allow_upstream_skip=True,
+            verbose=True,
         ),
     ])
     px.run(graph, strategy="thread", verbose=True)

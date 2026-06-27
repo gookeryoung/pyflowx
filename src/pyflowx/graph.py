@@ -12,6 +12,11 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "Graph",
+    "GraphDefaults",
+]
+
 import sys
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -73,6 +78,7 @@ class Graph:
     specs: dict[str, TaskSpec[Any]] = field(default_factory=dict)
     deps: dict[str, tuple[str, ...]] = field(default_factory=dict)
     defaults: GraphDefaults = field(default_factory=GraphDefaults)
+
     # 待解析的字符串引用列表（由 GraphComposer 消费）；为空表示无引用。
     _pending_refs: list[str] = field(default_factory=list)
 
