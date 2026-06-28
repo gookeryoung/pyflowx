@@ -56,7 +56,7 @@ from .report import RunReport
 from .storage import StateBackend, resolve_backend
 from .task import TaskEvent, TaskHooks, TaskResult, TaskSpec, TaskStatus
 
-logger = logging.getLogger("pyflowx")
+logger = logging.getLogger(__name__)
 
 # 观察者回调类型。
 EventCallback = Callable[[TaskEvent], None]

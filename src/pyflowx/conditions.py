@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .task import Condition, Context
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["BuiltinConditions", "Condition", "Constants"]
 
@@ -153,7 +156,7 @@ class BuiltinConditions:
                 return False
             try:
                 return content in p.read_text(encoding="utf-8")
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 return False
 
         return _static(_check, f"FILE_CONTENT_EXISTS({path!r},{content!r})")
@@ -186,7 +189,8 @@ class BuiltinConditions:
                 return False
             try:
                 return predicate(ctx[dep_name])
-            except Exception:
+            except Exception as exc:
+                logger.warning("DEP_MATCHES predicate %r raised: %r", dep_name, exc)
                 return False
 
         _cond.__name__ = f"DEP_MATCHES({dep_name!r},{getattr(predicate, '__name__', 'pred')})"

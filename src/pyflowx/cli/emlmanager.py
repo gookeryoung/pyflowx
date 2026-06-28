@@ -240,7 +240,7 @@ def _parse_email_date(date_str: str) -> str:
     try:
         dt = parsedate_to_datetime(date_str)
         return dt.isoformat()
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
         return date_str
 
 
@@ -277,11 +277,11 @@ def _extract_email_body_part(part: Any) -> str:
             decoded_text = payload.decode(charset, errors="replace")
         except (UnicodeDecodeError, LookupError) as decode_error:
             # 如果指定编码失败，尝试常见编码
-            logger.warning(f"字符编码 {charset} 解码失败: {decode_error}")
+            logger.warning("字符编码 %s 解码失败: %s", charset, decode_error)
             for fallback_charset in ["utf-8", "gbk", "gb2312", "latin-1"]:
                 try:
                     decoded_text = payload.decode(fallback_charset, errors="replace")
-                    logger.info(f"成功使用备用编码 {fallback_charset} 解码")
+                    logger.info("成功使用备用编码 %s 解码", fallback_charset)
                     break
                 except (UnicodeDecodeError, LookupError):
                     continue
@@ -293,15 +293,15 @@ def _extract_email_body_part(part: Any) -> str:
         # 限制长度并返回
         result = decoded_text[:MAX_BODY_LENGTH]
         if len(decoded_text) > MAX_BODY_LENGTH:
-            logger.debug(f"正文内容过长，截取前{MAX_BODY_LENGTH}字符")
+            logger.debug("正文内容过长，截取前%d字符", MAX_BODY_LENGTH)
 
         return result
 
     except AttributeError as attr_error:
-        logger.error(f"邮件部分对象属性错误: {attr_error}")
+        logger.error("邮件部分对象属性错误: %s", attr_error)
         return ""
     except Exception as unexpected_error:
-        logger.error(f"提取邮件正文时发生未知错误: {unexpected_error}")
+        logger.error("提取邮件正文时发生未知错误: %s", unexpected_error)
         return ""
 
 

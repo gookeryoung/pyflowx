@@ -69,7 +69,7 @@ TaskCmd = Union[
 Strategy = Union[str, "StrategyKind"]
 StrategyKind = Any  # 占位，避免循环；executors 模块用 Literal 约束
 
-logger = logging.getLogger("pyflowx")
+logger = logging.getLogger(__name__)
 
 # 条件判断函数类型：接收依赖上下文（可能为空映射），返回是否应执行。
 Condition = Callable[[Context], bool]

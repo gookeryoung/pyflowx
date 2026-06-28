@@ -15,6 +15,7 @@ import argparse
 import enum
 import sys
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any, Sequence, get_args
 
 from .compose import GraphComposer
@@ -138,9 +139,7 @@ class CliRunner:
     # ------------------------------------------------------------------ #
     def _prog_name(self) -> str:
         """从 sys.argv[0] 推导程序名."""
-        import os
-
-        return os.path.basename(sys.argv[0]) if sys.argv else "pyflowx"
+        return Path(sys.argv[0]).name if sys.argv else "pyflowx"
 
     def create_parser(self) -> argparse.ArgumentParser:
         """创建参数解析器.
