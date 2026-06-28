@@ -67,7 +67,7 @@ def main() -> None:
     runner = px.CliRunner(
         strategy="thread",
         description="Gittool - Git 执行工具.",
-        graphs={
+        aliases={
             # 添加并提交
             "a": px.Graph.from_specs([
                 px.TaskSpec("add", cmd=["git", "add", "."], conditions=(lambda _: has_files(),)),
@@ -90,13 +90,13 @@ def main() -> None:
                 ),
             ]),
             # 初始化子目录
-            "isub": px.Graph.from_specs([isub]),
+            "isub": isub,
             # 推送
-            "p": px.Graph.from_specs([push]),
+            "p": push,
             # 拉取
-            "pl": px.Graph.from_specs([pull]),
+            "pl": pull,
             # 重启TGit缓存
-            "r": px.Graph.from_specs([kill_tgit]),
+            "r": kill_tgit,
         },
     )
     runner.run_cli()

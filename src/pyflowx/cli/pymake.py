@@ -24,33 +24,41 @@ def maturin_build_cmd() -> list[str]:
     return command
 
 
-uv_build: px.TaskSpec = px.TaskSpec("uv_build", cmd=["uv", "build"])
-maturin_build: px.TaskSpec = px.TaskSpec("maturin_build", cmd=maturin_build_cmd())
-uv_sync: px.TaskSpec = px.TaskSpec("uv_sync", cmd=["uv", "sync"])
-git_clean: px.TaskSpec = px.TaskSpec("git_clean", cmd=["gitt", "c"])
-test: px.TaskSpec = px.TaskSpec(
-    "test", cmd=["pytest", "-m", "not slow", "-n", "8", "--dist", "loadfile", "--color=yes", "--durations=10"]
-)
-test_fast: px.TaskSpec = px.TaskSpec(
-    "test_fast", cmd=["pytest", "-m", "not slow", "--dist", "loadfile", "--color=yes", "--durations=10"]
-)
-test_coverage: px.TaskSpec = px.TaskSpec(
-    "test_coverage",
-    cmd=["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
-)
-ruff_lint: px.TaskSpec = px.TaskSpec("lint", cmd=["ruff", "check", "--fix", "--unsafe-fixes"])
-typecheck: px.TaskSpec = px.TaskSpec("pyrefly_check", cmd=["pyrefly", "check", "."])
-git_add_all: px.TaskSpec = px.TaskSpec("git_add_all", cmd=["git", "add", "-A"])
-bump: px.TaskSpec = px.TaskSpec("bumpversion", cmd=["bumpversion"])
-doc: px.TaskSpec = px.TaskSpec("doc", cmd=["sphinx-build", "-b", "html", "docs", "docs/_build"])
-git_push: px.TaskSpec = px.TaskSpec("git_push", cmd=["git", "push"])
-git_push_tags: px.TaskSpec = px.TaskSpec("git_push_tags", cmd=["git", "push", "--tags"])
-hatch_publish: px.TaskSpec = px.TaskSpec("publish_python", cmd=["hatch", "publish"])
-twine_publish: px.TaskSpec = px.TaskSpec("twine_publish", cmd=["twine", "upload", "--disable-progress-bar"])
-tox: px.TaskSpec = px.TaskSpec("tox", cmd=["tox", "-p", "auto"])
+# 扁平注册所有任务（px.cmd 自动从命令前两段推导 name）
+tasks: list[px.TaskSpec] = [
+    px.cmd(["uv", "build"]),
+    px.cmd(maturin_build_cmd(), name="maturin_build"),
+    px.cmd(["uv", "sync"]),
+    px.cmd(["gitt", "c"], name="git_clean"),
+    px.cmd(
+        ["pytest", "-m", "not slow", "-n", "8", "--dist", "loadfile", "--color=yes", "--durations=10"],
+        name="test",
+    ),
+    px.cmd(
+        ["pytest", "-m", "not slow", "--dist", "loadfile", "--color=yes", "--durations=10"],
+        name="test_fast",
+    ),
+    px.cmd(
+        ["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
+        name="test_coverage",
+    ),
+    px.cmd(["pyrefly", "check", "."], name="pyrefly_check"),
+    px.cmd(["git", "add", "-A"], name="git_add_all"),
+    px.cmd(["bumpversion"], name="bumpversion"),
+    px.cmd(["bumpversion", "minor"], name="bumpversion_minor"),
+    px.cmd(["git", "push"], name="git_push"),
+    px.cmd(["git", "push", "--tags"], name="git_push_tags"),
+    px.cmd(["hatch", "publish"], name="publish_python"),
+    px.cmd(["twine", "upload", "--disable-progress-bar"], name="twine_publish"),
+]
+
+# 单任务别名（alias 名与任务名相同）：直接用 TaskSpec，避免 str 自引用
+_doc = px.cmd(["sphinx-build", "-b", "html", "docs", "docs/_build"], name="doc")
+_lint = px.cmd(["ruff", "check", "--fix", "--unsafe-fixes"], name="lint")
+_tox = px.cmd(["tox", "-p", "auto"], name="tox")
 
 
-def main():
+def main() -> None:
     """pymake 构建工具.
 
     🔨 构建命令:
@@ -78,10 +86,10 @@ def main():
     📦 发布命令:
       pymake pb   - 发布到 PyPI (twine + hatch)
 
-    � 版本管理:
+    🔖 版本管理:
       pymake bump  - 自动升级版本号并提交修改 (清理 + 检查 + 格式化 + git add + bumpversion)
 
-    �💡 常用工作流:
+    💡 常用工作流:
       1. 日常开发: pymake lint && pymake t
       2. 构建发布包: pymake ba
       3. 多版本兼容性测试: pymake tox
@@ -98,28 +106,29 @@ def main():
     runner = px.CliRunner(
         strategy="sequential",
         description="PyMake - Python 构建工具",
-        graphs={
+        tasks=tasks,
+        aliases={
             # 构建命令
-            "b": px.Graph.from_specs([uv_build]),
-            "bc": px.Graph.from_specs([maturin_build]),
-            "ba": px.Graph.from_specs(["b", "bc"]),
+            "b": "uv_build",
+            "bc": "maturin_build",
+            "ba": ["b", "bc"],
             # 安装命令
-            "sync": px.Graph.from_specs([uv_sync]),
+            "sync": "uv_sync",
             # 清理命令
-            "c": px.Graph.from_specs([git_clean]),
+            "c": "git_clean",
             # 开发工具
-            "bump": px.Graph.from_specs(["c", "tc", git_add_all, bump]),
-            "bumpmi": px.Graph.from_specs([px.TaskSpec("bumpversion_minor", cmd=["bumpversion", "minor"])]),
-            "cov": px.Graph.from_specs([git_clean, test_coverage]),
-            "doc": px.Graph.from_specs([doc]),
-            "lint": px.Graph.from_specs([ruff_lint]),
-            "pb": px.Graph.from_specs([twine_publish, hatch_publish]),
-            "t": px.Graph.from_specs([test]),
-            "tf": px.Graph.from_specs([test_fast]),
-            "tc": px.Graph.from_specs([typecheck, "lint"]),
-            "tox": px.Graph.from_specs([tox]),
+            "bump": ["c", "tc", "git_add_all", "bumpversion"],
+            "bumpmi": "bumpversion_minor",
+            "cov": ["git_clean", "test_coverage"],
+            "doc": _doc,
+            "lint": _lint,
+            "pb": ["twine_publish", "publish_python"],
+            "t": "test",
+            "tf": "test_fast",
+            "tc": ["pyrefly_check", "lint"],
+            "tox": _tox,
             # 发布命令
-            "p": px.Graph.from_specs([git_clean, git_push, git_push_tags]),
+            "p": ["git_clean", "git_push", "git_push_tags"],
         },
     )
     runner.run_cli()

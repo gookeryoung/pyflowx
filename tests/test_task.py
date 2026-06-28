@@ -14,6 +14,7 @@ from pyflowx.task import (
     TaskSpec,
     TaskStatus,
     _env_and_cwd,
+    cmd,
     task_template,
 )
 
@@ -76,6 +77,41 @@ def test_retry_policy_negative_backoff_rejected() -> None:
 def test_retry_policy_negative_jitter_rejected() -> None:
     with pytest.raises(ValueError, match="jitter must be >= 0"):
         RetryPolicy(jitter=-1)
+
+
+# ---------------------------------------------------------------------- #
+# cmd() 工厂
+# ---------------------------------------------------------------------- #
+def test_cmd_factory_default_name_from_two_elements() -> None:
+    """cmd() 默认 name = '_'.join(command[:2])."""
+    spec = cmd(["uv", "build"])
+    assert spec.name == "uv_build"
+    assert spec.cmd == ["uv", "build"]
+
+
+def test_cmd_factory_default_name_single_element() -> None:
+    """cmd() 单元素命令 name = command[0]."""
+    spec = cmd(["ls"])
+    assert spec.name == "ls"
+
+
+def test_cmd_factory_explicit_name() -> None:
+    """cmd() 显式 name 覆盖默认推导."""
+    spec = cmd(["ruff", "check", "--fix"], name="lint")
+    assert spec.name == "lint"
+
+
+def test_cmd_factory_passes_depends_on() -> None:
+    """cmd() depends_on 透传给 TaskSpec."""
+    spec = cmd(["echo", "b"], name="b", depends_on=("a",))
+    assert spec.depends_on == ("a",)
+
+
+def test_cmd_factory_passes_extra_kwargs() -> None:
+    """cmd() 其余 kwargs 透传给 TaskSpec."""
+    spec = cmd(["echo", "x"], name="x", timeout=10.0, tags=("t1",))
+    assert spec.timeout == 10.0
+    assert spec.tags == ("t1",)
 
 
 def test_retry_policy_retries_property() -> None:

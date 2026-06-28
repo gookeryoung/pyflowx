@@ -17,7 +17,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "build": px.Graph.from_specs([build_task]),
                 "test": px.Graph.from_specs([test_task]),
                 "all": px.Graph.from_specs([build_task, "test"]),
@@ -38,7 +38,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs([task2]),
                 "cmd3": px.Graph.from_specs([task3]),
@@ -57,7 +57,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "lint": px.Graph.from_specs([lint_task, format_task]),
                 "quick": px.Graph.from_specs(["lint.lint"]),
             },
@@ -75,7 +75,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs(["cmd1", task2]),
                 "cmd3": px.Graph.from_specs(["cmd2", task3]),
@@ -93,7 +93,7 @@ class TestCommandReferences:
         with pytest.raises(ValueError, match="循环引用"):
             px.CliRunner(
                 strategy="sequential",
-                graphs={
+            aliases={
                     "cmd1": px.Graph.from_specs(["cmd1", task1]),
                 },
             )
@@ -105,7 +105,7 @@ class TestCommandReferences:
         with pytest.raises(ValueError, match="引用的命令 'invalid' 不存在"):
             px.CliRunner(
                 strategy="sequential",
-                graphs={
+            aliases={
                     "cmd1": px.Graph.from_specs(["invalid", task1]),
                 },
             )
@@ -117,7 +117,7 @@ class TestCommandReferences:
         with pytest.raises(ValueError, match="任务 'invalid' 不存在于命令 'cmd1' 中"):
             px.CliRunner(
                 strategy="sequential",
-                graphs={
+            aliases={
                     "cmd1": px.Graph.from_specs([task1]),
                     "cmd2": px.Graph.from_specs(["cmd1.invalid"]),
                 },
@@ -130,7 +130,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1, task2]),
                 "cmd2": px.Graph.from_specs(["cmd1"]),
             },
@@ -148,7 +148,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1, task2]),
                 "cmd2": px.Graph.from_specs(["cmd1", task3]),
             },
@@ -168,7 +168,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs([task2, task3]),
                 "cmd3": px.Graph.from_specs([task4]),
@@ -205,7 +205,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs([task2]),
                 "all": px.Graph.from_specs(["cmd1", "cmd2", task3, task4, task5]),
@@ -242,7 +242,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1, task2]),
                 "cmd2": px.Graph.from_specs([task3]),
                 "all": px.Graph.from_specs(["cmd1", "cmd2", task4]),
@@ -279,7 +279,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "c": px.Graph.from_specs([git_clean]),
                 "tc": px.Graph.from_specs([typecheck, "lint"]),
                 "lint": px.Graph.from_specs([lint, format_task]),
@@ -319,7 +319,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs([task2]),
                 "cmd3": px.Graph.from_specs([task3]),
@@ -350,7 +350,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "all": px.Graph.from_specs([task1, task2, task3]),
             },
         )
@@ -373,7 +373,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1, task2]),
                 "all": px.Graph.from_specs(["cmd1"]),
             },
@@ -399,7 +399,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1]),
                 "cmd2": px.Graph.from_specs(["cmd1", task2]),
                 "cmd3": px.Graph.from_specs(["cmd2", task3]),
@@ -430,7 +430,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "cmd1": px.Graph.from_specs([task1, task2]),  # Parallel tasks
                 "cmd2": px.Graph.from_specs([task3, task4]),  # Parallel tasks
                 "all": px.Graph.from_specs(["cmd1", "cmd2"]),
@@ -465,7 +465,7 @@ class TestCommandReferences:
 
         runner = px.CliRunner(
             strategy="sequential",
-            graphs={
+            aliases={
                 "clean": px.Graph.from_specs([clean]),
                 "build": px.Graph.from_specs([build1, build2]),
                 "test": px.Graph.from_specs([test1, test2]),

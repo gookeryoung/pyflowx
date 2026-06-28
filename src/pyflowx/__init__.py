@@ -94,6 +94,7 @@ from .task import (
     TaskResult,
     TaskSpec,
     TaskStatus,
+    cmd,
     task,
     task_template,
 )
@@ -136,6 +137,7 @@ __all__ = [
     "TaskStatus",
     "TaskTimeoutError",
     "build_call_args",
+    "cmd",
     "compose",
     "describe_injection",
     "run",

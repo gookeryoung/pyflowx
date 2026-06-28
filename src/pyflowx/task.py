@@ -535,6 +535,38 @@ def task(
     return _decorate(fn)
 
 
+def cmd(
+    command: list[str],
+    *,
+    name: str | None = None,
+    depends_on: tuple[str, ...] = (),
+    **kwargs: Any,
+) -> TaskSpec[Any]:
+    """从命令列表快速创建 :class:`TaskSpec`。
+
+    ``name`` 默认为 ``"_".join(command[:2])``（如 ``["uv", "build"]`` → ``"uv_build"``）。
+    若命令不足两个元素则用 ``"_".join(command)``。
+
+    其余关键字参数透传给 :class:`TaskSpec`（如 ``depends_on``、``tags`` 等）。
+
+    Examples
+    --------
+    >>> uv_build = px.cmd(["uv", "build"])
+    >>> uv_build.name
+    'uv_build'
+    >>> lint = px.cmd(["ruff", "check", "--fix"], name="lint")
+    >>> lint.name
+    'lint'
+    """
+    spec_name = name or "_".join(command[:2]) if len(command) >= 2 else "_".join(command)
+    return TaskSpec(
+        name=spec_name,
+        cmd=command,
+        depends_on=depends_on,
+        **kwargs,
+    )
+
+
 def task_template(
     fn: TaskFn[Any] | None = None,
     cmd: TaskCmd | None = None,

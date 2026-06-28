@@ -53,18 +53,18 @@ class TestCliRunnerConstruction:
 
     def test_requires_at_least_one_command(self) -> None:
         """没有命令时应抛出 ValueError."""
-        with pytest.raises(ValueError, match="至少需要一个命令"):
+        with pytest.raises(ValueError, match="至少需要一个别名"):
             _ = px.CliRunner()
 
     def test_accepts_single_graph(self) -> None:
         """单个命令应正常构造."""
-        runner = px.CliRunner(graphs={"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         assert runner.commands == ["clean"]
 
     def test_accepts_multiple_graphs(self) -> None:
         """多个命令应按插入顺序保留."""
         runner = px.CliRunner(
-            graphs={
+            aliases={
                 "clean": _echo_graph("c", "clean"),
                 "build": _echo_graph("b", "build"),
                 "test": _echo_graph("t", "test"),
@@ -74,37 +74,37 @@ class TestCliRunnerConstruction:
 
     def test_default_strategy_is_dependency(self) -> None:
         """默认策略应为 dependency（依赖驱动，最大并行度）."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         assert runner.strategy == "dependency"
 
     def test_custom_strategy_string(self) -> None:
         """应支持通过字符串指定策略."""
-        runner = px.CliRunner({"clean": _echo_graph()}, strategy="thread")
+        runner = px.CliRunner(aliases={"clean": _echo_graph()}, strategy="thread")
         assert runner.strategy == "thread"
 
     def test_custom_strategy_enum(self) -> None:
         """应支持通过 Strategy 枚举指定策略."""
-        runner = px.CliRunner({"clean": _echo_graph()}, strategy="async")
+        runner = px.CliRunner(aliases={"clean": _echo_graph()}, strategy="async")
         assert runner.strategy == "async"
 
     def test_default_verbose_is_true(self) -> None:
         """默认 verbose 应为 True."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         assert runner.verbose is True
 
     def test_custom_verbose_false(self) -> None:
         """应支持关闭 verbose."""
-        runner = px.CliRunner({"clean": _echo_graph()}, verbose=False)
+        runner = px.CliRunner(aliases={"clean": _echo_graph()}, verbose=False)
         assert runner.verbose is False
 
     def test_default_description_is_empty(self) -> None:
         """默认描述应为空字符串."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         assert runner.description == ""
 
     def test_custom_description(self) -> None:
         """应支持自定义描述."""
-        runner = px.CliRunner({"clean": _echo_graph()}, description="My CLI")
+        runner = px.CliRunner(aliases={"clean": _echo_graph()}, description="My CLI")
         assert runner.description == "My CLI"
 
 
@@ -116,13 +116,13 @@ class TestCliRunnerProperties:
 
     def test_commands_returns_list(self) -> None:
         """commands 应返回列表."""
-        runner = px.CliRunner({"a": _echo_graph(), "b": _echo_graph()})
+        runner = px.CliRunner(aliases={"a": _echo_graph(), "b": _echo_graph()})
         assert isinstance(runner.commands, list)
 
     def test_graphs_contains_original_graphs(self) -> None:
         """graphs 应包含原始 Graph 实例."""
         g = _echo_graph()
-        runner = px.CliRunner({"cmd": g})
+        runner = px.CliRunner(aliases={"cmd": g})
         assert runner.graphs["cmd"] is g
 
 
@@ -136,69 +136,69 @@ class TestCliRunnerParser:
         """create_parser 应返回 ArgumentParser."""
         from argparse import ArgumentParser
 
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         assert isinstance(parser, ArgumentParser)
 
     def test_parser_has_command_argument(self) -> None:
         """解析器应有 command 位置参数."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
         assert parsed.command == "clean"
 
     def test_parser_command_is_optional(self) -> None:
         """command 应为可选参数."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args([])
         assert parsed.command is None
 
     def test_parser_has_strategy_option(self) -> None:
         """解析器应有 --strategy 选项."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean", "--strategy", "thread"])
         assert parsed.strategy == "thread"
 
     def test_parser_strategy_default(self) -> None:
         """--strategy 默认值应与构造时一致."""
-        runner = px.CliRunner({"clean": _echo_graph()}, strategy="async")
+        runner = px.CliRunner(aliases={"clean": _echo_graph()}, strategy="async")
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
         assert parsed.strategy == "async"
 
     def test_parser_has_dry_run_flag(self) -> None:
         """解析器应有 --dry-run 标志."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean", "--dry-run"])
         assert parsed.dry_run is True
 
     def test_parser_dry_run_default_false(self) -> None:
         """--dry-run 默认为 False."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
         assert parsed.dry_run is False
 
     def test_parser_has_list_flag(self) -> None:
         """解析器应有 --list 标志."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["--list"])
         assert parsed.list is True
 
     def test_parser_has_quiet_flag(self) -> None:
         """解析器应有 --quiet 标志."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean", "--quiet"])
         assert parsed.quiet is True
 
     def test_parser_quiet_default_false(self) -> None:
         """--quiet 默认为 False."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         parser = runner.create_parser()
         parsed = parser.parse_args(["clean"])
         assert parsed.quiet is False
@@ -222,7 +222,7 @@ class TestCliRunnerRunSuccess:
 
     def test_run_valid_command_returns_zero(self) -> None:
         """有效命令执行成功应返回 0."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         exit_code = runner.run(["clean"])
         assert exit_code == CliExitCode.SUCCESS.value
 
@@ -236,28 +236,30 @@ class TestCliRunnerRunSuccess:
         def track_b() -> None:
             executed.append("b")
 
-        runner = px.CliRunner({
-            "a": px.Graph.from_specs([px.TaskSpec("a", track_a)]),
-            "b": px.Graph.from_specs([px.TaskSpec("b", track_b)]),
-        })
+        runner = px.CliRunner(
+            aliases={
+                "a": px.Graph.from_specs([px.TaskSpec("a", track_a)]),
+                "b": px.Graph.from_specs([px.TaskSpec("b", track_b)]),
+            }
+        )
         _ = runner.run(["b"])
         assert executed == ["b"]
 
     def test_run_multi_task_graph(self) -> None:
         """应能执行带依赖的多任务图."""
-        runner = px.CliRunner({"multi": _multi_task_graph()})
+        runner = px.CliRunner(aliases={"multi": _multi_task_graph()})
         exit_code = runner.run(["multi"])
         assert exit_code == CliExitCode.SUCCESS.value
 
     def test_run_with_strategy_override(self) -> None:
         """应支持通过 --strategy 覆盖默认策略."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         exit_code = runner.run(["echo", "--strategy", "thread"])
         assert exit_code == CliExitCode.SUCCESS.value
 
     def test_run_with_dry_run(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--dry-run 应只打印计划不执行."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         exit_code = runner.run(["echo", "--dry-run"])
         assert exit_code == CliExitCode.SUCCESS.value
         captured = capsys.readouterr()
@@ -272,7 +274,7 @@ class TestCliRunnerVerbose:
 
     def test_verbose_default_prints_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """默认 verbose=True 应打印任务生命周期."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         # verbose 模式下应打印任务生命周期
@@ -280,7 +282,7 @@ class TestCliRunnerVerbose:
 
     def test_quiet_flag_disables_verbose(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--quiet 应关闭 verbose 输出."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         _ = runner.run(["echo", "--quiet"])
         captured = capsys.readouterr()
         # quiet 模式下不应有 [verbose] 前缀的输出
@@ -288,14 +290,14 @@ class TestCliRunnerVerbose:
 
     def test_verbose_false_constructor_disables_verbose(self, capsys: pytest.CaptureFixture[str]) -> None:
         """构造时 verbose=False 应关闭 verbose 输出."""
-        runner = px.CliRunner({"echo": _echo_graph()}, verbose=False)
+        runner = px.CliRunner(aliases={"echo": _echo_graph()}, verbose=False)
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "[verbose]" not in captured.out
 
     def test_verbose_prints_command_for_cmd_task(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下 cmd 任务应打印执行的命令."""
-        runner = px.CliRunner({"echo": _echo_graph(msg="verbose-test")})
+        runner = px.CliRunner(aliases={"echo": _echo_graph(msg="verbose-test")})
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         # 应打印执行的命令
@@ -305,7 +307,7 @@ class TestCliRunnerVerbose:
 
     def test_verbose_prints_success_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下成功任务应打印成功信息."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         _ = runner.run(["echo"])
         captured = capsys.readouterr()
         assert "成功" in captured.out
@@ -319,14 +321,14 @@ class TestCliRunnerVerbose:
                 conditions=(lambda _ctx: False,),
             ),
         ])
-        runner = px.CliRunner({"skip": graph})
+        runner = px.CliRunner(aliases={"skip": graph})
         _ = runner.run(["skip"])
         captured = capsys.readouterr()
         assert "跳过" in captured.out
 
     def test_verbose_prints_failure_lifecycle(self, capsys: pytest.CaptureFixture[str]) -> None:
         """verbose 模式下失败任务应打印失败信息."""
-        runner = px.CliRunner({"fail": _failing_graph()})
+        runner = px.CliRunner(aliases={"fail": _failing_graph()})
         _ = runner.run(["fail"])
         captured = capsys.readouterr()
         # 失败信息可能出现在 stdout (verbose) 或 stderr (PyFlowXError)
@@ -342,7 +344,7 @@ class TestCliRunnerRunFailure:
 
     def test_run_unknown_command_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """未知命令应返回 1 并打印错误."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         exit_code = runner.run(["unknown"])
         assert exit_code == CliExitCode.FAILURE.value
         captured = capsys.readouterr()
@@ -351,7 +353,7 @@ class TestCliRunnerRunFailure:
 
     def test_run_no_command_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """无命令时应返回 1 并打印帮助."""
-        runner = px.CliRunner({"clean": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph()})
         exit_code = runner.run([])
         assert exit_code == CliExitCode.FAILURE.value
         captured = capsys.readouterr()
@@ -359,13 +361,13 @@ class TestCliRunnerRunFailure:
 
     def test_run_failing_task_returns_failure(self) -> None:
         """任务失败时应返回 1."""
-        runner = px.CliRunner({"fail": _failing_graph()})
+        runner = px.CliRunner(aliases={"fail": _failing_graph()})
         exit_code = runner.run(["fail"])
         assert exit_code == CliExitCode.FAILURE.value
 
     def test_run_failing_task_prints_error(self, capsys: pytest.CaptureFixture[str]) -> None:
         """任务失败时应打印错误信息."""
-        runner = px.CliRunner({"fail": _failing_graph()})
+        runner = px.CliRunner(aliases={"fail": _failing_graph()})
         _ = runner.run(["fail"])
         captured = capsys.readouterr()
         # PyFlowXError 信息应输出到 stderr
@@ -380,17 +382,19 @@ class TestCliRunnerList:
 
     def test_list_returns_success(self) -> None:
         """--list 应返回 0."""
-        runner = px.CliRunner({"clean": _echo_graph(), "build": _echo_graph()})
+        runner = px.CliRunner(aliases={"clean": _echo_graph(), "build": _echo_graph()})
         exit_code = runner.run(["--list"])
         assert exit_code == CliExitCode.SUCCESS.value
 
     def test_list_prints_all_commands(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--list 应打印所有命令."""
-        runner = px.CliRunner({
-            "clean": _echo_graph("c", "clean"),
-            "build": _echo_graph("b", "build"),
-            "test": _echo_graph("t", "test"),
-        })
+        runner = px.CliRunner(
+            aliases={
+                "clean": _echo_graph("c", "clean"),
+                "build": _echo_graph("b", "build"),
+                "test": _echo_graph("t", "test"),
+            }
+        )
         _ = runner.run(["--list"])
         captured = capsys.readouterr()
         assert "clean" in captured.out
@@ -404,7 +408,7 @@ class TestCliRunnerList:
         def track() -> None:
             executed.append("ran")
 
-        runner = px.CliRunner({"a": px.Graph.from_specs([px.TaskSpec("a", track)])})
+        runner = px.CliRunner(aliases={"a": px.Graph.from_specs([px.TaskSpec("a", track)])})
         _ = runner.run(["--list"])
         assert executed == []
 
@@ -417,7 +421,7 @@ class TestCliRunnerErrorHandling:
 
     def test_keyboard_interrupt_returns_130(self, capsys: pytest.CaptureFixture[str]) -> None:
         """KeyboardInterrupt 应返回 130."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
 
         def raise_interrupt(*_args: Any, **_kwargs: Any) -> None:
             raise KeyboardInterrupt
@@ -430,7 +434,7 @@ class TestCliRunnerErrorHandling:
 
     def test_pyflowx_error_returns_failure(self, capsys: pytest.CaptureFixture[str]) -> None:
         """PyFlowXError 应返回 1."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
 
         def raise_error(*_args: Any, **_kwargs: Any) -> None:
             raise TaskFailedError("echo", RuntimeError("boom"), 1)
@@ -447,7 +451,7 @@ class TestCliRunnerErrorHandling:
         class CustomError(Exception):
             pass
 
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
 
         def raise_custom(*_args: Any, **_kwargs: Any) -> None:
             raise CustomError("unexpected")
@@ -464,14 +468,14 @@ class TestCliRunnerRunCli:
 
     def test_run_cli_calls_sys_exit(self) -> None:
         """run_cli 应调用 sys.exit."""
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         with pytest.raises(SystemExit) as exc_info:
             runner.run_cli(["echo"])
         assert exc_info.value.code == CliExitCode.SUCCESS.value
 
     def test_run_cli_exit_code_on_failure(self) -> None:
         """run_cli 失败时应以非零码退出."""
-        runner = px.CliRunner({"fail": _failing_graph()})
+        runner = px.CliRunner(aliases={"fail": _failing_graph()})
         with pytest.raises(SystemExit) as exc_info:
             runner.run_cli(["fail"])
         assert exc_info.value.code == CliExitCode.FAILURE.value
@@ -479,7 +483,7 @@ class TestCliRunnerRunCli:
     def test_run_cli_no_args_uses_sys_argv(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """run_cli 无参数时应使用 sys.argv."""
         monkeypatch.setattr(sys, "argv", ["pymake", "echo"])
-        runner = px.CliRunner({"echo": _echo_graph()})
+        runner = px.CliRunner(aliases={"echo": _echo_graph()})
         with pytest.raises(SystemExit) as exc_info:
             runner.run_cli()
         assert exc_info.value.code == CliExitCode.SUCCESS.value
@@ -520,7 +524,7 @@ class TestCliRunnerIntegration:
                 conditions=(lambda _ctx: False,),
             ),
         ])
-        runner = px.CliRunner({"skip": graph})
+        runner = px.CliRunner(aliases={"skip": graph})
         exit_code = runner.run(["skip"])
         assert exit_code == CliExitCode.SUCCESS.value
 
@@ -533,7 +537,7 @@ class TestCliRunnerIntegration:
                 conditions=(lambda _ctx: True,),
             ),
         ])
-        runner = px.CliRunner({"run": graph})
+        runner = px.CliRunner(aliases={"run": graph})
         exit_code = runner.run(["run"])
         assert exit_code == CliExitCode.SUCCESS.value
 
@@ -554,17 +558,19 @@ class TestCliRunnerIntegration:
             px.TaskSpec("c", make("c"), depends_on=("a",)),
             px.TaskSpec("d", make("d"), depends_on=("b", "c")),
         ])
-        runner = px.CliRunner({"diamond": graph})
+        runner = px.CliRunner(aliases={"diamond": graph})
         exit_code = runner.run(["diamond"])
         assert exit_code == CliExitCode.SUCCESS.value
         assert order == ["a", "b", "c", "d"]
 
     def test_mixed_fn_and_cmd_commands(self) -> None:
         """混合 fn 和 cmd 的命令应都能执行."""
-        runner = px.CliRunner({
-            "fn_cmd": px.Graph.from_specs([px.TaskSpec("fn", fn=lambda: "fn-result")]),
-            "cmd_cmd": px.Graph.from_specs([px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]),
-        })
+        runner = px.CliRunner(
+            aliases={
+                "fn_cmd": px.Graph.from_specs([px.TaskSpec("fn", fn=lambda: "fn-result")]),
+                "cmd_cmd": px.Graph.from_specs([px.TaskSpec("cmd", cmd=[*ECHO_CMD, "cmd-result"])]),
+            }
+        )
         assert runner.run(["fn_cmd"]) == CliExitCode.SUCCESS.value
         assert runner.run(["cmd_cmd"]) == CliExitCode.SUCCESS.value
 
@@ -580,7 +586,7 @@ class TestCliRunnerIntegration:
                 ls_cmd = ["ls"]
 
             graph = px.Graph.from_specs([px.TaskSpec("ls", cmd=ls_cmd, cwd=Path(tmpdir))])
-            runner = px.CliRunner({"ls": graph})
+            runner = px.CliRunner(aliases={"ls": graph})
             exit_code = runner.run(["ls"])
             assert exit_code == CliExitCode.SUCCESS.value
 
@@ -612,3 +618,109 @@ class TestApplyVerboseToGraph:
         new_graph = _apply_verbose_to_graph(graph, verbose=True)
         new_spec = new_graph.spec("a")
         assert new_spec.verbose is True
+
+
+# ---------------------------------------------------------------------- #
+# 新 API: tasks + aliases
+# ---------------------------------------------------------------------- #
+class TestCliRunnerNewApi:
+    """测试 CliRunner 的 tasks + aliases 新 API."""
+
+    def test_tasks_plus_aliases_single_str(self) -> None:
+        """tasks 注册 + aliases str 引用单任务."""
+        runner = px.CliRunner(
+            tasks=[px.cmd([*ECHO_CMD, "a"], name="task_a")],
+            aliases={"a": "task_a"},
+        )
+        assert runner.commands == ["a"]
+        assert runner.run(["a"]) == CliExitCode.SUCCESS.value
+
+    def test_aliases_list_str_builds_chain(self) -> None:
+        """aliases list[str] 应建立 chain 依赖（后一个依赖前一个）."""
+        runner = px.CliRunner(
+            tasks=[
+                px.cmd([*ECHO_CMD, "a"], name="task_a"),
+                px.cmd([*ECHO_CMD, "b"], name="task_b"),
+            ],
+            aliases={"ab": ["task_a", "task_b"]},
+        )
+        graph = runner.graphs["ab"]
+        specs = graph.all_specs()
+        assert specs["task_b"].depends_on == ("task_a",)
+
+    def test_aliases_taskspec_value(self) -> None:
+        """aliases 值为 TaskSpec 时直接生成单任务图."""
+        spec = px.cmd([*ECHO_CMD, "x"], name="inline_x")
+        runner = px.CliRunner(aliases={"x": spec})
+        assert runner.run(["x"]) == CliExitCode.SUCCESS.value
+
+    def test_aliases_graph_value(self) -> None:
+        """aliases 值为 Graph 时原样使用（复杂场景：conditions 等）."""
+        graph = px.Graph.from_specs([
+            px.TaskSpec("a", cmd=[*ECHO_CMD, "a"]),
+            px.TaskSpec("b", cmd=[*ECHO_CMD, "b"], depends_on=("a",)),
+        ])
+        runner = px.CliRunner(aliases={"g": graph})
+        assert set(runner.graphs["g"].all_specs().keys()) == {"a", "b"}
+
+    def test_alias_name_same_as_task_name_via_taskspec(self) -> None:
+        """alias 名与 task 名相同时，用 TaskSpec 避免自引用循环."""
+        spec = px.cmd([*ECHO_CMD, "same"], name="same")
+        runner = px.CliRunner(aliases={"same": spec})
+        assert runner.run(["same"]) == CliExitCode.SUCCESS.value
+
+    def test_alias_str_reference_to_other_alias(self) -> None:
+        """alias 值为 str 引用其他 alias."""
+        runner = px.CliRunner(
+            aliases={
+                "base": px.cmd([*ECHO_CMD, "base"], name="base"),
+                "wrapper": "base",
+            },
+        )
+        assert runner.run(["wrapper"]) == CliExitCode.SUCCESS.value
+
+    def test_empty_aliases_raises(self) -> None:
+        """空 aliases 应抛 ValueError."""
+        with pytest.raises(ValueError, match="至少需要一个别名"):
+            _ = px.CliRunner()
+
+    def test_empty_list_value_raises(self) -> None:
+        """空 list 作为 alias 值应抛 ValueError."""
+        with pytest.raises(ValueError, match="任务列表为空"):
+            _ = px.CliRunner(aliases={"x": []})
+
+    def test_invalid_value_type_raises(self) -> None:
+        """无效类型（int）作为 alias 值应抛 TypeError."""
+        with pytest.raises(TypeError, match="值类型无效"):
+            _ = px.CliRunner(aliases={"x": 123})  # type: ignore[dict-item]
+
+    def test_invalid_list_element_type_raises(self) -> None:
+        """list 中非 str/TaskSpec 元素应抛 TypeError."""
+        with pytest.raises(TypeError, match="列表元素类型无效"):
+            _ = px.CliRunner(aliases={"x": [123]})  # type: ignore[list-item]
+
+    def test_duplicate_task_name_raises(self) -> None:
+        """tasks 中重名任务应抛 ValueError."""
+        spec = px.cmd([*ECHO_CMD, "a"], name="dup")
+        with pytest.raises(ValueError, match="任务名重复"):
+            _ = px.CliRunner(tasks=[spec, spec], aliases={"a": "dup"})
+
+    def test_commands_excludes_unreferenced_tasks(self) -> None:
+        """commands 只含 aliases，不含 tasks 中未引用的任务."""
+        runner = px.CliRunner(
+            tasks=[
+                px.cmd([*ECHO_CMD, "a"], name="used"),
+                px.cmd([*ECHO_CMD, "b"], name="unused"),
+            ],
+            aliases={"a": "used"},
+        )
+        assert runner.commands == ["a"]
+
+    def test_unknown_command_rejected(self) -> None:
+        """未注册的 alias 名应被拒绝（不接受裸 task 名）."""
+        runner = px.CliRunner(
+            tasks=[px.cmd([*ECHO_CMD, "a"], name="task_a")],
+            aliases={"a": "task_a"},
+        )
+        # task_a 是任务名，不是 alias，应被拒绝
+        assert runner.run(["task_a"]) == CliExitCode.FAILURE.value

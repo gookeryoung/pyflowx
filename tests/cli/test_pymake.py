@@ -70,92 +70,116 @@ class TestMaturinBuildCmd:
 # ---------------------------------------------------------------------- #
 # TaskSpec definitions
 # ---------------------------------------------------------------------- #
+def _find_task(name: str) -> pymake.px.TaskSpec:
+    """从 pymake.tasks 或单任务别名变量中查找指定名称的 TaskSpec."""
+    for spec in pymake.tasks:
+        if spec.name == name:
+            return spec
+    # 单任务别名变量（_doc/_lint/_tox）
+    alias_map = {"doc": pymake._doc, "lint": pymake._lint, "tox": pymake._tox}
+    if name in alias_map:
+        return alias_map[name]
+    raise KeyError(f"任务 {name!r} 未找到")
+
+
 class TestTaskSpecDefinitions:
     """Test that all TaskSpec definitions are valid."""
 
     def test_uv_build_spec(self) -> None:
         """uv_build spec should be properly defined."""
-        assert pymake.uv_build.name == "uv_build"
-        assert pymake.uv_build.cmd == ["uv", "build"]
-        assert pymake.uv_build.skip_if_missing is False
+        spec = _find_task("uv_build")
+        assert spec.name == "uv_build"
+        assert spec.cmd == ["uv", "build"]
+        assert spec.skip_if_missing is False
 
     def test_maturin_build_spec(self) -> None:
         """maturin_build spec should be properly defined."""
-        assert pymake.maturin_build.name == "maturin_build"
-        assert isinstance(pymake.maturin_build.cmd, list)
-        assert pymake.maturin_build.skip_if_missing is False
+        spec = _find_task("maturin_build")
+        assert spec.name == "maturin_build"
+        assert isinstance(spec.cmd, list)
+        assert spec.skip_if_missing is False
 
     def test_uv_sync_spec(self) -> None:
         """uv_sync spec should be properly defined."""
-        assert pymake.uv_sync.name == "uv_sync"
-        assert pymake.uv_sync.cmd == ["uv", "sync"]
-        assert pymake.uv_sync.skip_if_missing is False
+        spec = _find_task("uv_sync")
+        assert spec.name == "uv_sync"
+        assert spec.cmd == ["uv", "sync"]
+        assert spec.skip_if_missing is False
 
     def test_git_clean_spec(self) -> None:
         """git_clean spec should be properly defined."""
-        assert pymake.git_clean.name == "git_clean"
-        assert pymake.git_clean.cmd == ["gitt", "c"]
-        assert pymake.git_clean.skip_if_missing is False
+        spec = _find_task("git_clean")
+        assert spec.name == "git_clean"
+        assert spec.cmd == ["gitt", "c"]
+        assert spec.skip_if_missing is False
 
     def test_test_spec(self) -> None:
         """test spec should be properly defined."""
-        assert pymake.test.name == "test"
-        assert isinstance(pymake.test.cmd, list)
-        assert "pytest" in pymake.test.cmd
-        assert "-m" in pymake.test.cmd
-        assert "not slow" in pymake.test.cmd
-        assert pymake.test.skip_if_missing is False
+        spec = _find_task("test")
+        assert spec.name == "test"
+        assert isinstance(spec.cmd, list)
+        assert "pytest" in spec.cmd
+        assert "-m" in spec.cmd
+        assert "not slow" in spec.cmd
+        assert spec.skip_if_missing is False
 
     def test_test_fast_spec(self) -> None:
         """test_fast spec should be properly defined."""
-        assert pymake.test_fast.name == "test_fast"
-        assert isinstance(pymake.test_fast.cmd, list)
-        assert "pytest" in pymake.test_fast.cmd
-        assert "-n" not in pymake.test_fast.cmd  # test_fast doesn't use parallel
-        assert pymake.test_fast.skip_if_missing is False
+        spec = _find_task("test_fast")
+        assert spec.name == "test_fast"
+        assert isinstance(spec.cmd, list)
+        assert "pytest" in spec.cmd
+        assert "-n" not in spec.cmd  # test_fast doesn't use parallel
+        assert spec.skip_if_missing is False
 
     def test_test_coverage_spec(self) -> None:
         """test_coverage spec should be properly defined."""
-        assert pymake.test_coverage.name == "test_coverage"
-        assert isinstance(pymake.test_coverage.cmd, list)
-        assert "pytest" in pymake.test_coverage.cmd
-        assert "--cov" in pymake.test_coverage.cmd
-        assert pymake.test_coverage.skip_if_missing is False
+        spec = _find_task("test_coverage")
+        assert spec.name == "test_coverage"
+        assert isinstance(spec.cmd, list)
+        assert "pytest" in spec.cmd
+        assert "--cov" in spec.cmd
+        assert spec.skip_if_missing is False
 
     def test_ruff_lint_spec(self) -> None:
-        """ruff_lint spec should be properly defined."""
-        assert pymake.ruff_lint.name == "lint"
-        assert isinstance(pymake.ruff_lint.cmd, list)
-        assert "ruff" in pymake.ruff_lint.cmd
-        assert "check" in pymake.ruff_lint.cmd
-        assert pymake.ruff_lint.skip_if_missing is False
+        """lint spec should be properly defined."""
+        spec = _find_task("lint")
+        assert spec.name == "lint"
+        assert isinstance(spec.cmd, list)
+        assert "ruff" in spec.cmd
+        assert "check" in spec.cmd
+        assert spec.skip_if_missing is False
 
     def test_doc_spec(self) -> None:
         """doc spec should be properly defined."""
-        assert pymake.doc.name == "doc"
-        assert isinstance(pymake.doc.cmd, list)
-        assert "sphinx-build" in pymake.doc.cmd
-        assert pymake.doc.skip_if_missing is False
+        spec = _find_task("doc")
+        assert spec.name == "doc"
+        assert isinstance(spec.cmd, list)
+        assert "sphinx-build" in spec.cmd
+        assert spec.skip_if_missing is False
 
     def test_hatch_publish_spec(self) -> None:
-        """hatch_publish spec should be properly defined."""
-        assert pymake.hatch_publish.name == "publish_python"
-        assert pymake.hatch_publish.cmd == ["hatch", "publish"]
-        assert pymake.hatch_publish.skip_if_missing is False
+        """publish_python spec should be properly defined."""
+        spec = _find_task("publish_python")
+        assert spec.name == "publish_python"
+        assert spec.cmd == ["hatch", "publish"]
+        assert spec.skip_if_missing is False
 
     def test_twine_publish_spec(self) -> None:
         """twine_publish spec should be properly defined."""
-        assert pymake.twine_publish.name == "twine_publish"
-        assert isinstance(pymake.twine_publish.cmd, list)
-        assert "twine" in pymake.twine_publish.cmd
-        assert "upload" in pymake.twine_publish.cmd
-        assert pymake.twine_publish.skip_if_missing is False
+        spec = _find_task("twine_publish")
+        assert spec.name == "twine_publish"
+        assert isinstance(spec.cmd, list)
+        assert "twine" in spec.cmd
+        assert "upload" in spec.cmd
+        assert spec.skip_if_missing is False
 
     def test_tox_spec(self) -> None:
         """tox spec should be properly defined."""
-        assert pymake.tox.name == "tox"
-        assert pymake.tox.cmd == ["tox", "-p", "auto"]
-        assert pymake.tox.skip_if_missing is False
+        spec = _find_task("tox")
+        assert spec.name == "tox"
+        assert spec.cmd == ["tox", "-p", "auto"]
+        assert spec.skip_if_missing is False
 
 
 # ---------------------------------------------------------------------- #

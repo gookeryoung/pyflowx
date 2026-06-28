@@ -72,67 +72,126 @@ def _apply_verbose_to_graph(graph: Graph, verbose: bool) -> Graph:
 class CliRunner:
     """命令行运行器: 根据用户输入执行对应的任务流图.
 
-    将命令名映射到 Graph 实例.
-    通过 ``sys.argv`` 解析用户输入的命令, 执行对应的图.
+    将命令别名映射到 Graph 实例. 通过 ``sys.argv`` 解析用户输入的命令,
+    执行对应的图.
 
     Parameters
     ----------
+    aliases : dict[str, str | list[str] | Graph]
+        命令别名到任务引用的映射. 每个值可以是:
+        * ``str`` —— 单个任务名 (引用 ``tasks`` 中注册的任务),
+          生成单任务图.
+        * ``list[str]`` —— 任务名列表, 自动 :meth:`Graph.chain` 建立链式依赖,
+          即后一个任务依赖前一个.
+        * :class:`~pyflowx.graph.Graph` —— 直接使用该图 (用于复杂场景, 如
+          自定义 ``conditions``、并行分支等).
+    tasks : list[TaskSpec]
+        扁平注册的任务列表. ``aliases`` 中的字符串引用这些任务名.
+        未被任何 alias 引用的任务不会被执行.
     strategy : str | Strategy
-        默认执行策略 (``Strategy.SEQUENTIAL`` / ``Strategy.THREAD`` /
-        ``Strategy.ASYNC`` 或对应字符串). 可被命令行 ``--strategy`` 覆盖.
+        默认执行策略. 可被命令行 ``--strategy`` 覆盖.
+    description : str
+        CLI 帮助文本.
     verbose : bool
-        是否显示详细执行过程. ``True`` 时打印任务生命周期和 subprocess 输出.
-        默认 ``True``. 可被命令行 ``--quiet`` 关闭.
-    **graphs : Graph
-        命令名到图的映射. 每个 key 是一个命令名, value 是对应的
-        :class:`~pyflowx.graph.Graph`.
+        是否显示详细执行过程. 默认 ``True``, 可被命令行 ``--quiet`` 关闭.
 
     Examples
     --------
-    基本用法::
+    简单场景 (tasks + aliases)::
 
         runner = px.CliRunner(
-            clean=px.Graph.from_specs(
-                [
-                    px.TaskSpec("cargo_clean", cmd=["cargo", "clean"]),
-                ]
-            ),
-            build=px.Graph.from_specs(
-                [
-                    px.TaskSpec("uv_build", cmd=["uv", "build"]),
-                ]
-            ),
+            tasks=[
+                px.cmd(["uv", "build"]),                      # name="uv_build"
+                px.cmd(["maturin", "build"], name="maturin_build"),
+                px.cmd(["ruff", "check", "--fix"], name="lint"),
+            ],
+            aliases={
+                "b": "uv_build",
+                "ba": ["uv_build", "maturin_build"],   # chain: maturin 依赖 uv
+                "lint": "lint",
+            },
         )
-        runner.run()  # 解析 sys.argv
+        runner.run()
 
-    指定策略与描述::
+    复杂场景 (直接用 Graph)::
 
         runner = px.CliRunner(
-            strategy=px.Strategy.THREAD,
+            aliases={
+                "a": px.Graph.from_specs([
+                    px.TaskSpec("add", cmd=["git", "add", "."], conditions=(...)),
+                    px.TaskSpec("commit", cmd=["git", "commit"], depends_on=("add",)),
+                ]),
+            },
         )
-        runner.run(["test", "--strategy", "sequential"])
     """
 
-    graphs: dict[str, Graph] = field(default_factory=dict)
+    aliases: dict[str, str | list[str | TaskSpec[Any]] | TaskSpec[Any] | Graph] = field(default_factory=dict)
+    tasks: list[TaskSpec[Any]] = field(default_factory=list)
     strategy: Strategy = field(default="dependency")
     description: str = field(default_factory=str)
     verbose: bool = field(default_factory=lambda: True)
+    # 解析后的命令→图映射，__post_init__ 填充
+    graphs: dict[str, Graph] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
-        if not self.graphs:
-            raise ValueError("CliRunner 至少需要一个命令 (通过关键字参数提供)")
+        if not self.aliases:
+            raise ValueError("CliRunner 至少需要一个别名 (通过 aliases= 提供)")
 
-        # 解析并展开字符串引用，委托给 GraphComposer。
-        # Graph 不再 frozen，可直接赋值，无需 object.__setattr__。
-        self.graphs = GraphComposer(self.graphs).resolve_all()
+        # 1. 把 tasks 注册为虚拟命令图（每个 task 一个图），加入 raw_graphs
+        #    使 GraphComposer 能解析对它们的字符串引用
+        raw_graphs: dict[str, Graph] = {}
+        for spec in self.tasks:
+            if spec.name in raw_graphs:
+                raise ValueError(f"任务名重复: {spec.name!r}")
+            raw_graphs[spec.name] = Graph.from_specs([spec])
+
+        # 2. 把每个 alias 转为 Graph（alias 名可与 task 名相同，覆盖 task 注册）
+        for alias, value in self.aliases.items():
+            raw_graphs[alias] = self._alias_to_graph(alias, value)
+
+        # 3. 解析图间字符串引用（str / list[str] 引用其他 alias 或任务）
+        self.graphs = GraphComposer(raw_graphs).resolve_all()
+
+    @staticmethod
+    def _alias_to_graph(
+        alias: str,
+        value: str | list[str | TaskSpec[Any]] | TaskSpec[Any] | Graph,
+    ) -> Graph:
+        """把 alias 的值转换为 Graph.
+
+        * ``str`` —— 对其他 alias 或已注册任务名的引用, 由 GraphComposer 展开.
+        * ``TaskSpec`` —— 单个内联任务, 生成单任务图.
+        * ``list[str | TaskSpec]`` —— 引用/任务混合列表, GraphComposer 展开时
+          自动让后续引用依赖前面 (chain 语义). 元素为 alias 名、任务名或
+          :class:`TaskSpec` 对象 (内联任务).
+        * ``Graph`` —— 原样返回 (用于复杂场景: conditions、并行分支等).
+        """
+        if isinstance(value, Graph):
+            return value
+        if isinstance(value, TaskSpec):
+            return Graph.from_specs([value])
+        if isinstance(value, str):
+            # 字符串引用，用 _pending_refs 占位，GraphComposer 后续展开
+            return Graph.from_specs([value])  # type: ignore[arg-type]
+        if isinstance(value, list):
+            if not value:
+                raise ValueError(f"别名 {alias!r} 的任务列表为空")
+            for item in value:
+                if not isinstance(item, (str, TaskSpec)):
+                    raise TypeError(f"别名 {alias!r} 的列表元素类型无效: {type(item).__name__}, 预期 str 或 TaskSpec")
+            # str/TaskSpec 混合列表，由 GraphComposer 展开（自动建立 chain 依赖）
+            return Graph.from_specs(value)
+        raise TypeError(
+            f"别名 {alias!r} 的值类型无效: {type(value).__name__}, 预期 str/TaskSpec/list[str|TaskSpec]/Graph"
+        )
 
     # ------------------------------------------------------------------ #
     # 内省
     # ------------------------------------------------------------------ #
     @property
     def commands(self) -> list[str]:
-        """可用的命令列表 (按插入顺序)."""
-        return list(self.graphs.keys())
+        """可用的命令列表 (按 aliases 定义顺序, 不含 tasks 中未引用的任务)."""
+        return list(self.aliases.keys())
 
     # ------------------------------------------------------------------ #
     # 参数解析
@@ -225,9 +284,9 @@ class CliRunner:
             parser.print_help()
             return CliExitCode.FAILURE.value
 
-        # 验证命令
-        if parsed.command not in self.graphs:
-            available = ", ".join(self.graphs.keys())
+        # 验证命令（必须是已注册的 alias，不接受裸任务名）
+        if parsed.command not in self.aliases:
+            available = ", ".join(self.commands)
             print(
                 f"错误: 未知命令 {parsed.command!r} (可用命令: {available})",
                 file=sys.stderr,

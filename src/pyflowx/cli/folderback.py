@@ -86,9 +86,9 @@ def main() -> None:
     runner = px.CliRunner(
         strategy="thread",
         description="FolderBack - 文件夹备份工具",
-        graphs={
+        aliases={
             # 备份当前目录到 ./backup
-            "b": px.Graph.from_specs([folderback_default]),
+            "b": folderback_default,
         },
     )
     runner.run_cli()

@@ -74,9 +74,9 @@ def main() -> None:
     runner = px.CliRunner(
         strategy="thread",
         description="FolderZip - 文件夹压缩工具",
-        graphs={
+        aliases={
             # 压缩当前目录下的所有文件夹
-            "z": px.Graph.from_specs([folderzip_default]),
+            "z": folderzip_default,
         },
     )
     runner.run_cli()
