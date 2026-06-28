@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sys
@@ -67,6 +68,8 @@ TaskCmd = Union[
 # 执行策略：sequential/thread/async 为层屏障模型，dependency 为依赖驱动模型。
 Strategy = Union[str, "StrategyKind"]
 StrategyKind = Any  # 占位，避免循环；executors 模块用 Literal 约束
+
+logger = logging.getLogger("pyflowx")
 
 # 条件判断函数类型：接收依赖上下文（可能为空映射），返回是否应执行。
 Condition = Callable[[Context], bool]
@@ -378,12 +381,20 @@ class TaskSpec(Generic[T]):
 
     def storage_key(self, context: Context) -> str:
         """计算状态后端存储键。"""
-        if self.cache_key is not None:
-            try:
-                return f"{self.name}:{self.cache_key(context)}"
-            except Exception:
-                return self.name
-        return self.name
+        if self.cache_key is None:
+            return self.name
+        try:
+            return f"{self.name}:{self.cache_key(context)}"
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            # cache_key 抛出预期内的数据/类型异常时回退到 name，但仍记录警告
+            # 以便用户发现 cache_key 实现中的 bug。
+            logger.warning(
+                "task %r: cache_key 回退到 name（%s: %s）",
+                self.name,
+                type(exc).__name__,
+                exc,
+            )
+            return self.name
 
 
 # 全局锁：序列化对进程级状态（os.environ / os.chdir）的临时修改。

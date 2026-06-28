@@ -231,8 +231,11 @@ class Graph:
 
         同层任务无相互硬依赖，可并发执行。软依赖不参与分层。
         层按执行顺序返回。图有环时抛出 :class:`CycleError`。
+
+        .. note::
+            本方法假定图已通过 :meth:`validate` 校验（由 :func:`pyflowx.run`
+            在入口统一执行一次）。若直接调用本方法，需自行先校验。
         """
-        self.validate()
         sorter = _TopologicalSorter(self.deps)
         result: list[list[str]] = []
         sorter.prepare()

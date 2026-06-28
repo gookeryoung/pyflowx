@@ -70,9 +70,9 @@ def test_memory_backend_ttl_load_filters_expired() -> None:
 
 
 def test_memory_backend_expired_key_not_in_store() -> None:
-    """_expired 对不存在键返回 False."""
+    """不存在的键 has 返回 False."""
     b = MemoryBackend(ttl=1.0)
-    assert b._expired("nonexistent") is False
+    assert b.has("nonexistent") is False
 
 
 def test_memory_backend_no_ttl_never_expired() -> None:
@@ -244,35 +244,35 @@ def test_json_backend_ttl_load_filters_expired() -> None:
 
 
 def test_json_backend_expired_no_ttl() -> None:
-    """无 TTL 时 _expired 返回 False."""
+    """无 TTL 时永不过期."""
     with tempfile.TemporaryDirectory() as tmp:
         path = str(Path(tmp) / "state.json")
         b = JSONBackend(path)
         b.save("a", 1)
         # 手动修改 ts 为很久以前
         b._store["a"]["ts"] = time.time() - 1000
-        assert b._expired(b._store["a"]) is False  # 无 TTL，永不过期
+        assert b.has("a") is True  # 无 TTL，永不过期
 
 
 def test_json_backend_expired_with_ttl() -> None:
-    """有 TTL 时 _expired 检查是否过期."""
+    """有 TTL 时过期键 has 返回 False."""
     with tempfile.TemporaryDirectory() as tmp:
         path = str(Path(tmp) / "state.json")
         b = JSONBackend(path, ttl=1.0)
         b.save("a", 1)
         # 手动修改 ts 为很久以前
         b._store["a"]["ts"] = time.time() - 10  # 10 秒前，超过 TTL
-        assert b._expired(b._store["a"]) is True
+        assert b.has("a") is False
 
 
 def test_json_backend_expired_missing_ts() -> None:
-    """entry 缺少 ts 时使用默认值 0."""
+    """entry 缺少 ts 时视为过期."""
     with tempfile.TemporaryDirectory() as tmp:
         path = str(Path(tmp) / "state.json")
         b = JSONBackend(path, ttl=1.0)
         b._store["a"] = {"value": 1}  # 缺少 ts
         # ts 默认为 0，已经过了很久
-        assert b._expired(b._store["a"]) is True
+        assert b.has("a") is False
 
 
 def test_json_backend_save_value_error(monkeypatch: pytest.MonkeyPatch) -> None:

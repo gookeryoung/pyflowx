@@ -99,7 +99,10 @@ def test_verbose_run_with_skipped_lifecycle(capsys: pytest.CaptureFixture[str]):
 
 
 def test_verbose_run_with_user_callback():
-    """Test px.run with verbose=True and user callback both called."""
+    """Test px.run with verbose=True and user callback both called.
+
+    预期事件序列：RUNNING（开始）→ SUCCESS（完成）。
+    """
     events = []
 
     def on_event(event: px.TaskEvent):
@@ -109,8 +112,9 @@ def test_verbose_run_with_user_callback():
     graph = px.Graph.from_specs([spec])
     report = px.run(graph, strategy="sequential", verbose=True, on_event=on_event)
     assert report.success
-    assert len(events) == 1
-    assert events[0].status == px.TaskStatus.SUCCESS
+    assert len(events) == 2
+    assert events[0].status == px.TaskStatus.RUNNING
+    assert events[1].status == px.TaskStatus.SUCCESS
 
 
 def test_verbose_event_callback_success():

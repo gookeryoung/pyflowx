@@ -12,11 +12,12 @@
 
 架构
 ----
-本模块通过 **Mixin** 组合消除同步/异步任务执行器之间的重复代码：
+本模块通过 **模块级函数** 消除同步/异步任务执行器之间的重复代码：
 
-* :class:`_TaskSkipMixin`  —— 上游跳过 / 条件跳过的预检逻辑。
-* :class:`_TaskRetryMixin` —— 重试决策、成功/失败后处理、finalize。
-* :class:`SyncTaskRunner` / :class:`AsyncTaskRunner` —— 任务级执行器，组合上述 Mixin。
+* 模块级跳过/重试函数（:func:`_prepare_for_execution` / :func:`_should_retry`
+  / :func:`_mark_success` / :func:`_handle_failure` / :func:`_finalize_failure`）
+  —— 上游跳过 / 条件跳过的预检、重试决策、成功/失败后处理。
+* :class:`SyncTaskRunner` / :class:`AsyncTaskRunner` —— 任务级执行器，调用上述函数。
 * 模块级共享辅助（:func:`_filter_and_sort` / :func:`_store_result` /
   :func:`_build_semaphores` / :func:`_get_sem`）—— 缓存过滤、优先级排序、
   信号量构建、结果存储。
@@ -86,6 +87,22 @@ def _emit(on_event: EventCallback | None, result: TaskResult[Any]) -> None:
     )
 
 
+def _emit_running(on_event: EventCallback | None, spec: TaskSpec[Any]) -> None:
+    """触发 RUNNING 事件（任务开始执行时）。"""
+    if on_event is None:
+        return
+    on_event(
+        TaskEvent(
+            task=spec.name,
+            status=TaskStatus.RUNNING,
+            attempts=0,
+            error=None,
+            duration=None,
+            reason=None,
+        )
+    )
+
+
 def _run_hooks(hooks: TaskHooks, fn_name: str, *args: Any) -> None:
     """安全调用钩子（异常仅记录，不影响任务状态）。"""
     hook: Callable[..., None] | None = getattr(hooks, fn_name, None)
@@ -129,11 +146,16 @@ def _apply_cached(
     backend: StateBackend,
     on_event: EventCallback | None,
 ) -> bool:
-    """若 ``name`` 命中缓存，写入 context/report 并返回 True。"""
+    """若 ``name`` 命中缓存，写入 context/report 并返回 True。
+
+    单次 ``backend.get`` + ``KeyError`` 回退，避免 ``has`` + ``get`` 双重
+    哈希查找与双重 TTL 判断。
+    """
     storage_key = spec.storage_key(context)
-    if not backend.has(storage_key):
+    try:
+        cached = backend.get(storage_key)
+    except KeyError:
         return False
-    cached = backend.get(storage_key)
     context[name] = cached
     result = TaskResult(spec=spec, status=TaskStatus.SKIPPED, value=cached, reason="缓存命中")
     report.results[name] = result
@@ -142,154 +164,146 @@ def _apply_cached(
     return True
 
 
-def _sort_by_priority(layer: list[str], graph: Graph) -> list[str]:
-    """按优先级降序排序（稳定排序）。"""
-    return sorted(layer, key=lambda n: -graph.resolved_spec(n).priority)
+def _sort_by_priority(layer: list[str], specs: Mapping[str, TaskSpec[Any]]) -> list[str]:
+    """按优先级降序排序（稳定排序）。
 
-
-# ---------------------------------------------------------------------- #
-# Mixin：任务级跳过 / 重试 / 成功处理
-# ---------------------------------------------------------------------- #
-class _TaskSkipMixin:
-    """任务级跳过预检共享逻辑。
-
-    将"上游被跳过/失败"与"条件不满足"两类跳过判断统一为单一入口，
-    被 :class:`SyncTaskRunner` 与 :class:`AsyncTaskRunner` 复用。
+    接受预构建的 ``{name: spec}`` 映射，避免在排序键函数中重复调用
+    ``graph.resolved_spec``（即便有缓存也省去 N 次字典查询）。
     """
+    return sorted(layer, key=lambda n: -specs[n].priority)
 
-    @staticmethod
-    def _upstream_skip_reason(spec: TaskSpec[Any], report: RunReport | None) -> str | None:
-        """硬依赖被 SKIPPED/FAILED 时返回原因字符串，否则 ``None``。
 
-        软依赖不影响本检查——软依赖被跳过时注入默认值。
-        """
-        if report is None or spec.allow_upstream_skip:
-            return None
-        for dep in spec.depends_on:
-            if dep not in report.results:
-                continue
-            dep_status = report.results[dep].status
-            if dep_status in (TaskStatus.SKIPPED, TaskStatus.FAILED):
-                return f"上游任务 '{dep}' 状态为 {dep_status.value}"
+# ---------------------------------------------------------------------- #
+# 任务级跳过 / 重试 / 成功处理：模块级函数
+# ---------------------------------------------------------------------- #
+def _upstream_skip_reason(spec: TaskSpec[Any], report: RunReport | None) -> str | None:
+    """硬依赖被 SKIPPED/FAILED 时返回原因字符串，否则 ``None``。
+
+    软依赖不影响本检查——软依赖被跳过时注入默认值。
+    """
+    if report is None or spec.allow_upstream_skip:
         return None
+    for dep in spec.depends_on:
+        if dep not in report.results:
+            continue
+        dep_status = report.results[dep].status
+        if dep_status in (TaskStatus.SKIPPED, TaskStatus.FAILED):
+            return f"上游任务 '{dep}' 状态为 {dep_status.value}"
+    return None
 
-    @staticmethod
-    def _prepare_for_execution(
-        spec: TaskSpec[Any],
-        context: Mapping[str, Any],
-        report: RunReport | None,
-        on_event: EventCallback | None,
-    ) -> TaskResult[Any] | None:
-        """执行前预检：上游跳过 / 条件跳过。
 
-        返回 SKIPPED TaskResult 或 ``None``（继续执行）。
-        条件判断委托给 :meth:`TaskSpec.should_execute`，避免重复实现。
-        """
-        # 1. 上游被跳过/失败
-        skip_reason = _TaskSkipMixin._upstream_skip_reason(spec, report)
-        # 2. 条件 / skip_if_missing（单一来源：TaskSpec.should_execute）
-        if skip_reason is None:
-            should_run, cond_reason = spec.should_execute(context)
-            if not should_run:
-                skip_reason = cond_reason or "条件不满足"
-        if skip_reason is None:
-            return None
-        # 构造 SKIPPED 结果
-        result: TaskResult[Any] = TaskResult(
-            spec=spec,
-            status=TaskStatus.SKIPPED,
-            finished_at=datetime.now(),
-            reason=skip_reason,
+def _prepare_for_execution(
+    spec: TaskSpec[Any],
+    context: Mapping[str, Any],
+    report: RunReport | None,
+    on_event: EventCallback | None,
+) -> TaskResult[Any] | None:
+    """执行前预检：上游跳过 / 条件跳过。
+
+    返回 SKIPPED TaskResult 或 ``None``（继续执行）。
+    条件判断委托给 :meth:`TaskSpec.should_execute`，避免重复实现。
+    """
+    # 1. 上游被跳过/失败
+    skip_reason = _upstream_skip_reason(spec, report)
+    # 2. 条件 / skip_if_missing（单一来源：TaskSpec.should_execute）
+    if skip_reason is None:
+        should_run, cond_reason = spec.should_execute(context)
+        if not should_run:
+            skip_reason = cond_reason or "条件不满足"
+    if skip_reason is None:
+        return None
+    # 构造 SKIPPED 结果
+    result: TaskResult[Any] = TaskResult(
+        spec=spec,
+        status=TaskStatus.SKIPPED,
+        finished_at=datetime.now(),
+        reason=skip_reason,
+    )
+    _emit(on_event, result)
+    logger.info("task %r skipped (%s)", spec.name, skip_reason)
+    return result
+
+
+def _should_retry(spec: TaskSpec[Any], attempts: int, exc: BaseException) -> bool:
+    """是否应继续重试。"""
+    return attempts < spec.retry.max_attempts and spec.retry.should_retry(exc)
+
+
+def _mark_success(spec: TaskSpec[Any], result: TaskResult[Any], value: Any) -> None:
+    """标记任务成功并触发 post_run 钩子。"""
+    result.value = value
+    result.status = TaskStatus.SUCCESS
+    result.finished_at = datetime.now()
+    _run_hooks(spec.hooks, "post_run", spec, value)
+
+
+def _finalize_failure(
+    result: TaskResult[Any],
+    layer_idx: int | None,
+    on_event: EventCallback | None,
+    continue_on_error: bool,
+) -> None:
+    """标记任务为 FAILED。若 ``continue_on_error`` 为真则不抛出异常。"""
+    result.status = TaskStatus.FAILED
+    result.finished_at = datetime.now()
+    _emit(on_event, result)
+    if continue_on_error:
+        logger.warning(
+            "task %r failed but continue_on_error=True; continuing.",
+            result.spec.name,
         )
-        _emit(on_event, result)
-        logger.info("task %r skipped (%s)", spec.name, skip_reason)
-        return result
+        return
+    raise TaskFailedError(
+        task=result.spec.name,
+        cause=result.error if result.error is not None else RuntimeError("unknown"),
+        attempts=result.attempts,
+        layer=layer_idx,
+    )
 
 
-class _TaskRetryMixin:
-    """任务级重试决策与失败/成功后处理共享逻辑。"""
+def _handle_failure(
+    spec: TaskSpec[Any],
+    result: TaskResult[Any],
+    exc: BaseException,
+    layer_idx: int | None,
+    on_event: EventCallback | None,
+) -> bool:
+    """统一处理失败：超时转换、重试决策、finalize。
 
-    @staticmethod
-    def _should_retry(spec: TaskSpec[Any], attempts: int, exc: BaseException) -> bool:
-        """是否应继续重试。"""
-        return attempts < spec.retry.max_attempts and spec.retry.should_retry(exc)
-
-    @staticmethod
-    def _mark_success(spec: TaskSpec[Any], result: TaskResult[Any], value: Any) -> None:
-        """标记任务成功并触发 post_run 钩子。"""
-        result.value = value
-        result.status = TaskStatus.SUCCESS
-        result.finished_at = datetime.now()
-        _run_hooks(spec.hooks, "post_run", spec, value)
-
-    @staticmethod
-    def _finalize_failure(
-        result: TaskResult[Any],
-        layer_idx: int | None,
-        on_event: EventCallback | None,
-        continue_on_error: bool,
-    ) -> None:
-        """标记任务为 FAILED。若 ``continue_on_error`` 为真则不抛出异常。"""
-        result.status = TaskStatus.FAILED
-        result.finished_at = datetime.now()
-        _emit(on_event, result)
-        if continue_on_error:
-            logger.warning(
-                "task %r failed but continue_on_error=True; continuing.",
-                result.spec.name,
-            )
-            return
-        raise TaskFailedError(
-            task=result.spec.name,
-            cause=result.error if result.error is not None else RuntimeError("unknown"),
-            attempts=result.attempts,
-            layer=layer_idx,
+    Returns
+    -------
+    bool
+        ``True`` 表示已 finalize（不再重试）；``False`` 表示应继续重试。
+    """
+    # asyncio.TimeoutError → TaskTimeoutError（统一异常类型）
+    if isinstance(exc, asyncio.TimeoutError):
+        exc = TaskTimeoutError(spec.name, spec.timeout or 0.0)
+        logger.warning(
+            "task %r timed out (attempt %d/%d); retrying",
+            spec.name,
+            result.attempts,
+            spec.retry.max_attempts,
         )
-
-    @staticmethod
-    def _handle_failure(
-        spec: TaskSpec[Any],
-        result: TaskResult[Any],
-        exc: BaseException,
-        layer_idx: int | None,
-        on_event: EventCallback | None,
-    ) -> bool:
-        """统一处理失败：超时转换、重试决策、finalize。
-
-        Returns
-        -------
-        bool
-            ``True`` 表示已 finalize（不再重试）；``False`` 表示应继续重试。
-        """
-        # asyncio.TimeoutError → TaskTimeoutError（统一异常类型）
-        if isinstance(exc, asyncio.TimeoutError):
-            exc = TaskTimeoutError(spec.name, spec.timeout or 0.0)
-            logger.warning(
-                "task %r timed out (attempt %d/%d); retrying",
-                spec.name,
-                result.attempts,
-                spec.retry.max_attempts,
-            )
-        else:
-            logger.warning(
-                "task %r failed (attempt %d/%d): %r; retrying",
-                spec.name,
-                result.attempts,
-                spec.retry.max_attempts,
-                exc,
-            )
-        result.error = exc
-        if _TaskRetryMixin._should_retry(spec, result.attempts, exc):
-            return False
-        _run_hooks(spec.hooks, "on_failure", spec, exc)
-        _TaskRetryMixin._finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
-        return True
+    else:
+        logger.warning(
+            "task %r failed (attempt %d/%d): %r; retrying",
+            spec.name,
+            result.attempts,
+            spec.retry.max_attempts,
+            exc,
+        )
+    result.error = exc
+    if _should_retry(spec, result.attempts, exc):
+        return False
+    _run_hooks(spec.hooks, "on_failure", spec, exc)
+    _finalize_failure(result, layer_idx, on_event, spec.continue_on_error)
+    return True
 
 
 # ---------------------------------------------------------------------- #
-# 任务执行器：同步 / 异步（复用 _TaskSkipMixin + _TaskRetryMixin）
+# 任务执行器：同步 / 异步（调用模块级跳过/重试函数）
 # ---------------------------------------------------------------------- #
-class SyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
+class SyncTaskRunner:
     """同步任务执行器：带重试与跳过预检。"""
 
     @staticmethod
@@ -300,7 +314,7 @@ class SyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
         on_event: EventCallback | None = None,
         report: RunReport | None = None,
     ) -> TaskResult[Any]:
-        skipped = _TaskSkipMixin._prepare_for_execution(spec, context, report, on_event)
+        skipped = _prepare_for_execution(spec, context, report, on_event)
         if skipped is not None:
             return skipped
 
@@ -309,23 +323,24 @@ class SyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
         args, kwargs = build_call_args(spec, context)
 
         _run_hooks(spec.hooks, "pre_run", spec)
+        _emit_running(on_event, spec)
 
         while True:
             result.attempts += 1
             try:
                 with spec.env_context():
                     value = spec.effective_fn(*args, **kwargs)
-                _TaskRetryMixin._mark_success(spec, result, value)
+                _mark_success(spec, result, value)
                 return result
             except Exception as exc:
-                if _TaskRetryMixin._handle_failure(spec, result, exc, layer_idx, on_event):
+                if _handle_failure(spec, result, exc, layer_idx, on_event):
                     return result
                 wait = spec.retry.wait_seconds(result.attempts)
                 if wait > 0:
                     time.sleep(wait)
 
 
-class AsyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
+class AsyncTaskRunner:
     """异步任务执行器：在事件循环上运行同步或异步任务，带重试与跳过预检。"""
 
     @staticmethod
@@ -337,7 +352,7 @@ class AsyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
         report: RunReport | None = None,
         semaphore: asyncio.Semaphore | None = None,
     ) -> TaskResult[Any]:
-        skipped = _TaskSkipMixin._prepare_for_execution(spec, context, report, on_event)
+        skipped = _prepare_for_execution(spec, context, report, on_event)
         if skipped is not None:
             return skipped
 
@@ -348,15 +363,16 @@ class AsyncTaskRunner(_TaskSkipMixin, _TaskRetryMixin):
             loop = asyncio.get_event_loop()
 
             _run_hooks(spec.hooks, "pre_run", spec)
+            _emit_running(on_event, spec)
 
             while True:
                 result.attempts += 1
                 try:
                     value = await _execute_async_task(spec, args, kwargs, loop)
-                    _TaskRetryMixin._mark_success(spec, result, value)
+                    _mark_success(spec, result, value)
                     return result
                 except Exception as exc:
-                    if _TaskRetryMixin._handle_failure(spec, result, exc, layer_idx, on_event):
+                    if _handle_failure(spec, result, exc, layer_idx, on_event):
                         return result
                     wait = spec.retry.wait_seconds(result.attempts)
                     if wait > 0:
@@ -401,13 +417,19 @@ def _filter_and_sort(
     backend: StateBackend,
     on_event: EventCallback | None,
 ) -> list[str]:
-    """过滤掉已命中缓存的任务，按优先级排序返回待运行列表。"""
+    """过滤掉已命中缓存的任务，按优先级排序返回待运行列表。
+
+    预构建 ``{name: spec}`` 映射，过滤与排序共享同一份 resolved spec，
+    避免 ``_sort_by_priority`` 内重复调用 ``graph.resolved_spec``。
+    """
+    specs: dict[str, TaskSpec[Any]] = {}
     to_run: list[str] = []
     for name in layer:
         spec = graph.resolved_spec(name)
+        specs[name] = spec
         if not _apply_cached(name, spec, context, report, backend, on_event):
             to_run.append(name)
-    return _sort_by_priority(to_run, graph)
+    return _sort_by_priority(to_run, specs)
 
 
 def _store_result(
@@ -619,7 +641,7 @@ def _make_verbose_callback(on_event: EventCallback | None) -> EventCallback:
 
     def _verbose_callback(event: TaskEvent) -> None:
         dur = f" ({event.duration:.3f}s)" if event.duration is not None else ""
-        if event.status == TaskStatus.RUNNING:  # pragma: no cover
+        if event.status == TaskStatus.RUNNING:
             print(f"[verbose] 任务 {event.task!r} 开始执行...", flush=True)
         elif event.status == TaskStatus.SUCCESS:
             print(f"[verbose] 任务 {event.task!r} 成功{dur}", flush=True)
@@ -684,6 +706,10 @@ def run(
         _print_dry_run(graph, layers)
         return RunReport(success=True)
 
+    # 入口统一校验一次：所有策略共用，避免 layers() / dependency 路径
+    # 各自重复调用 validate()。
+    graph.validate()
+
     effective_callback: EventCallback | None = _make_verbose_callback(on_event) if verbose else on_event
     backend = resolve_backend(state)
     report = RunReport()
@@ -705,7 +731,6 @@ def run(
                 layers = graph.layers()
                 asyncio.run(_async_drive(graph, layers, context, report, backend, effective_callback, limits))
             elif strategy == "dependency":
-                graph.validate()
                 asyncio.run(DependencyRunner.execute(graph, context, report, backend, effective_callback, limits))
             else:
                 raise ValueError(f"Unknown strategy: {strategy!r}")

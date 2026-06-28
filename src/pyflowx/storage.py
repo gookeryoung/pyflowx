@@ -175,13 +175,6 @@ class MemoryBackend(_TTLStateBackendMixin):
     def _clear_raw(self) -> None:
         self._store.clear()
 
-    def _expired(self, key: str) -> bool:
-        """键是否已过期（兼容旧测试 API）。"""
-        entry = self._get_raw(key)
-        if entry is None:
-            return False
-        return self._is_expired(entry[1])
-
 
 class JSONBackend(_TTLStateBackendMixin):
     """基于文件的 JSON 存储，用于跨进程续跑。
@@ -282,10 +275,6 @@ class JSONBackend(_TTLStateBackendMixin):
         finally:
             self._defer_flush = False
             self._flush()
-
-    def _expired(self, entry: Mapping[str, Any]) -> bool:
-        """带元数据的条目是否已过期（兼容旧测试 API）。"""
-        return self._is_expired(float(entry.get("ts", 0)))
 
 
 def resolve_backend(backend: StateBackend | None) -> StateBackend:

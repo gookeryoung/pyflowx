@@ -203,10 +203,10 @@ def test_is_cmd_available_callable_returns_true() -> None:
 # storage_key 异常处理
 # ---------------------------------------------------------------------- #
 def test_storage_key_cache_key_exception_returns_name() -> None:
-    """cache_key 抛异常时应返回任务名."""
+    """cache_key 抛预期异常（TypeError/ValueError/KeyError/AttributeError）时应返回任务名."""
 
     def bad_cache_key(_ctx):
-        raise RuntimeError("cache key error")
+        raise ValueError("cache key error")
 
     spec = TaskSpec("a", _fn, cache_key=bad_cache_key)
     key = spec.storage_key({})
