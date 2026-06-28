@@ -57,16 +57,10 @@ def zip_folders(cwd: str = ".") -> None:
         archive_folder(dir_path)
 
 
-# ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-folderzip_default: px.TaskSpec = px.TaskSpec("folderzip_default", fn=lambda: zip_folders("."))
-
-
-# ============================================================================
-# CLI Runner
-# ============================================================================
+@px.task
+def folderzip_default() -> None:
+    """压缩当前目录下的所有文件夹."""
+    zip_folders(".")
 
 
 def main() -> None:

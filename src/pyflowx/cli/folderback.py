@@ -66,19 +66,10 @@ def backup_folder(src: str, dst: str, max_zip: int = 5) -> None:
     zip_target(src_path, dst_path, max_zip)
 
 
-# ============================================================================
-# TaskSpec 定义
-# ============================================================================
-
-folderback_default: px.TaskSpec = px.TaskSpec(
-    "folderback_default",
-    fn=lambda: backup_folder(".", "./backup", 5),
-)
-
-
-# ============================================================================
-# CLI Runner
-# ============================================================================
+@px.task
+def folderback_default() -> None:
+    """备份当前目录到 ./backup."""
+    backup_folder(".", "./backup", 5)
 
 
 def main() -> None:

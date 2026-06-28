@@ -7,78 +7,20 @@ from unittest.mock import patch
 import pytest
 
 from pyflowx.cli import pymake
-from pyflowx.conditions import Constants
-
-
-# ---------------------------------------------------------------------- #
-# maturin_build_cmd
-# ---------------------------------------------------------------------- #
-class TestMaturinBuildCmd:
-    """Test maturin_build_cmd function."""
-
-    def test_returns_list(self) -> None:
-        """Should return a list."""
-        cmd = pymake.maturin_build_cmd()
-        assert isinstance(cmd, list)
-
-    def test_contains_maturin_build(self) -> None:
-        """Should contain 'maturin' and 'build'."""
-        cmd = pymake.maturin_build_cmd()
-        assert "maturin" in cmd
-        assert "build" in cmd
-
-    def test_contains_release_flag(self) -> None:
-        """Should contain release flag '-r'."""
-        cmd = pymake.maturin_build_cmd()
-        assert "-r" in cmd
-
-    def test_windows_includes_target(self) -> None:
-        """On Windows, should include target-specific flags."""
-        cmd = pymake.maturin_build_cmd()
-        if Constants.IS_WINDOWS:
-            assert "--target" in cmd
-            assert "x86_64-win7-windows-msvc" in cmd
-            assert "-Zbuild-std" in cmd
-            assert "-i" in cmd
-            assert "python3.8" in cmd
-        else:
-            # On non-Windows, should not include Windows-specific flags
-            assert "--target" not in cmd
-
-    def test_does_not_mutate_on_multiple_calls(self) -> None:
-        """Multiple calls should return independent lists."""
-        cmd1 = pymake.maturin_build_cmd()
-        cmd2 = pymake.maturin_build_cmd()
-        assert cmd1 == cmd2
-        # Mutating one should not affect the other
-        cmd1.append("extra")
-        assert "extra" not in cmd2
-
-    def test_non_windows_excludes_target_flags(self) -> None:
-        """On non-Windows, should not include Windows-specific flags (覆盖 22->32 分支)."""
-        from unittest.mock import patch
-
-        with patch.object(pymake.Constants, "IS_WINDOWS", False):
-            cmd = pymake.maturin_build_cmd()
-        assert "maturin" in cmd
-        assert "build" in cmd
-        assert "-r" in cmd
-        assert "--target" not in cmd
-        assert "-Zbuild-std" not in cmd
 
 
 # ---------------------------------------------------------------------- #
 # TaskSpec definitions
 # ---------------------------------------------------------------------- #
 def _find_task(name: str) -> pymake.px.TaskSpec:
-    """从 pymake.tasks 或单任务别名变量中查找指定名称的 TaskSpec."""
+    """从 pymake.tasks 或 aliases 中查找指定名称的 TaskSpec."""
     for spec in pymake.tasks:
         if spec.name == name:
             return spec
-    # 单任务别名变量（_doc/_lint/_tox）
-    alias_map = {"doc": pymake._doc, "lint": pymake._lint, "tox": pymake._tox}
-    if name in alias_map:
-        return alias_map[name]
+    # 单任务别名（doc/lint/tox）内联在 aliases dict 中
+    value = pymake.aliases.get(name)
+    if isinstance(value, pymake.px.TaskSpec):
+        return value
     raise KeyError(f"任务 {name!r} 未找到")
 
 

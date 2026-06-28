@@ -46,7 +46,12 @@ def init_sub_dirs() -> None:
         )
 
 
-isub: px.TaskSpec = px.TaskSpec("isub", fn=init_sub_dirs)
+@px.task(name="isub")
+def isub() -> None:
+    """初始化子目录的Git仓库."""
+    init_sub_dirs()
+
+
 push: px.TaskSpec = px.TaskSpec("push", cmd=["git", "push"])
 pull: px.TaskSpec = px.TaskSpec("pull", cmd=["git", "pull"])
 kill_tgit: px.TaskSpec = px.TaskSpec("task_kill", cmd=["taskkill", "/f", "/t", "/im", "tgitcache.exe"])
@@ -73,11 +78,11 @@ def main() -> None:
                 px.TaskSpec("add", cmd=["git", "add", "."], conditions=(lambda _: has_files(),)),
                 px.TaskSpec("commit", cmd=["git", "commit", "-m", "chore: update"], depends_on=("add",)),
             ]),
-            # 清理
-            "c": px.Graph.from_specs([
+            # 清理（chain: clean → status）
+            "c": px.Graph().chain(
                 px.TaskSpec("clean", cmd=["git", "clean", "-xfd", *EXCLUDE_CMDS]),
-                px.TaskSpec("status", cmd=["git", "status", "--porcelain"], depends_on=("clean",)),
-            ]),
+                px.TaskSpec("status", cmd=["git", "status", "--porcelain"]),
+            ),
             # 初始化、添加并提交
             "i": px.Graph.from_specs([
                 px.TaskSpec("init", cmd=["git", "init"], conditions=(lambda _: not_has_git_repo(),)),

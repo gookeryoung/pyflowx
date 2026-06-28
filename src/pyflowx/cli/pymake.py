@@ -9,25 +9,14 @@ from __future__ import annotations
 import pyflowx as px
 from pyflowx.conditions import Constants
 
-
-def maturin_build_cmd() -> list[str]:
-    """获取 maturin 构建命令（根据平台自动添加参数）.
-
-    Returns
-    -------
-    list[str]
-        完整的 maturin 构建命令列表.
-    """
-    command = ["maturin", "build", "-r"].copy()
-    if Constants.IS_WINDOWS:
-        command.extend(["--target", "x86_64-win7-windows-msvc", "-Zbuild-std", "-i", "python3.8"])
-    return command
-
+MATURIN_BUILD_COMMAND = ["maturin", "build", "-r"]
+if Constants.IS_WINDOWS:
+    MATURIN_BUILD_COMMAND.extend(["--target", "x86_64-win7-windows-msvc", "-Zbuild-std", "-i", "python3.8"])
 
 # 扁平注册所有任务（px.cmd 自动从命令前两段推导 name）
 tasks: list[px.TaskSpec] = [
     px.cmd(["uv", "build"]),
-    px.cmd(maturin_build_cmd(), name="maturin_build"),
+    px.cmd(MATURIN_BUILD_COMMAND),
     px.cmd(["uv", "sync"]),
     px.cmd(["gitt", "c"], name="git_clean"),
     px.cmd(
@@ -42,20 +31,40 @@ tasks: list[px.TaskSpec] = [
         ["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
         name="test_coverage",
     ),
-    px.cmd(["pyrefly", "check", "."], name="pyrefly_check"),
+    px.cmd(["pyrefly", "check", "."]),
     px.cmd(["git", "add", "-A"], name="git_add_all"),
-    px.cmd(["bumpversion"], name="bumpversion"),
-    px.cmd(["bumpversion", "minor"], name="bumpversion_minor"),
-    px.cmd(["git", "push"], name="git_push"),
+    px.cmd(["bumpversion"]),
+    px.cmd(["bumpversion", "minor"]),
+    px.cmd(["git", "push"]),
     px.cmd(["git", "push", "--tags"], name="git_push_tags"),
     px.cmd(["hatch", "publish"], name="publish_python"),
     px.cmd(["twine", "upload", "--disable-progress-bar"], name="twine_publish"),
 ]
 
-# 单任务别名（alias 名与任务名相同）：直接用 TaskSpec，避免 str 自引用
-_doc = px.cmd(["sphinx-build", "-b", "html", "docs", "docs/_build"], name="doc")
-_lint = px.cmd(["ruff", "check", "--fix", "--unsafe-fixes"], name="lint")
-_tox = px.cmd(["tox", "-p", "auto"], name="tox")
+# 单任务别名（alias 名与任务名相同）：直接内联 TaskSpec，避免 str 自引用
+aliases: dict[str, str | list[str | px.TaskSpec] | px.TaskSpec | px.Graph] = {
+    # 构建命令
+    "b": "uv_build",
+    "bc": "maturin_build",
+    "ba": ["b", "bc"],
+    # 安装命令
+    "sync": "uv_sync",
+    # 清理命令
+    "c": "git_clean",
+    # 开发工具
+    "bump": ["c", "tc", "git_add_all", "bumpversion"],
+    "bumpmi": "bumpversion_minor",
+    "cov": ["git_clean", "test_coverage"],
+    "doc": px.cmd(["sphinx-build", "-b", "html", "docs", "docs/_build"], name="doc"),
+    "lint": px.cmd(["ruff", "check", "--fix", "--unsafe-fixes"], name="lint"),
+    "pb": ["twine_publish", "publish_python"],
+    "t": "test",
+    "tf": "test_fast",
+    "tc": ["pyrefly_check", "lint"],
+    "tox": px.cmd(["tox", "-p", "auto"], name="tox"),
+    # 发布命令
+    "p": ["git_clean", "git_push", "git_push_tags"],
+}
 
 
 def main() -> None:
@@ -103,32 +112,5 @@ def main() -> None:
       pymake lint        # 格式化代码
       pymake type        # 类型检查
     """
-    runner = px.CliRunner(
-        strategy="sequential",
-        description="PyMake - Python 构建工具",
-        tasks=tasks,
-        aliases={
-            # 构建命令
-            "b": "uv_build",
-            "bc": "maturin_build",
-            "ba": ["b", "bc"],
-            # 安装命令
-            "sync": "uv_sync",
-            # 清理命令
-            "c": "git_clean",
-            # 开发工具
-            "bump": ["c", "tc", "git_add_all", "bumpversion"],
-            "bumpmi": "bumpversion_minor",
-            "cov": ["git_clean", "test_coverage"],
-            "doc": _doc,
-            "lint": _lint,
-            "pb": ["twine_publish", "publish_python"],
-            "t": "test",
-            "tf": "test_fast",
-            "tc": ["pyrefly_check", "lint"],
-            "tox": _tox,
-            # 发布命令
-            "p": ["git_clean", "git_push", "git_push_tags"],
-        },
-    )
+    runner = px.CliRunner(strategy="sequential", description="PyMake - Python 构建工具", tasks=tasks, aliases=aliases)
     runner.run_cli()
