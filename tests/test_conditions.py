@@ -301,3 +301,59 @@ def test_dir_exists_false(tmp_path: Path):
     missing = tmp_path / "nonexistent"
     cond = BuiltinConditions.DIR_EXISTS(missing)
     assert cond({}) is False
+
+
+def test_builtin_is_windows_returns_module_condition():
+    """BuiltinConditions.IS_WINDOWS() 应返回模块级 IS_WINDOWS."""
+    assert BuiltinConditions.IS_WINDOWS() is IS_WINDOWS
+
+
+def test_builtin_is_linux_returns_module_condition():
+    """BuiltinConditions.IS_LINUX() 应返回模块级 IS_LINUX."""
+    assert BuiltinConditions.IS_LINUX() is IS_LINUX
+
+
+def test_builtin_is_macos_returns_module_condition():
+    """BuiltinConditions.IS_MACOS() 应返回模块级 IS_MACOS."""
+    assert BuiltinConditions.IS_MACOS() is IS_MACOS
+
+
+def test_builtin_is_posix_returns_module_condition():
+    """BuiltinConditions.IS_POSIX() 应返回模块级 IS_POSIX."""
+    assert BuiltinConditions.IS_POSIX() is IS_POSIX
+
+
+def test_file_content_exists_missing_file(tmp_path: Path):
+    """FILE_CONTENT_EXISTS 文件不存在时返回 False."""
+    cond = BuiltinConditions.FILE_CONTENT_EXISTS(tmp_path / "missing.txt", "x")
+    assert cond({}) is False
+
+
+def test_file_content_exists_contains_content(tmp_path: Path):
+    """FILE_CONTENT_EXISTS 文件包含内容时返回 True."""
+    f = tmp_path / "f.txt"
+    f.write_text("hello world", encoding="utf-8")
+    cond = BuiltinConditions.FILE_CONTENT_EXISTS(f, "world")
+    assert cond({}) is True
+
+
+def test_file_content_exists_not_contains_content(tmp_path: Path):
+    """FILE_CONTENT_EXISTS 文件不包含内容时返回 False."""
+    f = tmp_path / "f.txt"
+    f.write_text("hello", encoding="utf-8")
+    cond = BuiltinConditions.FILE_CONTENT_EXISTS(f, "missing")
+    assert cond({}) is False
+
+
+def test_file_content_exists_decode_error_returns_false(tmp_path: Path):
+    """FILE_CONTENT_EXISTS 读取非 UTF-8 文件应返回 False（解码异常被吞）."""
+    f = tmp_path / "bin.dat"
+    f.write_bytes(b"\xff\xfe\x00bad")
+    cond = BuiltinConditions.FILE_CONTENT_EXISTS(f, "x")
+    assert cond({}) is False
+
+
+def test_dep_matches_missing_dep_returns_false():
+    """DEP_MATCHES 依赖不存在时应返回 False（覆盖 if not in ctx 分支）."""
+    cond = BuiltinConditions.DEP_MATCHES("missing", lambda _v: True)
+    assert cond({}) is False

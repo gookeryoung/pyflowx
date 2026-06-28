@@ -2,11 +2,12 @@
 
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from pyflowx.conditions import Constants
-from pyflowx.tasks.system import clr, reset_icon_cache, setenv, which
+from pyflowx.tasks.system import clr, reset_icon_cache, setenv, setenv_group, which, write_file
 
 
 def test_clr_creates_task_spec() -> None:
@@ -189,3 +190,57 @@ def test_which_not_found(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
     spec.fn()
     captured = capsys.readouterr()
     assert "nonexistent_cmd -> 未找到" in captured.out
+
+
+def test_write_file_creates_task_spec() -> None:
+    """write_file() 应创建带 verbose 的 TaskSpec。"""
+    spec = write_file("/tmp/unused", "x")
+    assert spec.name == "write_file_/tmp/unused"
+    assert spec.verbose is True
+
+
+def test_write_file_writes_content(tmp_path: Path) -> None:
+    """write_file() 应将内容写入指定文件."""
+    f = tmp_path / "out.txt"
+    spec = write_file(str(f), "hello world")
+    assert spec.fn is not None
+    spec.fn()
+    assert f.read_text(encoding="utf-8") == "hello world"
+
+
+def test_write_file_with_encoding(tmp_path: Path) -> None:
+    """write_file() 应支持指定编码."""
+    f = tmp_path / "out.txt"
+    spec = write_file(str(f), "中文", encoding="utf-8")
+    assert spec.fn is not None
+    spec.fn()
+    assert f.read_text(encoding="utf-8") == "中文"
+
+
+def test_write_file_failure_propagates(tmp_path: Path) -> None:
+    """write_file() 写入失败应抛出异常（不吞异常）."""
+    # 父目录不存在时写入应抛 FileNotFoundError
+    missing = tmp_path / "no_such_dir" / "out.txt"
+    spec = write_file(str(missing), "x")
+    assert spec.fn is not None
+    with pytest.raises(FileNotFoundError):
+        spec.fn()
+
+
+def test_setenv_group_creates_specs() -> None:
+    """setenv_group() 应为每个环境变量创建 TaskSpec."""
+    envs = {"VAR_A": "1", "VAR_B": "2"}
+    specs = setenv_group(envs)
+    assert len(specs) == 2
+    assert specs[0].name == "setenv_var_a"
+    assert specs[1].name == "setenv_var_b"
+
+
+def test_setenv_group_default_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """setenv_group(default=True) 不应覆盖已存在的环境变量."""
+    monkeypatch.setenv("PYFLOWX_GROUP_EXISTS", "original")
+    specs = setenv_group({"PYFLOWX_GROUP_EXISTS": "new"}, default=True)
+    for spec in specs:
+        assert spec.fn is not None
+        spec.fn()
+    assert os.environ["PYFLOWX_GROUP_EXISTS"] == "original"

@@ -113,10 +113,7 @@ def write_file(path: str, content: str, encoding: str = "utf-8") -> px.TaskSpec:
     """写入文件任务."""
 
     def write():
-        try:
-            with open(path, "w", encoding=encoding) as f:
-                f.write(content)
-        except Exception as e:
-            print(f"写入文件 {path} 失败: {e}")
+        p = Path(path)
+        p.write_text(content, encoding=encoding)
 
     return px.TaskSpec(f"write_file_{path}", fn=write, verbose=True)

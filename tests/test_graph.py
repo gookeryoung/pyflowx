@@ -319,6 +319,79 @@ def test_compose_function() -> None:
     assert "a1" in resolved["cmd_b"]
 
 
+def test_graph_composer_expand_refs_multiple_refs_chain() -> None:
+    """expand_refs 多个 ref 应串联依赖：后一个 ref 首任务依赖前一个 ref 末任务."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn)])
+    graph_c = px.Graph.from_specs([px.TaskSpec("c1", _fn)])
+    graph_b = px.Graph.from_specs([px.TaskSpec("b1", _fn)])
+    graph_b._pending_refs = ["cmd_a", "cmd_c"]
+
+    composer = GraphComposer({"cmd_a": graph_a, "cmd_c": graph_c, "cmd_b": graph_b})
+    resolved = composer.resolve_all()
+
+    # c1 应依赖 a1（后 ref 首任务依赖前 ref 末任务）
+    assert "a1" in resolved["cmd_b"]
+    assert "c1" in resolved["cmd_b"]
+    assert "b1" in resolved["cmd_b"]
+    c1_spec = resolved["cmd_b"].all_specs()["c1"]
+    assert "a1" in c1_spec.depends_on
+
+
+def test_graph_composer_expand_refs_ref_returns_empty() -> None:
+    """expand_refs 引用空图时，previous_ref_last_task 保持 None，original_specs 走 else 分支."""
+    graph_empty = px.Graph.from_specs([])
+    graph_b = px.Graph.from_specs([px.TaskSpec("b1", _fn)])
+    graph_b._pending_refs = ["empty_cmd"]
+
+    composer = GraphComposer({"empty_cmd": graph_empty, "cmd_b": graph_b})
+    resolved = composer.resolve_all()
+
+    # b1 保留，无额外依赖
+    assert "b1" in resolved["cmd_b"]
+    b1_spec = resolved["cmd_b"].all_specs()["b1"]
+    assert b1_spec.depends_on == ()
+
+
+def test_graph_composer_expand_refs_multiple_original_specs_serialized() -> None:
+    """expand_refs 多个 original_specs 应串行依赖，且首个依赖 ref 末任务."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn)])
+    graph_b = px.Graph.from_specs([
+        px.TaskSpec("b1", _fn),
+        px.TaskSpec("b2", _fn),
+        px.TaskSpec("b3", _fn),
+    ])
+    graph_b._pending_refs = ["cmd_a"]
+
+    composer = GraphComposer({"cmd_a": graph_a, "cmd_b": graph_b})
+    resolved = composer.resolve_all()
+
+    specs = resolved["cmd_b"].all_specs()
+    # b1 依赖 a1（ref 末任务）
+    assert "a1" in specs["b1"].depends_on
+    # b2 依赖 b1，b3 依赖 b2（串行）
+    assert "b1" in specs["b2"].depends_on
+    assert "b2" in specs["b3"].depends_on
+
+
+def test_graph_composer_parse_ref_dot_notation_success() -> None:
+    """parse_ref 'cmd.task' 形式应返回对应单个 TaskSpec."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn), px.TaskSpec("a2", _fn)])
+    composer = GraphComposer({"cmd_a": graph_a})
+
+    result = composer.parse_ref("cmd_a.a2", "cmd_b")
+    assert len(result) == 1
+    assert result[0].name == "a2"
+
+
+def test_graph_composer_parse_ref_dot_notation_cmd_not_found() -> None:
+    """parse_ref 'missing.task' 形式应检测命令不存在."""
+    graph_a = px.Graph.from_specs([px.TaskSpec("a1", _fn)])
+    composer = GraphComposer({"cmd_a": graph_a})
+
+    with pytest.raises(ValueError, match="引用的命令 'missing' 不存在"):
+        _ = composer.parse_ref("missing.task", "cmd_b")
+
+
 # ---------------------------------------------------------------------- #
 # resolved_spec defaults 测试
 # ---------------------------------------------------------------------- #
