@@ -6,39 +6,48 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pyflowx as px
 from pyflowx.conditions import Constants
+
+# 项目根目录（pymake.py 在 src/pyflowx/cli，向上四层到达根目录）
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 
 MATURIN_BUILD_COMMAND = ["maturin", "build", "-r"]
 if Constants.IS_WINDOWS:
     MATURIN_BUILD_COMMAND.extend(["--target", "x86_64-win7-windows-msvc", "-Zbuild-std", "-i", "python3.8"])
 
 # 扁平注册所有任务（px.cmd 自动从命令前两段推导 name）
+# 所有任务指定 cwd=ROOT_DIR，确保在项目根目录执行
 tasks: list[px.TaskSpec] = [
-    px.cmd(["uv", "build"]),
-    px.cmd(MATURIN_BUILD_COMMAND),
-    px.cmd(["uv", "sync"]),
-    px.cmd(["gitt", "c"], name="git_clean"),
+    px.cmd(["uv", "build"], cwd=ROOT_DIR),
+    px.cmd(MATURIN_BUILD_COMMAND, cwd=ROOT_DIR),
+    px.cmd(["uv", "sync"], cwd=ROOT_DIR),
+    px.cmd(["gitt", "c"], name="git_clean", cwd=ROOT_DIR),
     px.cmd(
         ["pytest", "-m", "not slow", "-n", "8", "--dist", "loadfile", "--color=yes", "--durations=10"],
         name="test",
+        cwd=ROOT_DIR,
     ),
     px.cmd(
         ["pytest", "-m", "not slow", "--dist", "loadfile", "--color=yes", "--durations=10"],
         name="test_fast",
+        cwd=ROOT_DIR,
     ),
     px.cmd(
         ["pytest", "--cov", "-n", "8", "--dist", "loadfile", "--tb=short", "-v", "--color=yes", "--durations=10"],
         name="test_coverage",
+        cwd=ROOT_DIR,
     ),
-    px.cmd(["pyrefly", "check", "."]),
-    px.cmd(["git", "add", "-A"], name="git_add_all"),
-    px.cmd(["bumpversion"]),
-    px.cmd(["bumpversion", "minor"]),
-    px.cmd(["git", "push"]),
-    px.cmd(["git", "push", "--tags"], name="git_push_tags"),
-    px.cmd(["hatch", "publish"], name="publish_python"),
-    px.cmd(["twine", "upload", "--disable-progress-bar"], name="twine_publish"),
+    px.cmd(["pyrefly", "check", "."], cwd=ROOT_DIR),
+    px.cmd(["git", "add", "-A"], name="git_add_all", cwd=ROOT_DIR),
+    px.cmd(["bumpversion"], cwd=ROOT_DIR),
+    px.cmd(["bumpversion", "minor"], cwd=ROOT_DIR),
+    px.cmd(["git", "push"], cwd=ROOT_DIR),
+    px.cmd(["git", "push", "--tags"], name="git_push_tags", cwd=ROOT_DIR),
+    px.cmd(["hatch", "publish"], name="publish_python", cwd=ROOT_DIR),
+    px.cmd(["twine", "upload", "--disable-progress-bar"], name="twine_publish", cwd=ROOT_DIR),
 ]
 
 # 单任务别名（alias 名与任务名相同）：直接内联 TaskSpec，避免 str 自引用
@@ -55,13 +64,13 @@ aliases: dict[str, str | list[str | px.TaskSpec] | px.TaskSpec | px.Graph] = {
     "bump": ["c", "tc", "git_add_all", "bumpversion"],
     "bumpmi": "bumpversion_minor",
     "cov": ["git_clean", "test_coverage"],
-    "doc": px.cmd(["sphinx-build", "-b", "html", "docs", "docs/_build"], name="doc"),
-    "lint": px.cmd(["ruff", "check", "--fix", "--unsafe-fixes"], name="lint"),
+    "doc": px.cmd(["sphinx-build", "-b", "html", "docs", "docs/_build"], name="doc", cwd=ROOT_DIR),
+    "lint": px.cmd(["ruff", "check", "--fix", "--unsafe-fixes"], name="lint", cwd=ROOT_DIR),
     "pb": ["twine_publish", "publish_python"],
     "t": "test",
     "tf": "test_fast",
     "tc": ["pyrefly_check", "lint"],
-    "tox": px.cmd(["tox", "-p", "auto"], name="tox"),
+    "tox": px.cmd(["tox", "-p", "auto"], name="tox", cwd=ROOT_DIR),
     # 发布命令
     "p": ["git_clean", "git_push", "git_push_tags"],
 }

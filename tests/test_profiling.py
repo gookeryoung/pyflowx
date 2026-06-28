@@ -531,16 +531,23 @@ class TestIntegrationWithRun:
 
     def test_profile_from_real_run(self) -> None:
         """从真实 run() 结果构建剖面."""
+        import time
+
+        def slow() -> int:
+            time.sleep(0.01)  # 确保任务有实际耗时，避免 duration 极小导致并行度计算为 0
+            return 1
+
         graph = px.Graph.from_specs([
-            px.TaskSpec("a", lambda: 1),
-            px.TaskSpec("b", lambda: 2, depends_on=("a",)),
-            px.TaskSpec("c", lambda: 3, depends_on=("a",)),
+            px.TaskSpec("a", slow),
+            px.TaskSpec("b", slow, depends_on=("a",)),
+            px.TaskSpec("c", slow, depends_on=("a",)),
         ])
         report = px.run(graph, strategy="sequential")
 
         profile = ProfileReport.from_report(report, graph)
 
         assert len(profile.tasks) == 3
+        # sequential 策略下应为串行，duration > 0
         assert profile.critical_path_duration > 0
         # sequential 策略下并行度应为 1
         assert profile.peak_parallelism == 1

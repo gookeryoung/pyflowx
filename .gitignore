@@ -10,3 +10,4 @@ wheels/
 .venv
 .coverage
 .idea
+*_profile.html

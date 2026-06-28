@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -122,6 +123,22 @@ class TestTaskSpecDefinitions:
         assert spec.name == "tox"
         assert spec.cmd == ["tox", "-p", "auto"]
         assert spec.skip_if_missing is False
+
+    def test_all_tasks_have_correct_cwd(self) -> None:
+        """所有任务应该有正确的 cwd 设置（指向项目根目录）."""
+        # 验证 ROOT_DIR 定义正确（向上三层到达项目根目录）
+        expected_root = Path(__file__).parent.parent.parent
+        assert expected_root == pymake.ROOT_DIR
+
+        # 验证 tasks 中的所有命令任务都有正确的 cwd
+        for spec in pymake.tasks:
+            if spec.cmd is not None:
+                assert spec.cwd == pymake.ROOT_DIR, f"任务 {spec.name} 的 cwd 应为 {pymake.ROOT_DIR}"
+
+        # 验证 aliases 中的内联任务（doc/lint/tox）也有正确的 cwd
+        for name in ("doc", "lint", "tox"):
+            spec = _find_task(name)
+            assert spec.cwd == pymake.ROOT_DIR, f"任务 {name} 的 cwd 应为 {pymake.ROOT_DIR}"
 
 
 # ---------------------------------------------------------------------- #

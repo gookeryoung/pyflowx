@@ -193,8 +193,8 @@ def test_should_execute_skip_if_missing_cmd_not_found() -> None:
 
 def test_should_execute_skip_if_missing_cmd_found() -> None:
     """skip_if_missing 但命令存在时应执行."""
-    # 使用 Python 作为已安装的命令
-    spec = TaskSpec("a", cmd=["echo"], skip_if_missing=True)  # echo 应存在
+    # 使用 Python 作为已安装的命令（Windows 上 echo 是 shell 内置，shutil.which 找不到）
+    spec = TaskSpec("a", cmd=["python"], skip_if_missing=True)  # python 应存在
     should_run, reason = spec.should_execute({})
     assert should_run is True
     assert reason is None
