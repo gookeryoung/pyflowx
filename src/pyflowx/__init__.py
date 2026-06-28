@@ -82,6 +82,7 @@ from .errors import (
 )
 from .executors import Strategy, run
 from .graph import Graph, GraphDefaults
+from .profiling import ProfileReport, TaskProfile
 from .report import RunReport
 from .runner import CliExitCode, CliRunner
 from .storage import JSONBackend, MemoryBackend, StateBackend
@@ -122,6 +123,7 @@ __all__ = [
     "JSONBackend",
     "MemoryBackend",
     "MissingDependencyError",
+    "ProfileReport",
     "PyFlowXError",
     "RetryPolicy",
     "RunReport",
@@ -132,6 +134,7 @@ __all__ = [
     "TaskEvent",
     "TaskFailedError",
     "TaskHooks",
+    "TaskProfile",
     "TaskResult",
     "TaskSpec",
     "TaskStatus",
