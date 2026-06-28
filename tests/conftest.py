@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+# 将 tests 目录加入 sys.path，使进程池测试能 import _proc_helper 模块级辅助函数。
+# 进程池 pickle 要求被调用函数为模块级，conftest.py 在 xdist worker 中也会执行。
+_TESTS_DIR = str(Path(__file__).resolve().parent)
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
 
 
 @pytest.fixture(autouse=True)

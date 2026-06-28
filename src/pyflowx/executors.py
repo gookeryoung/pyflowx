@@ -58,6 +58,31 @@ from .task import TaskEvent, TaskHooks, TaskResult, TaskSpec, TaskStatus
 
 logger = logging.getLogger(__name__)
 
+# 进程池复用：同一次 run() 内的 process 任务共享一个 ProcessPoolExecutor。
+# 模块级缓存避免每次任务都创建/销毁进程池的开销。
+_process_pool: concurrent.futures.ProcessPoolExecutor | None = None
+_process_pool_lock = threading.Lock()
+
+
+def _get_process_pool() -> concurrent.futures.ProcessPoolExecutor:
+    """获取复用的进程池（惰性创建）。"""
+    global _process_pool  # noqa: PLW0603
+    if _process_pool is None:
+        with _process_pool_lock:
+            if _process_pool is None:
+                _process_pool = concurrent.futures.ProcessPoolExecutor()
+    return _process_pool
+
+
+def _run_in_process(fn: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+    """模块级函数：在进程池中执行任务（须可 pickle）。
+
+    env_context 等上下文管理器无法跨进程传递，进程池任务的 ``env``/``cwd``
+    不生效；如需设置环境，应在 ``fn`` 内部自行处理。
+    """
+    return fn(*args, **kwargs)
+
+
 # 观察者回调类型。
 EventCallback = Callable[[TaskEvent], None]
 Strategy = Literal["sequential", "thread", "async", "dependency"]
@@ -391,19 +416,50 @@ async def _execute_async_task(
     loop: asyncio.AbstractEventLoop,
 ) -> Any:
     """执行异步或同步任务（带超时处理）。"""
+    # 异步任务直接 await
     if _is_async_fn(spec):
         coro = cast(Awaitable[Any], spec.effective_fn(*args, **kwargs))
-        if spec.timeout is not None:
-            return await asyncio.wait_for(coro, timeout=spec.timeout)
-        return await coro
+        return await asyncio.wait_for(coro, timeout=spec.timeout) if spec.timeout is not None else await coro
+
+    # 同步任务：根据 executor 选择执行器
+    fut = _submit_sync_task(spec, args, kwargs, loop)
+    return await asyncio.wait_for(fut, timeout=spec.timeout) if spec.timeout is not None else await fut
+
+
+def _submit_sync_task(
+    spec: TaskSpec[Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    loop: asyncio.AbstractEventLoop,
+) -> asyncio.Future[Any]:
+    """提交同步任务到对应执行器，返回 Future。
+
+    * ``inline``：直接在事件循环线程调用（阻塞循环，最快）。
+    * ``process``：进程池执行（绕过 GIL，fn 须可 pickle）。
+    * ``thread``（默认）：线程池执行。
+    """
 
     def fn_call() -> Any:
         with spec.env_context():
             return spec.effective_fn(*args, **kwargs)
 
-    if spec.timeout is not None:
-        return await asyncio.wait_for(loop.run_in_executor(None, fn_call), timeout=spec.timeout)
-    return await loop.run_in_executor(None, fn_call)
+    # inline：直接在事件循环线程调用，无线程池开销，但会阻塞循环。
+    if spec.executor == "inline":
+        result = fn_call()
+        fut: asyncio.Future[Any] = loop.create_future()
+        fut.set_result(result)
+        return fut
+
+    # process：进程池执行，绕过 GIL，适合 CPU 密集型任务（fn 须可 pickle）。
+    if spec.executor == "process":
+        from functools import partial
+
+        pool = _get_process_pool()
+        proc_fn = partial(_run_in_process, spec.effective_fn, args, kwargs)
+        return loop.run_in_executor(pool, proc_fn)
+
+    # thread（默认）：线程池执行。
+    return loop.run_in_executor(None, fn_call)
 
 
 # ---------------------------------------------------------------------- #
@@ -662,7 +718,7 @@ def _make_verbose_callback(on_event: EventCallback | None) -> EventCallback:
 
 def run(
     graph: Graph,
-    strategy: Strategy = "sequential",
+    strategy: Strategy = "dependency",
     *,
     max_workers: int | None = None,
     dry_run: bool = False,
@@ -678,8 +734,8 @@ def run(
     graph:
         待执行的已校验 :class:`Graph`。
     strategy:
-        执行策略: ``"sequential"`` / ``"thread"`` / ``"async"`` /
-        ``"dependency"``。``"dependency"`` 为依赖驱动调度，无层屏障。
+        执行策略: ``"dependency"``（默认，依赖驱动无层屏障，最大并行度）/
+        ``"sequential"`` / ``"thread"`` / ``"async"``（层屏障模型）。
     max_workers:
         ``"thread"`` 的线程池大小。默认 ``min(32, len(layer))``。
     dry_run:

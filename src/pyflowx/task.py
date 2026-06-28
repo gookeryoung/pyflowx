@@ -254,6 +254,10 @@ class TaskSpec(Generic[T]):
         存取状态后端，使不同输入产生独立缓存条目。``None`` 表示用任务名。
     hooks:
         :class:`TaskHooks` 生命周期钩子。
+    executor:
+        同步任务的执行器：``"thread"``（默认，线程池）/ ``"process"``
+        （进程池，绕过 GIL，适合 CPU 密集型；``fn`` 须可 pickle）/
+        ``"inline"``（直接在事件循环线程调用，最快但会阻塞循环）。
     """
 
     name: str
@@ -279,6 +283,7 @@ class TaskSpec(Generic[T]):
     continue_on_error: bool = False
     cache_key: CacheKeyFn | None = None
     hooks: TaskHooks = field(default_factory=TaskHooks)
+    executor: str = "thread"  # "thread" | "process" | "inline"
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -447,6 +452,89 @@ def _env_and_cwd(
 # ---------------------------------------------------------------------- #
 # 任务模板：批量生成相似 TaskSpec 的工厂
 # ---------------------------------------------------------------------- #
+def _task_noop() -> None:
+    """task(cmd=...) 形式下的占位 fn（cmd 任务执行期不调用 fn）。"""
+    return None
+
+
+def task(
+    fn: TaskFn[Any] | None = None,
+    *,
+    cmd: TaskCmd | None = None,
+    depends_on: tuple[str, ...] = (),
+    soft_depends_on: tuple[str, ...] = (),
+    defaults: Mapping[str, Any] | None = None,
+    args: tuple[Any, ...] = (),
+    kwargs: Mapping[str, Any] | None = None,
+    retry: RetryPolicy | None = None,
+    timeout: float | None = None,
+    tags: tuple[str, ...] = (),
+    conditions: tuple[Condition, ...] = (),
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    verbose: bool = False,
+    skip_if_missing: bool = False,
+    allow_upstream_skip: bool = False,
+    strategy: str | None = None,
+    priority: int = 0,
+    concurrency_key: str | None = None,
+    continue_on_error: bool = False,
+    cache_key: CacheKeyFn | None = None,
+    hooks: TaskHooks | None = None,
+    name: str | None = None,
+) -> Any:
+    """装饰器：将函数转为 :class:`TaskSpec`。
+
+    ``name`` 默认取 ``fn.__name__``。可直接装饰函数，或带参数使用。
+
+    Examples
+    --------
+    >>> @px.task
+    ... def extract(): return [1, 2, 3]
+    >>> @px.task(depends_on=("extract",))
+    ... def double(extract): return [x * 2 for x in extract]
+    >>> graph = px.Graph.from_specs([extract, double])
+    """
+
+    def _decorate(func: TaskFn[Any]) -> TaskSpec[Any]:
+        spec_name = name or func.__name__
+        return TaskSpec(
+            name=spec_name,
+            fn=func,
+            cmd=cmd,
+            depends_on=depends_on,
+            soft_depends_on=soft_depends_on,
+            defaults=dict(defaults) if defaults else {},
+            args=args,
+            kwargs=dict(kwargs) if kwargs else {},
+            retry=retry if retry is not None else RetryPolicy(),
+            timeout=timeout,
+            tags=tags,
+            conditions=conditions,
+            cwd=Path(cwd) if isinstance(cwd, str) else cwd,
+            env=dict(env) if env else None,
+            verbose=verbose,
+            skip_if_missing=skip_if_missing,
+            allow_upstream_skip=allow_upstream_skip,
+            strategy=strategy,
+            priority=priority,
+            concurrency_key=concurrency_key,
+            continue_on_error=continue_on_error,
+            cache_key=cache_key,
+            hooks=hooks if hooks is not None else TaskHooks(),
+        )
+
+    if fn is None and cmd is None:
+        # 带参数调用：@task(depends_on=...)，等待被装饰函数
+        return _decorate
+    if fn is None:
+        # task(cmd=..., name=...) 直接构造，无被装饰函数
+        if name is None:
+            raise ValueError("task(cmd=...) 需要显式提供 name")
+        return _decorate(_task_noop)
+    return _decorate(fn)
+
+
 def task_template(
     fn: TaskFn[Any] | None = None,
     cmd: TaskCmd | None = None,

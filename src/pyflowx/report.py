@@ -69,6 +69,22 @@ class RunReport:
         """以 FAILED 状态结束的任务名列表。"""
         return [name for name, r in self.results.items() if r.status == TaskStatus.FAILED]
 
+    def succeeded_tasks(self) -> list[str]:
+        """以 SUCCESS 状态结束的任务名列表。"""
+        return [name for name, r in self.results.items() if r.status == TaskStatus.SUCCESS]
+
+    def skipped_tasks(self) -> list[str]:
+        """以 SKIPPED 状态结束的任务名列表。"""
+        return [name for name, r in self.results.items() if r.status == TaskStatus.SKIPPED]
+
+    def tasks_by_status(self, status: TaskStatus) -> list[str]:
+        """返回指定状态的任务名列表。"""
+        return [name for name, r in self.results.items() if r.status == status]
+
+    def durations(self) -> dict[str, float]:
+        """任务名 -> 执行时长（秒）。无时长记录的为 0.0。"""
+        return {name: (r.duration or 0.0) for name, r in self.results.items()}
+
     def describe(self) -> str:
         """用于调试的人类可读多行报告。"""
         lines: list[str] = [f"RunReport(success={self.success})"]

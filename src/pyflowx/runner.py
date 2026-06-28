@@ -114,7 +114,7 @@ class CliRunner:
     """
 
     graphs: dict[str, Graph] = field(default_factory=dict)
-    strategy: Strategy = field(default="sequential")
+    strategy: Strategy = field(default="dependency")
     description: str = field(default_factory=str)
     verbose: bool = field(default_factory=lambda: True)
 

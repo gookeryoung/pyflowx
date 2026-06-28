@@ -126,3 +126,50 @@ class TestRunReportDescribe:
         report.results["a"] = TaskResult[Any](spec=spec, status=TaskStatus.PENDING)
         desc = report.describe()
         assert "-" in desc  # duration 显示为 "-"
+
+
+class TestRunReportQueries:
+    """测试 RunReport 的新查询 API."""
+
+    def test_succeeded_tasks(self) -> None:
+        """succeeded_tasks 返回 SUCCESS 状态的任务名."""
+        report = px.RunReport()
+        report.results["a"] = _make_result("a", status=TaskStatus.SUCCESS)
+        report.results["b"] = _make_result("b", status=TaskStatus.FAILED)
+        report.results["c"] = _make_result("c", status=TaskStatus.SUCCESS)
+        assert report.succeeded_tasks() == ["a", "c"]
+
+    def test_skipped_tasks(self) -> None:
+        """skipped_tasks 返回 SKIPPED 状态的任务名."""
+        report = px.RunReport()
+        report.results["a"] = _make_result("a", status=TaskStatus.SKIPPED)
+        report.results["b"] = _make_result("b", status=TaskStatus.SUCCESS)
+        assert report.skipped_tasks() == ["a"]
+
+    def test_tasks_by_status(self) -> None:
+        """tasks_by_status 按指定状态过滤."""
+        report = px.RunReport()
+        report.results["a"] = _make_result("a", status=TaskStatus.FAILED)
+        report.results["b"] = _make_result("b", status=TaskStatus.FAILED)
+        report.results["c"] = _make_result("c", status=TaskStatus.SUCCESS)
+        assert report.tasks_by_status(TaskStatus.FAILED) == ["a", "b"]
+        assert report.tasks_by_status(TaskStatus.SUCCESS) == ["c"]
+        assert report.tasks_by_status(TaskStatus.SKIPPED) == []
+
+    def test_durations(self) -> None:
+        """durations 返回任务名 -> 时长映射."""
+        report = px.RunReport()
+        report.results["a"] = _make_result("a", duration=1.5)
+        report.results["b"] = _make_result("b", duration=2.0)
+        durs = report.durations()
+        assert durs["a"] == 1.5
+        assert durs["b"] == 2.0
+
+    def test_durations_no_duration(self) -> None:
+        """无时长的任务应返回 0.0."""
+        report = px.RunReport()
+        spec: TaskSpec[Any] = TaskSpec[Any]("a", _fn)  # type: ignore[arg-type]
+        report.results["a"] = TaskResult[Any](spec=spec, status=TaskStatus.PENDING)
+        durs = report.durations()
+        assert durs["a"] == 0.0
+

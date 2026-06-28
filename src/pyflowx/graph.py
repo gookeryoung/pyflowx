@@ -17,12 +17,13 @@ __all__ = [
     "GraphDefaults",
 ]
 
+import inspect
 import sys
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .errors import CycleError, DuplicateTaskError, MissingDependencyError
-from .task import RetryPolicy, TaskSpec
+from .task import Context, RetryPolicy, TaskSpec
 
 if sys.version_info >= (3, 9):  # pragma: no cover
     import graphlib  # pyright: ignore[reportUnreachable]
@@ -63,6 +64,74 @@ def _prune_deps(spec: TaskSpec[Any], keep: Callable[[str], bool]) -> TaskSpec[An
     )
 
 
+def _make_namespaced_fn(orig_fn: Any, ns: str, dep_names: set[str]) -> Any:
+    """包装 fn，使其能接收带 ``ns:`` 前缀的依赖名，调用时映射回原参数名。
+
+    命名空间合并后，依赖名带前缀（如 ``build:extract``），但 Python 参数名
+    不能含 ``:``。wrapper 用 ``**kwargs`` 接收所有依赖，内部把带前缀的依赖名
+    映射回原参数名后调用原 fn。
+
+    无依赖参数时直接返回原 fn。
+    """
+    if not dep_names or orig_fn is None:
+        return orig_fn
+    try:
+        orig_sig = inspect.signature(orig_fn)
+    except (TypeError, ValueError):
+        return orig_fn
+
+    # 带前缀依赖名 -> 原参数名
+    name_map: dict[str, str] = {f"{ns}:{orig}": orig for orig in dep_names}
+    prefix = f"{ns}:"
+
+    # 检查原 fn 是否有 Context 标注参数
+    context_param_name: str | None = None
+    for p in orig_sig.parameters.values():
+        ann = p.annotation
+        if ann is not Context and not (isinstance(ann, str) and ann.endswith("Context")):
+            continue
+        context_param_name = p.name
+        break
+
+    if context_param_name is not None:
+
+        def wrapper(ctx: Any = None, **kwargs: Any) -> Any:
+            # ctx 是 dep_context，键为带前缀的依赖名；映射回原始键
+            orig_ctx: dict[str, Any] = {}
+            for k, v in (ctx or {}).items():
+                orig_ctx[name_map.get(k, k)] = v
+            # kwargs 中带前缀的依赖也映射回原参数名
+            for k, v in kwargs.items():
+                if k in name_map:
+                    orig_ctx[name_map[k]] = v
+            return orig_fn(**{context_param_name: orig_ctx})
+
+        ctx_param = inspect.Parameter("ctx", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Context)
+        kw_param = inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD)
+        wrapper.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+            parameters=[ctx_param, kw_param],
+            return_annotation=orig_sig.return_annotation,
+        )
+    else:
+
+        def wrapper(**kwargs: Any) -> Any:  # type: ignore[no-redef]
+            orig_kwargs: dict[str, Any] = {}
+            for k, v in kwargs.items():
+                if k.startswith(prefix):
+                    orig_kwargs[k[len(prefix) :]] = v
+            return orig_fn(**orig_kwargs)
+
+        kw_param = inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD)
+        wrapper.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+            parameters=[kw_param],
+            return_annotation=orig_sig.return_annotation,
+        )
+
+    wrapper.__name__ = f"{ns}_{getattr(orig_fn, '__name__', 'fn')}"
+    wrapper.__doc__ = getattr(orig_fn, "__doc__", None)
+    return wrapper
+
+
 @dataclass
 class Graph:
     """校验后的有向无环任务图。
@@ -78,6 +147,7 @@ class Graph:
     specs: dict[str, TaskSpec[Any]] = field(default_factory=dict)
     deps: dict[str, tuple[str, ...]] = field(default_factory=dict)
     defaults: GraphDefaults = field(default_factory=GraphDefaults)
+    namespace: str | None = None
 
     # 待解析的字符串引用列表（由 GraphComposer 消费）；为空表示无引用。
     _pending_refs: list[str] = field(default_factory=list)
@@ -95,6 +165,28 @@ class Graph:
         self._validate_references()
         return self
 
+    def chain(self, *specs: TaskSpec[Any]) -> Graph:
+        """链式注册任务：每个 spec 自动依赖前一个。
+
+        ``chain(a, b, c)`` 等价于 ``b`` 依赖 ``a``，``c`` 依赖 ``b``。
+        若 spec 已带 ``depends_on``，则前驱名追加到现有依赖前。
+        返回 ``self`` 支持链式调用。
+
+        Examples
+        --------
+        >>> graph = px.Graph().chain(extract, transform, load)
+        """
+        prev_name: str | None = None
+        for s in specs:
+            current = s
+            if prev_name is not None:
+                # 将前驱追加到 depends_on 最前（保持显式依赖优先）
+                new_deps = (prev_name, *s.depends_on) if prev_name not in s.depends_on else s.depends_on
+                current = replace(s, depends_on=new_deps)
+            self.add(current)
+            prev_name = current.name
+        return self
+
     def _register(self, spec: TaskSpec[Any]) -> None:
         if spec.name in self.specs:
             raise DuplicateTaskError(spec.name)
@@ -108,6 +200,8 @@ class Graph:
         cls,
         specs: Iterable[TaskSpec[Any] | str],
         defaults: GraphDefaults | None = None,
+        *,
+        namespace: str | None = None,
     ) -> Graph:
         """从可迭代的 task spec 构建图。
 
@@ -120,8 +214,10 @@ class Graph:
             TaskSpec 对象或字符串引用的列表。
         defaults:
             图级默认值。``None`` 使用空 :class:`GraphDefaults`。
+        namespace:
+            可选命名空间，用于 :meth:`add_subgraph` 合并时加前缀。
         """
-        graph = cls(defaults=defaults or GraphDefaults())
+        graph = cls(defaults=defaults or GraphDefaults(), namespace=namespace)
         pending_refs: list[str] = []
 
         for spec in specs:
@@ -138,6 +234,46 @@ class Graph:
         graph._validate_references()
         graph.validate()
         return graph
+
+    def add_subgraph(self, sub: Graph, *, namespace: str | None = None) -> Graph:
+        """将子图合并到当前图，任务名加命名空间前缀避免冲突。
+
+        参数
+        ----
+        sub:
+            待合并的子图。
+        namespace:
+            命名空间前缀。``None`` 时使用 ``sub.namespace``，若子图也无命名空间
+            则抛出 ``ValueError``。最终任务名为 ``f"{ns}:{original_name}"``。
+
+        合并后，子图内任务的依赖名也会被加前缀；与子图外部任务的依赖保持原样。
+
+        返回 ``self`` 支持链式调用。
+        """
+        ns = namespace or sub.namespace
+        if not ns:
+            raise ValueError("add_subgraph 需要 namespace 或子图自带 namespace")
+
+        def _rename(name: str) -> str:
+            # 仅对子图内部任务名加前缀；外部依赖保持原样
+            return f"{ns}:{name}" if name in sub.specs else name
+
+        sub_names = set(sub.specs.keys())
+        for spec in sub.specs.values():
+            # 子图内部依赖名需加前缀，对应的 fn 参数也需包装
+            internal_deps = (set(spec.depends_on) | set(spec.soft_depends_on)) & sub_names
+            new_fn = _make_namespaced_fn(spec.fn, ns, internal_deps) if spec.fn else spec.fn
+            new_spec = replace(
+                spec,
+                name=_rename(spec.name),
+                fn=new_fn,
+                depends_on=tuple(_rename(d) for d in spec.depends_on),
+                soft_depends_on=tuple(_rename(d) for d in spec.soft_depends_on),
+            )
+            self._register(new_spec)
+        self._validate_references()
+        self.validate()
+        return self
 
     # ------------------------------------------------------------------ #
     # 校验

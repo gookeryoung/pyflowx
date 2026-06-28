@@ -94,6 +94,7 @@ from .task import (
     TaskResult,
     TaskSpec,
     TaskStatus,
+    task,
     task_template,
 )
 
@@ -139,5 +140,6 @@ __all__ = [
     "describe_injection",
     "run",
     "run_command",
+    "task",
     "task_template",
 ]

@@ -72,10 +72,10 @@ class TestCliRunnerConstruction:
         )
         assert runner.commands == ["clean", "build", "test"]
 
-    def test_default_strategy_is_sequential(self) -> None:
-        """默认策略应为 Strategy.SEQUENTIAL."""
+    def test_default_strategy_is_dependency(self) -> None:
+        """默认策略应为 dependency（依赖驱动，最大并行度）."""
         runner = px.CliRunner({"clean": _echo_graph()})
-        assert runner.strategy == "sequential"
+        assert runner.strategy == "dependency"
 
     def test_custom_strategy_string(self) -> None:
         """应支持通过字符串指定策略."""
